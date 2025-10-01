@@ -4,7 +4,7 @@
 //! container operations for unpacking and repacking container types, but focuses
 //! specifically on qubit extraction and runtime barrier insertion.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use hugr::{
     builder::{BuildError, DFGBuilder, Dataflow, DataflowHugr},
@@ -19,51 +19,48 @@ use hugr::{
 
 use crate::extension::qsystem::{cached_extensions::ExtensionCache, QSystemOpBuilder};
 
+/// Temporary extension name for barrier-specific operations.
+pub(super) const TEMP_BARRIER_EXT_NAME: hugr::hugr::IdentList =
+    hugr::hugr::IdentList::new_static_unchecked("__tket.barrier.temp");
+
+// Barrier-specific operation names.
+pub(super) const WRAPPED_BARRIER_NAME: hugr::ops::OpName =
+    hugr::ops::OpName::new_static("wrapped_barrier");
+
+pub static TEMP_BARRIER_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
+    Extension::new_arc(
+        TEMP_BARRIER_EXT_NAME,
+        hugr::extension::Version::new(0, 0, 0),
+        |ext, ext_ref| {
+            // version of runtime barrier that takes a variable number of qubits
+            ext.add_op(
+                WRAPPED_BARRIER_NAME,
+                Default::default(),
+                PolyFuncTypeRV::new(
+                    vec![TypeParam::new_list_type(TypeBound::Linear)],
+                    FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Linear)),
+                ),
+                ext_ref,
+            )
+            .unwrap();
+        },
+    )
+});
+
 /// Factory for creating barrier-specific operations that use generic container operations.
 ///
 /// This factory focuses on barrier-specific functionality like runtime barrier insertion,
 /// while delegating generic container unpacking/repacking to the ContainerOperationFactory.
 pub struct BarrierOperationFactory {
-    /// Temporary extension used for barrier-specific operations.
-    extension: Arc<Extension>,
     cache: ExtensionCache,
 }
 
 impl BarrierOperationFactory {
-    /// Temporary extension name for barrier-specific operations.
-    pub(super) const TEMP_EXT_NAME: hugr::hugr::IdentList =
-        hugr::hugr::IdentList::new_static_unchecked("__tket.barrier.temp");
-
-    // Barrier-specific operation names.
-    pub(super) const WRAPPED_BARRIER: hugr::ops::OpName =
-        hugr::ops::OpName::new_static("wrapped_barrier");
-
     /// Create a new instance of the BarrierOperationFactory.
     pub fn new() -> Self {
         Self {
-            extension: Self::build_extension(),
             cache: ExtensionCache::new(),
         }
-    }
-
-    fn build_extension() -> Arc<Extension> {
-        Extension::new_arc(
-            Self::TEMP_EXT_NAME,
-            hugr::extension::Version::new(0, 0, 0),
-            |ext, ext_ref| {
-                // version of runtime barrier that takes a variable number of qubits
-                ext.add_op(
-                    Self::WRAPPED_BARRIER,
-                    Default::default(),
-                    PolyFuncTypeRV::new(
-                        vec![TypeParam::new_list_type(TypeBound::Linear)],
-                        FuncValueType::new_endo(TypeRV::new_row_var_use(0, TypeBound::Linear)),
-                    ),
-                    ext_ref,
-                )
-                .unwrap();
-            },
-        )
     }
 
     /// Build a runtime barrier across the given qubit wires using external cache
@@ -78,8 +75,8 @@ impl BarrierOperationFactory {
             qb_row.clone().into_iter().map(Into::into).collect(),
         )];
         let op = ExtensionOp::new(
-            self.extension
-                .get_op(&Self::WRAPPED_BARRIER)
+            TEMP_BARRIER_EXT
+                .get_op(&WRAPPED_BARRIER_NAME)
                 .unwrap()
                 .clone(),
             args.clone(),

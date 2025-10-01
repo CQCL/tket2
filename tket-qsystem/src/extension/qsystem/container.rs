@@ -21,7 +21,7 @@ use hugr::{
     },
     Hugr, Wire,
 };
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use tket::analysis::type_unpack::{array_args, TypeUnpacker};
 
@@ -71,14 +71,90 @@ fn add_array_ops<AK: ArrayKind>(
     Ok(())
 }
 
+/// Temporary extension name for barrier-specific operations.
+pub(super) const TEMP_UNPACK_EXT_NAME: hugr::hugr::IdentList =
+    hugr::hugr::IdentList::new_static_unchecked("__tket.barrier.temp");
+
+// Temporary operation names.
+pub(super) const UNPACK_OPT: OpName = OpName::new_static("option_unwrap");
+pub(super) const REPACK_OPT: OpName = OpName::new_static("option_tag");
+pub(super) const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
+pub(super) const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
+pub(super) const VARRAY_UNPACK: OpName = OpName::new_static("varray_unpack");
+pub(super) const VARRAY_REPACK: OpName = OpName::new_static("varray_repack");
+pub(super) const BARRAY_UNPACK: OpName = OpName::new_static("barray_unpack");
+pub(super) const BARRAY_REPACK: OpName = OpName::new_static("barray_repack");
+pub(super) const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
+pub(super) const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
+
+pub static TEMP_UNPACK_EXT: LazyLock<Arc<Extension>> = LazyLock::new(|| {
+    Extension::new_arc(
+        TEMP_UNPACK_EXT_NAME,
+        hugr::extension::Version::new(0, 0, 0),
+        |ext, ext_ref| {
+            // Generic option unwrap/tag operations
+            let opt_unwrap_sig = PolyFuncTypeRV::new(
+                vec![TypeParam::RuntimeType(TypeBound::Linear)],
+                FuncValueType::new(
+                    hugr::types::TypeRow::from(vec![Type::from(
+                        hugr::extension::prelude::option_type(Type::new_var_use(
+                            0,
+                            TypeBound::Linear,
+                        )),
+                    )]),
+                    hugr::types::TypeRow::from(vec![Type::new_var_use(0, TypeBound::Linear)]),
+                ),
+            );
+            // produce option of element
+            ext.add_op(
+                REPACK_OPT,
+                Default::default(),
+                invert_sig(&opt_unwrap_sig),
+                ext_ref,
+            )
+            .unwrap();
+            // unwrap option of element
+            ext.add_op(UNPACK_OPT, Default::default(), opt_unwrap_sig, ext_ref)
+                .unwrap();
+
+            // Add array operations for all ArrayKind types
+            add_array_ops::<Array>(ext, ext_ref, ARRAY_UNPACK, ARRAY_REPACK).unwrap();
+            add_array_ops::<ValueArray>(ext, ext_ref, VARRAY_UNPACK, VARRAY_REPACK).unwrap();
+            add_array_ops::<BorrowArray>(ext, ext_ref, BARRAY_UNPACK, BARRAY_REPACK).unwrap();
+
+            let tuple_unpack_sig = PolyFuncTypeRV::new(
+                vec![
+                    // incoming tuple row
+                    TypeParam::new_list_type(TypeBound::Linear),
+                    // unpacked row
+                    TypeParam::new_list_type(TypeBound::Linear),
+                ],
+                FuncValueType::new(
+                    Type::new_tuple(TypeRV::new_row_var_use(0, TypeBound::Linear)),
+                    TypeRV::new_row_var_use(1, TypeBound::Linear),
+                ),
+            );
+            // pack some wires into a tuple
+            ext.add_op(
+                TUPLE_REPACK,
+                Default::default(),
+                invert_sig(&tuple_unpack_sig),
+                ext_ref,
+            )
+            .unwrap();
+            // unpack a tuple into some wires
+            ext.add_op(TUPLE_UNPACK, Default::default(), tuple_unpack_sig, ext_ref)
+                .unwrap();
+        },
+    )
+});
+
 /// Factory for creating and caching container unpack/repack operations.
 ///
 /// This factory provides a generic framework for unpacking and repacking container types
 /// such as arrays, tuples, and option types. It uses lazy operation caching to avoid
 /// regenerating the same function definitions multiple times.
 pub struct ContainerOperationFactory {
-    /// Temporary extension used for placeholder operations.
-    extension: Arc<Extension>,
     /// Function definitions for each instance of the operations.
     pub(super) func_cache: ExtensionCache,
     /// Type analyzer for determining which types to unpack
@@ -86,26 +162,9 @@ pub struct ContainerOperationFactory {
 }
 
 impl ContainerOperationFactory {
-    /// Temporary extension name.
-    pub(super) const TEMP_EXT_NAME: hugr::hugr::IdentList =
-        hugr::hugr::IdentList::new_static_unchecked("__tket.container.temp");
-
-    // Temporary operation names.
-    pub(super) const UNPACK_OPT: OpName = OpName::new_static("option_unwrap");
-    pub(super) const REPACK_OPT: OpName = OpName::new_static("option_tag");
-    pub(super) const ARRAY_UNPACK: OpName = OpName::new_static("array_unpack");
-    pub(super) const ARRAY_REPACK: OpName = OpName::new_static("array_repack");
-    pub(super) const VARRAY_UNPACK: OpName = OpName::new_static("varray_unpack");
-    pub(super) const VARRAY_REPACK: OpName = OpName::new_static("varray_repack");
-    pub(super) const BARRAY_UNPACK: OpName = OpName::new_static("barray_unpack");
-    pub(super) const BARRAY_REPACK: OpName = OpName::new_static("barray_repack");
-    pub(super) const TUPLE_UNPACK: OpName = OpName::new_static("tuple_unpack");
-    pub(super) const TUPLE_REPACK: OpName = OpName::new_static("tuple_repack");
-
     /// Create a new instance with a custom type analyzer.
     pub fn new(type_analyzer: TypeUnpacker) -> Self {
         Self {
-            extension: Self::build_extension(),
             func_cache: ExtensionCache::new(),
             type_analyzer,
         }
@@ -116,89 +175,9 @@ impl ContainerOperationFactory {
         &mut self.type_analyzer
     }
 
-    fn build_extension() -> Arc<Extension> {
-        Extension::new_arc(
-            Self::TEMP_EXT_NAME,
-            hugr::extension::Version::new(0, 0, 0),
-            |ext, ext_ref| {
-                // Generic option unwrap/tag operations
-                let opt_unwrap_sig = PolyFuncTypeRV::new(
-                    vec![TypeParam::RuntimeType(TypeBound::Linear)],
-                    FuncValueType::new(
-                        hugr::types::TypeRow::from(vec![Type::from(
-                            hugr::extension::prelude::option_type(Type::new_var_use(
-                                0,
-                                TypeBound::Linear,
-                            )),
-                        )]),
-                        hugr::types::TypeRow::from(vec![Type::new_var_use(0, TypeBound::Linear)]),
-                    ),
-                );
-                // produce option of element
-                ext.add_op(
-                    Self::REPACK_OPT,
-                    Default::default(),
-                    invert_sig(&opt_unwrap_sig),
-                    ext_ref,
-                )
-                .unwrap();
-                // unwrap option of element
-                ext.add_op(
-                    Self::UNPACK_OPT,
-                    Default::default(),
-                    opt_unwrap_sig,
-                    ext_ref,
-                )
-                .unwrap();
-
-                // Add array operations for all ArrayKind types
-                add_array_ops::<Array>(ext, ext_ref, Self::ARRAY_UNPACK, Self::ARRAY_REPACK)
-                    .unwrap();
-                add_array_ops::<ValueArray>(ext, ext_ref, Self::VARRAY_UNPACK, Self::VARRAY_REPACK)
-                    .unwrap();
-                add_array_ops::<BorrowArray>(
-                    ext,
-                    ext_ref,
-                    Self::BARRAY_UNPACK,
-                    Self::BARRAY_REPACK,
-                )
-                .unwrap();
-
-                let tuple_unpack_sig = PolyFuncTypeRV::new(
-                    vec![
-                        // incoming tuple row
-                        TypeParam::new_list_type(TypeBound::Linear),
-                        // unpacked row
-                        TypeParam::new_list_type(TypeBound::Linear),
-                    ],
-                    FuncValueType::new(
-                        Type::new_tuple(TypeRV::new_row_var_use(0, TypeBound::Linear)),
-                        TypeRV::new_row_var_use(1, TypeBound::Linear),
-                    ),
-                );
-                // pack some wires into a tuple
-                ext.add_op(
-                    Self::TUPLE_REPACK,
-                    Default::default(),
-                    invert_sig(&tuple_unpack_sig),
-                    ext_ref,
-                )
-                .unwrap();
-                // unpack a tuple into some wires
-                ext.add_op(
-                    Self::TUPLE_UNPACK,
-                    Default::default(),
-                    tuple_unpack_sig,
-                    ext_ref,
-                )
-                .unwrap();
-            },
-        )
-    }
-
     /// Get an operation from the extension.
     pub fn get_op(&self, name: &OpName, args: impl Into<Vec<TypeArg>>) -> Option<ExtensionOp> {
-        ExtensionOp::new(self.extension.get_op(name)?.clone(), args).ok()
+        ExtensionOp::new(TEMP_UNPACK_EXT.get_op(name)?.clone(), args).ok()
     }
 
     /// Insert an option unwrap operation for a given element type.
@@ -209,9 +188,7 @@ impl ContainerOperationFactory {
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
-        let op = self
-            .get_op(&Self::UNPACK_OPT, args.clone())
-            .expect("known op");
+        let op = self.get_op(&UNPACK_OPT, args.clone()).expect("known op");
         self.func_cache.cache_function(&op, &[], |func_b| {
             let [in_wire] = func_b.input_wires_arr();
             let [out_wire] =
@@ -235,9 +212,7 @@ impl ContainerOperationFactory {
         elem_ty: &Type,
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
-        let op = self
-            .get_op(&Self::REPACK_OPT, args.clone())
-            .expect("known op");
+        let op = self.get_op(&REPACK_OPT, args.clone()).expect("known op");
         self.func_cache.cache_function(&op, &[], |func_b| {
             let [in_wire] = func_b.input_wires_arr();
             let out_wire = func_b.make_sum(
@@ -405,9 +380,7 @@ impl ContainerOperationFactory {
             Some(args) => args,
             None => return Ok(vec![tuple_wire]), // Not a tuple we should unpack
         };
-        let op = self
-            .get_op(&Self::TUPLE_UNPACK, args.clone())
-            .expect("known op");
+        let op = self.get_op(&TUPLE_UNPACK, args.clone()).expect("known op");
 
         self.func_cache.cache_function(&op, &args[..1], |func_b| {
             let w = func_b.input().out_wire(0);
@@ -444,9 +417,7 @@ impl ContainerOperationFactory {
             }
         };
 
-        let op = self
-            .get_op(&Self::TUPLE_REPACK, args.clone())
-            .expect("known op");
+        let op = self.get_op(&TUPLE_REPACK, args.clone()).expect("known op");
 
         self.func_cache.cache_function(&op, &args[..1], |func_b| {
             let in_wires = func_b.input().outputs().collect::<Vec<_>>();
@@ -502,9 +473,9 @@ impl ContainerOperationFactory {
             };
         }
 
-        handle_array_type!(Array, Self::ARRAY_UNPACK);
-        handle_array_type!(ValueArray, Self::VARRAY_UNPACK);
-        handle_array_type!(BorrowArray, Self::BARRAY_UNPACK);
+        handle_array_type!(Array, ARRAY_UNPACK);
+        handle_array_type!(ValueArray, VARRAY_UNPACK);
+        handle_array_type!(BorrowArray, BARRAY_UNPACK);
 
         if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
@@ -552,9 +523,9 @@ impl ContainerOperationFactory {
             };
         }
 
-        handle_array_type!(Array, Self::ARRAY_REPACK);
-        handle_array_type!(ValueArray, Self::VARRAY_REPACK);
-        handle_array_type!(BorrowArray, Self::BARRAY_REPACK);
+        handle_array_type!(Array, ARRAY_REPACK);
+        handle_array_type!(ValueArray, VARRAY_REPACK);
+        handle_array_type!(BorrowArray, BARRAY_REPACK);
 
         if let Some(row) = ty.as_sum().and_then(SumType::as_tuple) {
             let row: hugr::types::TypeRow =
@@ -614,21 +585,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case::array(
-        Array,
-        ContainerOperationFactory::ARRAY_UNPACK,
-        ContainerOperationFactory::ARRAY_REPACK
-    )]
-    #[case::value_array(
-        ValueArray,
-        ContainerOperationFactory::VARRAY_UNPACK,
-        ContainerOperationFactory::VARRAY_REPACK
-    )]
-    #[case::borrow_array(
-        BorrowArray,
-        ContainerOperationFactory::BARRAY_UNPACK,
-        ContainerOperationFactory::BARRAY_REPACK
-    )]
+    #[case::array(Array, ARRAY_UNPACK, ARRAY_REPACK)]
+    #[case::value_array(ValueArray, VARRAY_UNPACK, VARRAY_REPACK)]
+    #[case::borrow_array(BorrowArray, BARRAY_UNPACK, BARRAY_REPACK)]
     fn test_array_unpack_repack<AK: ArrayKind>(
         #[case] _kind: AK,
         #[case] unpack_op: OpName,

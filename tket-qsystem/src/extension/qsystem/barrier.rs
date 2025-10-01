@@ -4,7 +4,8 @@ pub use barrier_inserter::BarrierInserter;
 
 #[cfg(test)]
 mod test {
-    use crate::extension::qsystem::barrier::barrier_ops::BarrierOperationFactory;
+    use super::*;
+
     use crate::extension::qsystem::{self, lower_tk2_op};
     use hugr::builder::{Dataflow, DataflowHugr};
     use hugr::extension::prelude::Barrier;
@@ -19,7 +20,6 @@ mod test {
     use itertools::Itertools;
     use rstest::rstest;
 
-    use crate::extension::qsystem::container::ContainerOperationFactory;
     fn opt_q_arr(size: u64) -> hugr::types::Type {
         array_type(size, option_type(qb_t()).into())
     }
@@ -84,7 +84,7 @@ mod test {
                 .filter(|&r_barr_n| {
                     h.get_optype(r_barr_n).as_func_defn().is_some_and(|op| {
                         op.func_name()
-                            .contains(BarrierOperationFactory::WRAPPED_BARRIER.as_str())
+                            .contains(barrier_ops::WRAPPED_BARRIER_NAME.as_str())
                     })
                 })
                 .exactly_one()
@@ -124,8 +124,8 @@ mod test {
         for n in h.nodes() {
             if let Some(op) = h.get_optype(n).as_extension_op() {
                 for factory_ext in [
-                    &ContainerOperationFactory::TEMP_EXT_NAME,
-                    &BarrierOperationFactory::TEMP_EXT_NAME,
+                    &qsystem::container::TEMP_UNPACK_EXT_NAME,
+                    &barrier_ops::TEMP_BARRIER_EXT_NAME,
                 ] {
                     assert_ne!(
                         op.extension_id(),
