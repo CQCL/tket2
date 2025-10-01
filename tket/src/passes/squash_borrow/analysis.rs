@@ -106,10 +106,8 @@ impl BorrowInfo {
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
         let (borrow_from, borrow_index, borrowed) = parse_borrow_signature(&sig)?;
 
-        Ok(Self {
-            ..Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
-                .map_err(|_| BorrowAnalysisError::NonConstIndex)?
-        })
+        Self::try_from_ports(circuit, borrow_node, borrow_from, borrow_index, borrowed)
+            .map_err(|_| BorrowAnalysisError::NonConstIndex)
     }
 
     fn try_from_return_node<N: HugrNode>(
@@ -122,10 +120,8 @@ impl BorrowInfo {
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
         let (borrow_from, borrow_index, borrowed) = parse_return_signature(&sig)?;
 
-        Ok(Self {
-            ..Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
-                .map_err(|_| BorrowAnalysisError::NonConstIndex)?
-        })
+        Self::try_from_ports(circuit, return_node, borrow_from, borrow_index, borrowed)
+            .map_err(|_| BorrowAnalysisError::NonConstIndex)
     }
 
     /// Prefer using [Self::try_from_borrow_node] or
@@ -247,12 +243,14 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
             &self.resource_scope_config(),
         );
 
-        let v = circuit
+        Ok(circuit
             .get_resource_starts()
             .filter(|(n, _)| !self.is_borrow_node(*n, circuit.hugr()))
-            .flat_map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
-            .collect::<Vec<_>>();
-        Ok(v.into_iter().flatten().collect())
+            .map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect())
     }
 
     /// Check if a node is a borrow node.
