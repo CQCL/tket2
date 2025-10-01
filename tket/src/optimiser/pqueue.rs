@@ -196,9 +196,7 @@ impl<S: Clone, P: Clone + Ord> StatePQueue<S, P> {
 
     /// Consume the priority queue into a vector with the all-time best states.
     pub fn into_all_time_best(mut self) -> Option<Vec<S>> {
-        let Some(all_time_best) = self.all_time_best else {
-            return None;
-        };
+        let all_time_best = self.all_time_best?;
         Some(
             all_time_best
                 .into_sorted_iter()
