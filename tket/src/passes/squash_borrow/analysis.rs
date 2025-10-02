@@ -4,10 +4,12 @@ use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
+use hugr::extension::prelude::ConstUsize;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
-use hugr::ops::{constant, OpTrait, OpType};
+use hugr::ops::{OpTrait, OpType, Value};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
+use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::{types::Type, HugrView};
 use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 
@@ -92,7 +94,7 @@ pub struct BorrowInfo {
     borrowed_resource: ResourceId,
 
     borrow_index_ty: Type,
-    borrow_index_const: constant::Value,
+    borrow_index_const: u64,
 }
 
 impl BorrowInfo {
@@ -391,7 +393,7 @@ impl<H: HugrView> ResourceScope<H> {
         res
     }
 
-    fn as_const(&self, wire: Wire<H::Node>) -> Option<&constant::Value> {
+    fn as_const(&self, wire: Wire<H::Node>) -> Option<u64> {
         let (def_node, def_port) = self.get_value_definition(wire)?;
 
         if def_port.index() > 0 {
@@ -420,11 +422,18 @@ impl<H: HugrView> ResourceScope<H> {
                 .expect("invalid signature for conversion op");
         }
 
-        if let OpType::Const(const_op) = op {
-            Some(&const_op.value)
-        } else {
-            None
+        let OpType::Const(const_op) = op else {
+            return None;
+        };
+        if let Value::Extension { e } = &const_op.value {
+            if let Some(c) = e.value().downcast_ref::<ConstUsize>() {
+                return Some(c.value());
+            }
+            if let Some(c) = e.value().downcast_ref::<ConstInt>() {
+                return Some(c.value_u());
+            }
         }
+        panic!("Unexpected index {:?}", const_op.value)
     }
 }
 
