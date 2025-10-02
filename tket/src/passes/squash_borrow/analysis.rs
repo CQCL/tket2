@@ -66,7 +66,9 @@ pub enum BorrowAnalysisError<N: HugrNode> {
 /// that is borrowed from.
 #[derive(Clone, Debug)]
 pub struct BorrowInterval<N> {
-    /// Describes what we are borrowing how and from what
+    /// Identifies what we are borrowing from
+    pub borrow_resource: ResourceId,
+    /// Describes what we are borrowing and how
     pub info: BorrowInfo,
     /// The node that borrowed the resource.
     ///
@@ -88,7 +90,8 @@ pub struct BorrowInterval<N> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BorrowInfo {
     borrow_from_ty: Type,
-    borrow_from_resource: ResourceId,
+    borrow_from: IncomingPort,
+    borrow_from_outgoing: OutgoingPort,
 
     borrowed_ty: Type,
 
@@ -178,24 +181,21 @@ impl BorrowInfo {
             }
         }
 
-        let (borrow_from, borrow_index, borrowed) = (
-            ports.borrow_from_port,
-            ports.borrow_index_port,
-            ports.borrowed_port,
-        );
+        let BorrowReturnPorts {
+            borrow_from_port,
+            borrow_index_port,
+            borrowed_port,
+            borrow_from_port_outgoing,
+        } = ports;
 
-        let borrow_from_resource = circuit
-            .get_circuit_unit(node, borrow_from)
-            .and_then(|v| v.as_resource())
-            .expect("valid port");
         let borrow_from_ty = circuit
             .hugr()
             .signature(node)
-            .and_then(|sig| sig.port_type(borrow_from).cloned())
+            .and_then(|sig| sig.port_type(borrow_from_port).cloned())
             .expect("valid port");
 
         let borrow_index_id = circuit
-            .get_circuit_unit(node, borrow_index)
+            .get_circuit_unit(node, borrow_index_port)
             .and_then(|v| v.as_copyable_wire())
             .expect("valid port");
         let borrow_index_const = circuit
@@ -205,19 +205,20 @@ impl BorrowInfo {
         let borrow_index_ty = circuit
             .hugr()
             .signature(node)
-            .and_then(|sig| sig.port_type(borrow_index).cloned())
+            .and_then(|sig| sig.port_type(borrow_index_port).cloned())
             .expect("valid port");
 
         let borrowed_ty = circuit
             .hugr()
             .get_optype(node)
             .dataflow_signature()
-            .and_then(|sig| sig.port_type(borrowed).cloned())
+            .and_then(|sig| sig.port_type(borrowed_port).cloned())
             .expect("valid port");
 
         Ok(Self {
             borrow_from_ty,
-            borrow_from_resource,
+            borrow_from: borrow_from_port,
+            borrow_from_outgoing: borrow_from_port_outgoing,
             borrowed_ty,
             borrow_index_ty,
             borrow_index_const,
@@ -225,26 +226,38 @@ impl BorrowInfo {
     }
 
     fn check_eq(&self, other: &Self) -> Result<(), String> {
-        if self == other {
+        // Do not check borrow_from/borrow_from_outgoing ports
+        if &(Self {
+            borrow_from: other.borrow_from,
+            borrow_from_outgoing: other.borrow_from_outgoing,
+            ..self.clone()
+        }) == other
+        {
             return Ok(());
         }
 
         let Self {
             borrow_from_ty,
-            borrow_from_resource,
             borrowed_ty,
             borrow_index_ty,
             borrow_index_const,
+            borrow_from,
+            borrow_from_outgoing,
         } = self;
         fn compare<T: std::fmt::Debug + PartialEq>(a: T, b: T, name: &str) -> Option<String> {
             (a != b).then_some(format!("{}: {:?} != {:?}", name, a, b))
         }
         let msg = [
             compare(borrow_from_ty, &other.borrow_from_ty, "array_ty"),
-            compare(borrow_from_resource, &other.borrow_from_resource, "b"),
             compare(borrowed_ty, &other.borrowed_ty, "elem_ty"),
             compare(borrow_index_ty, &other.borrow_index_ty, "b_index_ty"),
             compare(borrow_index_const, &other.borrow_index_const, "b_idx"),
+            compare(borrow_from, &other.borrow_from, "b_from_port"),
+            compare(
+                borrow_from_outgoing,
+                &other.borrow_from_outgoing,
+                "b_from_port_out",
+            ),
         ]
         .into_iter()
         .flatten()
@@ -326,6 +339,18 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
             match node {
                 borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
                     let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit)?;
+                    assert_eq!(
+                        Some(resource_id),
+                        circuit
+                            .get_circuit_unit(node, info.borrow_from)
+                            .and_then(|v| v.as_resource())
+                    );
+                    assert_eq!(
+                        Some(resource_id),
+                        circuit
+                            .get_circuit_unit(node, info.borrow_from_outgoing)
+                            .and_then(|v| v.as_resource())
+                    );
 
                     if let Some(prev_start) =
                         interval_starts.insert(info.borrow_index_const, (info, borrow_node))
@@ -335,6 +360,18 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                 }
                 return_node if self.is_return_node(node, circuit.hugr()) => {
                     let info = BorrowInfo::try_from_return_node(return_node, circuit)?;
+                    assert_eq!(
+                        Some(resource_id),
+                        circuit
+                            .get_circuit_unit(node, info.borrow_from)
+                            .and_then(|v| v.as_resource())
+                    );
+                    assert_eq!(
+                        Some(resource_id),
+                        circuit
+                            .get_circuit_unit(node, info.borrow_from_outgoing)
+                            .and_then(|v| v.as_resource())
+                    );
 
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
@@ -344,6 +381,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                     interval_start.0.check_eq(&info).unwrap();
 
                     complete_intervals.push(BorrowInterval {
+                        borrow_resource: resource_id,
                         borrow_node: interval_start.1,
                         return_node,
                         info,
