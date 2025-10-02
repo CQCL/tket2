@@ -17,6 +17,7 @@ from guppylang.std.quantum import (
     z,
 )
 from hugr.ops import CFG
+from pytest_snapshot.plugin import Snapshot
 from pytket._tket.circuit import Circuit
 from selene_hugr_qis_compiler import HugrReadError, check_hugr, compile_to_llvm_ir
 
@@ -75,26 +76,27 @@ def test_unsupported_pytket_ops() -> None:
 
     with pytest.raises(
         HugrReadError,
-        match="Pytket op 'CSXdg' is not currently supported by the Selene HUGR-QIS compiler",
+        match="Pytket op 'CSXdg' is not currently "
+        "supported by the Selene HUGR-QIS compiler",
     ):
         check_hugr(hugr_envelope)
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_no_results(snapshot, target_triple):
+def test_llvm_no_results(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def bar() -> None:
         q0: qubit = qubit()
         h(q0)
-        m = measure(q0)
+        measure(q0)
 
     hugr_envelope = bar.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"no_results_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_flip_some(snapshot, target_triple):
+def test_llvm_flip_some(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         q0: qubit = qubit()
@@ -110,24 +112,24 @@ def test_llvm_flip_some(snapshot, target_triple):
         result("c3", measure(q3))
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"flip_some_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_discard_array(snapshot, target_triple):
+def test_llvm_discard_array(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         qs = array(qubit() for _ in range(10))
         discard_array(qs)
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"discard_array_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_measure_array(snapshot, target_triple):
+def test_llvm_measure_array(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         qs = array(qubit() for _ in range(10))
@@ -135,15 +137,15 @@ def test_llvm_measure_array(snapshot, target_triple):
         x(qs[2])
         x(qs[3])
         x(qs[9])
-        cs = measure_array(qs)
+        measure_array(qs)
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"measure_array_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_print_array(snapshot, target_triple):
+def test_llvm_print_array(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         qs = array(qubit() for _ in range(10))
@@ -157,12 +159,12 @@ def test_llvm_print_array(snapshot, target_triple):
         result("fs", array(i * 0.0625 for i in range(100)))
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"print_array_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_exit(snapshot, target_triple):
+def test_llvm_exit(snapshot: Snapshot, target_triple: str) -> None:
     """
     This test verifies the behaviour of exit(), which should stop the shot
     and add the error message to the result stream, but should then resume
@@ -179,12 +181,12 @@ def test_llvm_exit(snapshot, target_triple):
         result("c", outcome)
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"exit_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_panic(snapshot, target_triple):
+def test_llvm_panic(snapshot: Snapshot, target_triple: str) -> None:
     """
     This test verifies the behaviour of panic(), which should stop the shot
     and should not allow any further shots to be performed. On the python
@@ -202,12 +204,12 @@ def test_llvm_panic(snapshot, target_triple):
         result("c", outcome)
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"panic_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_rus(snapshot, target_triple):
+def test_llvm_rus(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def rus(q: qubit) -> None:
         while True:
@@ -242,23 +244,23 @@ def test_llvm_rus(snapshot, target_triple):
         result("result", measure(q))
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"rus_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_get_current_shot(snapshot, target_triple):
+def test_llvm_get_current_shot(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         result("shot", get_current_shot())
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"current_shot_{target_triple}")
 
 
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_rng(snapshot, target_triple):
+def test_llvm_rng(snapshot: Snapshot, target_triple: str) -> None:
     @guppy
     def main() -> None:
         rng = RNG(42)
@@ -281,7 +283,7 @@ def test_llvm_rng(snapshot, target_triple):
         result("rint_bnd2", rint_bnd)
 
     hugr_envelope = main.compile().to_bytes()
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
     snapshot.assert_match(ir, f"rng_{target_triple}")
 
 

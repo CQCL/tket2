@@ -31,8 +31,8 @@ exclude = '''(?x)(
     | ^notebooks/   # Examples
     | ^test_files/  # Test files
     | ^tket1-passes/tket-c-api/ # Do not check conan files
-    | ^qis-compiler/**/test_.*.py$
 )'''
+ignore_missing_imports = true
 
 # TODO: Fix the lint errors and enable this
 #strict = true
