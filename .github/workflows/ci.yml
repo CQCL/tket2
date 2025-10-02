@@ -44,6 +44,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
       extensions: ${{ steps.filter.outputs.llvm }}
+      qis: ${{ steps.filter.outputs.qis-compiler }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/check-changes
@@ -84,10 +85,16 @@ jobs:
           RUSTDOCFLAGS: "-Dwarnings"
 
   check-py:
-    name: Check Python code 🐍
+    name: Check tket-py 🐍
     needs: changes
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      # avoid LLVM dependent compiler building
+      NO_INSTALL_PACKAGE: selene_hugr_qis_compiler
+    defaults:
+      run:
+        working-directory: tket-py
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -270,7 +277,13 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
-    name: tests (Python, coverage)
+    name: tket-py tests (Python, coverage)
+    env:
+      # avoid LLVM dependent compiler building
+      NO_INSTALL_PACKAGE: selene_hugr_qis_compiler
+    defaults:
+      run:
+        working-directory: tket-py
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -298,6 +311,43 @@ jobs:
           flags: python
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  tests-qis-compiler:
+    needs: changes
+    if: ${{ needs.changes.outputs.qis == 'true' }}
+    runs-on: ubuntu-latest
+    name: qis-compiler check + test
+    env:
+      NO_INSTALL_PACKAGE: tket
+    defaults:
+      run:
+        working-directory: ./qis-compiler
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
+      - name: Install Python ${{ env.PYTHON_LOWEST }}
+        run: uv python install ${{ env.PYTHON_LOWEST }}
+      - name: Setup dependencies
+        run: uv sync --python ${{ env.PYTHON_LOWEST }}
+      - name: Check formatting with ruff
+        run: uv run ruff format --check
+      - name: Lint with ruff
+        run: uv run ruff check
+      - name: Type check with mypy
+        run: uv run mypy .
+      - name: Run qis-compiler tests
+        run: uv run pytest
 
   # Ensure that serialized extensions match rust implementation
   tket-extensions:
@@ -357,7 +407,7 @@ jobs:
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket-extensions, extension-versions]
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket-extensions, extension-versions, tests-qis-compiler]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

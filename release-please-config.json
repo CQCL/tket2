@@ -54,7 +54,23 @@
                     "jsonpath": "$.package[?(@.name.value=='tket_exts')].version"
                 }
             ]
-        }
+        },
+        "qis-compiler": {
+            "release-type": "python",
+            "component": "qis-compiler",
+            "package-name": "selene_hugr_qis_compiler",
+            "include-component-in-tag": true,
+            "draft": false,
+            "prerelease": false,
+            "draft-pull-request": true,
+            "extra-files": [
+                {
+                    "type": "toml",
+                    "path": "uv.lock",
+                    "jsonpath": "$.package[?(@.name.value=='selene_hugr_qis_compiler')].version"
+                }
+            ]
+        },
     },
     "changelog-sections": [
         {
