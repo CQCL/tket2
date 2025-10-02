@@ -27,7 +27,9 @@ use crate::extension::bool::BoolOp;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
-use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
+use crate::serialize::pytket::{
+    DecodeInsertionTarget, DecodeOptions, EncodeOptions, EncodedCircuit,
+};
 use crate::TketOp;
 
 const SIMPLE_JSON: &str = r#"{
@@ -596,18 +598,26 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 ///
 /// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
 #[rstest]
-#[case::meas_ancilla(circ_measure_ancilla())]
-#[case::preset_qubits(circ_preset_qubits())]
-#[case::preset_parameterized(circ_parameterized())]
-#[case::nested_dfgs(circ_nested_dfgs())]
-#[case::global_defs(circ_global_defs())]
-#[case::recursive(circ_recursive())]
-#[case::non_local(circ_non_local())]
-fn circuit_roundtrip(#[case] circ: Circuit) {
+#[case::meas_ancilla(circ_measure_ancilla(), 1)]
+#[case::preset_qubits(circ_preset_qubits(), 1)]
+#[case::preset_parameterized(circ_parameterized(), 1)]
+#[case::nested_dfgs(circ_nested_dfgs(), 1)]
+#[case::global_defs(circ_global_defs(), 1)]
+#[case::recursive(circ_recursive(), 1)]
+#[case::non_local(circ_non_local(), 1)]
+fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let circ_signature = circ.circuit_signature().into_owned();
 
-    let ser: SerialCircuit =
-        SerialCircuit::encode(&circ, EncodeOptions::new()).unwrap_or_else(|e| panic!("{e}"));
+    let encoded: EncodedCircuit =
+        EncodedCircuit::from_hugr(&circ, EncodeOptions::new_with_subcircuits())
+            .unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains(circ.parent()));
+    assert_eq!(encoded.len(), num_circuits);
+
+    let ser: SerialCircuit = encoded
+        .extract_standalone()
+        .unwrap_or_else(|e| panic!("{e}"));
     let deser: Circuit = ser
         .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
         .unwrap_or_else(|e| panic!("{e}"));
