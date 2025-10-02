@@ -249,14 +249,14 @@ cond_624_case_1.i.i:                              ; preds = %cond_492_case_1.i.i
   %.fca.2.0.extract.i.i = extractvalue { i1, { i1, i64, i1 } } %61, 0
   %.fca.2.1.0.extract.i.i = extractvalue { i1, { i1, i64, i1 } } %61, 1, 0
   %62 = select i1 %.fca.2.0.extract.i.i, i1 %.fca.2.1.0.extract.i.i, i1 false
-  br i1 %62, label %cond_419_case_1.i.i, label %cond_exit_602.i
+  br i1 %62, label %cond_418_case_1.i.i, label %cond_exit_602.i
 
-cond_419_case_1.i.i:                              ; preds = %cond_624_case_1.i.i
+cond_418_case_1.i.i:                              ; preds = %cond_624_case_1.i.i
   %.fca.2.1.1.extract.i.i = extractvalue { i1, { i1, i64, i1 } } %61, 1, 1
   tail call void @___dec_future_refcount(i64 %.fca.2.1.1.extract.i.i)
   br label %cond_exit_602.i
 
-cond_exit_602.i:                                  ; preds = %cond_419_case_1.i.i, %cond_624_case_1.i.i
+cond_exit_602.i:                                  ; preds = %cond_418_case_1.i.i, %cond_624_case_1.i.i
   %exitcond.not.i = icmp eq i64 %34, 10
   br i1 %exitcond.not.i, label %"__hugr__.$ArrayIter._assert_all_used.helper.5$$t(qubit).580.exit.i.i", label %cond_492_case_1.i.i.i
 
