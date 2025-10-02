@@ -1,12 +1,15 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
+mod circuit;
 mod config;
 pub mod decoder;
 pub mod encoder;
 mod error;
 pub mod extension;
 mod options;
+mod unsupported;
 
+pub use circuit::EncodedCircuit;
 pub use config::{
     default_decoder_config, default_encoder_config, PytketDecoderConfig, PytketEncoderConfig,
     TypeTranslatorSet,
@@ -19,7 +22,6 @@ pub use options::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
 use hugr::{Hugr, Node};
-
 #[cfg(test)]
 mod tests;
 
@@ -31,9 +33,8 @@ use std::{fs, io};
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
-use crate::circuit::Circuit;
-
 use self::decoder::PytketDecoderContext;
+use crate::circuit::Circuit;
 
 pub use crate::passes::pytket::lower_to_pytket;
 
@@ -143,14 +144,7 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circuit: &Circuit, options: EncodeOptions) -> Result<Self, Self::EncodeError> {
-        let config = options
-            .config
-            .unwrap_or_else(|| default_encoder_config().into());
-        let region = circuit.parent();
-        let mut encoder = PytketEncoderContext::new(circuit, region, config)?;
-        encoder.run_encoder(circuit, region)?;
-        let (serial, _) = encoder.finish(circuit, region)?;
-        Ok(serial)
+        EncodedCircuit::from_hugr(circuit, options)?.extract_standalone()
     }
 }
 
