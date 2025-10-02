@@ -807,6 +807,11 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
         let optype = circ.hugr().get_optype(node);
 
+        if self.encode_nonlocal_inputs(node, optype, circ)? == EncodeStatus::Unsupported {
+            self.unsupported.record_node(node, circ);
+            return Ok(EncodeStatus::Unsupported);
+        }
+
         // Try to encode the operation using each of the registered encoders.
         //
         // If none of the encoders can handle the operation, we just add it to
@@ -836,7 +841,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     .hugr()
                     .single_linked_output(node, call.called_function_port())
                     .expect("Function call must be linked to a function");
-                if self.emit_function_call(node, fn_node, circ)? == EncodeStatus::Success {
+                if circ.hugr().get_optype(fn_node).is_func_defn()
+                    && self.emit_function_call(node, fn_node, circ)? == EncodeStatus::Success
+                {
                     return Ok(EncodeStatus::Success);
                 }
             }
@@ -849,6 +856,70 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
         self.unsupported.record_node(node, circ);
         Ok(EncodeStatus::Unsupported)
+    }
+
+    /// The toposort traversal in `run_encoder` only explores nodes in the
+    /// region.
+    ///
+    /// When a node has a non-local input, we must process its originating node
+    /// before trying to translate it.
+    ///
+    /// In general if a node has a non-local dataflow input we report it as unsupported,
+    /// unless the input comes from a global definition that we are able to encode.
+    ///
+    /// # Returns
+    ///
+    /// - [`EncodeStatus::Success`] if all node inputs are supported.
+    /// - [`EncodeStatus::Unsupported`] if the node has unsupported non-local dataflow inputs, and we should mark it as unsupported.
+    fn encode_nonlocal_inputs(
+        &mut self,
+        node: H::Node,
+        optype: &OpType,
+        circ: &Circuit<H>,
+    ) -> Result<EncodeStatus, PytketEncodeError<H::Node>> {
+        let node_parent = circ.hugr().get_parent(node);
+
+        // Explore the dataflow value and static inputs, but not the _other inputs_.
+        let input_ports = circ
+            .hugr()
+            .node_inputs(node)
+            .take(optype.value_input_count() + optype.static_input_port().is_some() as usize);
+
+        for (neigh, neigh_port) in input_ports.flat_map(|inp| circ.hugr().linked_outputs(node, inp))
+        {
+            let wire = Wire::new(neigh, neigh_port);
+            if self.values.peek_wire_values(wire).is_some() {
+                // Ignore inputs that already have registered values.
+                continue;
+            }
+
+            let neigh_parent = circ.hugr().get_parent(neigh);
+            if neigh_parent == node_parent {
+                continue;
+            }
+            if neigh_parent != Some(circ.hugr().module_root()) {
+                // Non-global dataflow input, report as unsupported.
+                return Ok(EncodeStatus::Unsupported);
+            }
+            let optype = circ.hugr().get_optype(neigh);
+            match optype {
+                OpType::FuncDefn(_) | OpType::FuncDecl(_) => {
+                    // Function definitions/declarations have special handling to be able to encode Call nodes.
+                    // We register them here with an empty set of values (since function-typed wires do not carry pytket values).
+                    self.values
+                        .register_wire::<TrackedValue>(wire, vec![], circ)?;
+                }
+                OpType::Const(_) => {
+                    if self.try_encode_node(neigh, circ)? == EncodeStatus::Unsupported {
+                        return Ok(EncodeStatus::Unsupported);
+                    }
+                }
+                _ => {
+                    return Ok(EncodeStatus::Unsupported);
+                }
+            }
+        }
+        Ok(EncodeStatus::Success)
     }
 
     /// Helper to register values for a node's output wires.

@@ -5,13 +5,13 @@ use std::io::BufReader;
 
 use hugr::builder::{
     Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
-    ModuleBuilder,
+    ModuleBuilder, SubContainer,
 };
 use hugr::extension::prelude::{bool_t, qb_t};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
-use hugr::ops::OpParent;
+use hugr::ops::{OpParent, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
@@ -290,6 +290,67 @@ fn circ_recursive() -> Circuit {
     hugr.into()
 }
 
+/// A circuit with global constant definitions.
+#[fixture]
+fn circ_global_defs() -> Circuit {
+    let input_t = vec![qb_t()];
+    let output_t = vec![qb_t()];
+    let mut h = FunctionBuilder::new(
+        "global_param",
+        Signature::new(input_t.clone(), output_t.clone()),
+    )
+    .unwrap();
+
+    let (rot_const, func_decl) = {
+        let mut module = h.module_root_builder();
+        let rot_const = module.add_constant(Value::from(ConstRotation::new(0.2).unwrap()));
+        let func_decl = module
+            .declare("func", Signature::new(input_t, output_t).into())
+            .unwrap();
+        (rot_const, func_decl)
+    };
+
+    let [q] = h.input_wires_arr();
+    let rot = h.load_const(&rot_const);
+    let [q] = h
+        .add_dataflow_op(TketOp::Rx, [q, rot])
+        .unwrap()
+        .outputs_arr();
+    let [q] = h.call(&func_decl, &[], [q]).unwrap().outputs_arr();
+    let hugr = h.finish_hugr_with_outputs([q]).unwrap();
+
+    hugr.into()
+}
+
+/// A circuit with non-local dataflow edges.
+#[fixture]
+fn circ_non_local() -> Circuit {
+    let input_t = vec![qb_t(), rotation_type()];
+    let inner_input_t = vec![qb_t()];
+    let output_t = vec![qb_t()];
+    let mut h =
+        FunctionBuilder::new("non_local", Signature::new(input_t, output_t.clone())).unwrap();
+
+    let [q, rot] = h.input_wires_arr();
+    let [q] = {
+        let mut dfg = h
+            .dfg_builder(Signature::new(inner_input_t, output_t), [q])
+            .unwrap();
+        // Rx with non-local input
+        let [q] = dfg.input_wires_arr();
+        let [q] = dfg
+            .add_dataflow_op(TketOp::Rx, [q, rot])
+            .unwrap()
+            .outputs_arr();
+        dfg.set_outputs([q]).unwrap();
+        dfg.finish_sub_container().unwrap()
+    }
+    .outputs_arr();
+    let hugr = h.finish_hugr_with_outputs([q]).unwrap();
+
+    hugr.into()
+}
+
 /// A simple circuit with ancillae
 #[fixture]
 fn circ_measure_ancilla() -> Circuit {
@@ -539,7 +600,9 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::preset_qubits(circ_preset_qubits())]
 #[case::preset_parameterized(circ_parameterized())]
 #[case::nested_dfgs(circ_nested_dfgs())]
+#[case::global_defs(circ_global_defs())]
 #[case::recursive(circ_recursive())]
+#[case::non_local(circ_non_local())]
 fn circuit_roundtrip(#[case] circ: Circuit) {
     let circ_signature = circ.circuit_signature().into_owned();
 
