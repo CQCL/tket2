@@ -331,7 +331,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
             match node {
                 borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit).unwrap();
+                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit)?;
 
                     // ALAN should we look at the index not the borrowed-resource here?
                     if let Some(prev_start) =
@@ -341,7 +341,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                     }
                 }
                 return_node if self.is_return_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_return_node(return_node, circuit).unwrap();
+                    let info = BorrowInfo::try_from_return_node(return_node, circuit)?;
 
                     // ALAN should we look at the index not the borrowed-resource here?
                     let Some(interval_start) = interval_starts.remove(&info.borrowed_resource)
