@@ -108,7 +108,7 @@ impl OpFunctionMap {
     /// Register function replacements for all temporary operations.
     /// Inserts function definitions in the given Hugr and
     /// adds replacements to the given [`ReplaceTypes`] lowerer,
-    /// Which can be used to replace extension operations with calls to the
+    /// which can be used to replace extension operations with calls to the
     /// corresponding function definitions.
     pub fn register_operation_replacements(
         self,

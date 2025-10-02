@@ -31,7 +31,7 @@ pub fn array_args<AT: ArrayKind>(ext: &CustomType) -> Option<(u64, &Type)> {
 
 /// Analyzes types to determine how they should be unpacked
 /// such that the `element_type` is extracted out into individual wires.
-/// Can recursively handle array and tuple composite types, elements inside
+/// Can recursively handle array and tuple composite types. Elements inside
 /// other composite types (e.g. from unknown extensions) are ignored.
 ///
 /// Arrays of `Option[element_type]` are treated as special cases

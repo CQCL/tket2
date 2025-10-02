@@ -114,7 +114,7 @@ mod test {
                 .count();
             assert_eq!(
                 num_run_bar_ops, 1,
-                "Should be a runtime barrier op in the function"
+                "Should be exactly one runtime barrier op in the function"
             );
             h.single_linked_input(run_barr_func_n, 0).unwrap().0
         };
