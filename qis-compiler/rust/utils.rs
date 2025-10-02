@@ -36,7 +36,7 @@ pub fn read_hugr_envelope(bytes: &[u8]) -> Result<Hugr> {
     // Check that no opaque tket1 operations are present.
     for node in package.modules[0].nodes() {
         let op = package.modules[0].get_optype(node);
-        if let Some(name) = is_opaque_tket1_op(&op) {
+        if let Some(name) = is_opaque_tket1_op(op) {
             return Err(anyhow!(
                 "Pytket op '{name}' is not currently supported by the Selene HUGR-QIS compiler"
             ));
@@ -53,9 +53,7 @@ pub fn read_hugr_envelope(bytes: &[u8]) -> Result<Hugr> {
 // TODO: Interpreting the operation payload to get the name is a bit hacky atm,
 // since `tket` does not make the `OpaqueTk1Op` payload definition public.
 fn is_opaque_tket1_op(op: &OpType) -> Option<String> {
-    let Some(ext_op) = op.as_extension_op() else {
-        return None;
-    };
+    let ext_op = op.as_extension_op()?;
 
     if ext_op.extension_id() != &TKET1_EXTENSION_ID || ext_op.unqualified_id() != TKET1_OP_NAME {
         return None;
@@ -76,5 +74,5 @@ fn is_opaque_tket1_op(op: &OpType) -> Option<String> {
         Some(name.to_string())
     }
 
-    Some(get_pytket_op_name(ext_op.args().first()).unwrap_or_else(|| format!("unknown")))
+    Some(get_pytket_op_name(ext_op.args().first()).unwrap_or_else(|| "unknown".to_string()))
 }
