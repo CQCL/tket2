@@ -16,7 +16,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CACHE_CARGO: true
-  UV_VERSION: "0.8.2"
+  UV_VERSION: "0.8.22"
 jobs:
   build_qis_compiler_wheels:
     strategy:

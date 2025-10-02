@@ -2,6 +2,15 @@
 requires = ["maturin>=1.7.4,<2.0"]
 build-backend = "maturin"
 
+[dependency-groups]
+dev = [
+    "guppylang~=0.21.0",
+    "pytest-snapshot~=0.9.0",
+    "cibuildwheel>=2.23.2",
+    "pytket~=2.9",
+    "tket",
+]
+
 [project]
 name = "selene-hugr-qis-compiler"
 description = "A Python frontend for compiling HUGR to Quantinuum's QIS."
@@ -62,7 +71,6 @@ select = [
     "PYI",
 ]
 ignore = ["F403", "F405", "PYI021", "PYI048"]
-
 
 
 [tool.uv]

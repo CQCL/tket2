@@ -16,4 +16,3 @@ def check_hugr(pkg_bytes: bytes) -> None:
 
 class HugrReadError(Exception):
     """Raised when reading HUGR fails"""
-

@@ -6,7 +6,6 @@ dev = [
     "maturin >=1.7.0,<2",
     "pytest >=8.3.2,<9",
     "pytest-cov ~=7.0",
-    "pytest-snapshot~=0.9.0",
     "ruff >=0.6.2,<0.7",
     "mypy >=1.17.1,<2",
     "hypothesis >=6.111.1,<7",
@@ -17,9 +16,6 @@ dev = [
     "pip >=25",
     # Pyyaml 0.6.0 makes setuptools fail. This ensures we're using a newer version.
     "pyyaml >=6.0.2",
-    "cibuildwheel>=2.23.2",
-    "pytket~=2.9.1",
-    "guppylang~=0.21.0",
 ]
 
 [tool.uv]
