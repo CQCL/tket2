@@ -384,9 +384,11 @@ impl<H: HugrView> ResourceScope<H> {
             .nodes()
             .iter()
             .flat_map(|&n| self.hugr().out_value_types(n).map(move |(p, _)| (n, p)));
-        all_out_value_ports.find(|&(n, p)| {
+        let res = all_out_value_ports.find(|&(n, p)| {
             self.get_circuit_unit(n, p).expect("valid port") == CircuitUnit::Copyable(wire)
-        })
+        });
+        assert_eq!(res, Some((wire.node(), wire.source())));
+        res
     }
 
     fn as_const(&self, wire: Wire<H::Node>) -> Option<&constant::Value> {
