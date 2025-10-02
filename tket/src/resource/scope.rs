@@ -266,6 +266,14 @@ impl<H: HugrView> ResourceScope<H> {
             self.nodes().contains(&next_node).then_some(next_node)
         })
     }
+
+    /// Iterate over the starting points of all resources
+    pub fn get_resource_starts(&self) -> impl Iterator<Item = (H::Node, ResourceId)> + '_ {
+        self.nodes().into_iter().flat_map(|n| {
+            self.get_resources(*n, Direction::Outgoing)
+                .filter_map(|r| self.is_resource_start(*n, r).then_some((*n, r)))
+        })
+    }
 }
 
 impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
