@@ -16,6 +16,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CACHE_CARGO: true
+  UV_VERSION: "0.8.2"
 jobs:
   build_qis_compiler_wheels:
     strategy:
@@ -38,7 +39,7 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          version: "0.6.6"
+          version: ${{ env.UV_VERSION }}
 
       # Note that we are using CIBuildWheel to build the wheels.
       # This treats linux differently to macos and windows.

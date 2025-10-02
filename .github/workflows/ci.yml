@@ -18,7 +18,7 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
   # Pinned version for the uv package manager
-  UV_VERSION: "0.4.20"
+  UV_VERSION: "0.8.2"
   UV_FROZEN: 1
   # The highest and lowest supported Python versions, used for testing
   PYTHON_HIGHEST: "3.13"
@@ -44,7 +44,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
       extensions: ${{ steps.filter.outputs.llvm }}
-      qis: ${{ steps.filter.outputs.qis-compiler }}
+      qis-compiler: ${{ steps.filter.outputs.qis-compiler }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/check-changes
@@ -314,14 +314,14 @@ jobs:
 
   tests-qis-compiler:
     needs: changes
-    if: ${{ needs.changes.outputs.qis == 'true' }}
+    if: ${{ needs.changes.outputs.qis-compiler == 'true' }}
     runs-on: ubuntu-latest
     name: qis-compiler check + test
     env:
       NO_INSTALL_PACKAGE: tket
     defaults:
       run:
-        working-directory: ./qis-compiler
+        working-directory: qis-compiler
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
