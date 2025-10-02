@@ -34,3 +34,7 @@ tket-py/docs/generated
 jupyter_execute/
 
 .github/copilot-instructions.md
+
+
+# binaries
+*.so

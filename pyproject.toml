@@ -1,12 +1,12 @@
 [tool.uv.workspace]
-members = ["tket-py", "tket-eccs", "tket-exts"]
+members = ["tket-py", "tket-eccs", "tket-exts", "qis-compiler"]
 
-[tool.uv]
-
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "maturin >=1.7.0,<2",
     "pytest >=8.3.2,<9",
     "pytest-cov ~=7.0",
+    "pytest-snapshot~=0.9.0",
     "ruff >=0.6.2,<0.7",
     "mypy >=1.17.1,<2",
     "hypothesis >=6.111.1,<7",
@@ -17,23 +17,13 @@ dev-dependencies = [
     "pip >=25",
     # Pyyaml 0.6.0 makes setuptools fail. This ensures we're using a newer version.
     "pyyaml >=6.0.2",
+    "cibuildwheel>=2.23.2",
+    "pytket~=2.9.1",
+    "guppylang~=0.21.0",
 ]
 
+[tool.uv]
 prerelease = "explicit"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.maturin]
-# Maturin is not the build system for the workspace (it is only used for `tket-py`).
-# We mirror the `tket-py/pyproject.toml` config here so `maturin develop` still works
-# from the root of the workspace.
-manifest-path = "tket-py/Cargo.toml"
-python-source = "tket-py"
-module-name = "tket._tket"
-# "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so)
-features = ["pyo3/extension-module"]
 
 [tool.mypy]
 exclude = '''(?x)(
@@ -41,6 +31,7 @@ exclude = '''(?x)(
     | ^notebooks/   # Examples
     | ^test_files/  # Test files
     | ^tket1-passes/tket-c-api/ # Do not check conan files
+    | ^qis-compiler/**/test_.*.py$
 )'''
 
 # TODO: Fix the lint errors and enable this
