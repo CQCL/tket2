@@ -91,7 +91,6 @@ pub struct BorrowInfo {
     borrow_from_resource: ResourceId,
 
     borrowed_ty: Type,
-    borrowed_resource: ResourceId,
 
     borrow_index_ty: Type,
     borrow_index_const: u64,
@@ -209,10 +208,6 @@ impl BorrowInfo {
             .and_then(|sig| sig.port_type(borrow_index).cloned())
             .expect("valid port");
 
-        let borrowed_resource = circuit
-            .get_circuit_unit(node, borrowed)
-            .and_then(|v| v.as_resource())
-            .expect("valid port");
         let borrowed_ty = circuit
             .hugr()
             .get_optype(node)
@@ -224,7 +219,6 @@ impl BorrowInfo {
             borrow_from_ty,
             borrow_from_resource,
             borrowed_ty,
-            borrowed_resource,
             borrow_index_ty,
             borrow_index_const,
         })
@@ -239,7 +233,6 @@ impl BorrowInfo {
             borrow_from_ty,
             borrow_from_resource,
             borrowed_ty,
-            borrowed_resource,
             borrow_index_ty,
             borrow_index_const,
         } = self;
@@ -250,7 +243,6 @@ impl BorrowInfo {
             compare(borrow_from_ty, &other.borrow_from_ty, "array_ty"),
             compare(borrow_from_resource, &other.borrow_from_resource, "b"),
             compare(borrowed_ty, &other.borrowed_ty, "elem_ty"),
-            compare(borrowed_resource, &other.borrowed_resource, "b_res"),
             compare(borrow_index_ty, &other.borrow_index_ty, "b_index_ty"),
             compare(borrow_index_const, &other.borrow_index_const, "b_idx"),
         ]
@@ -335,9 +327,8 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                 borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
                     let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit)?;
 
-                    // ALAN should we look at the index not the borrowed-resource here?
                     if let Some(prev_start) =
-                        interval_starts.insert(info.borrowed_resource, (info, borrow_node))
+                        interval_starts.insert(info.borrow_index_const, (info, borrow_node))
                     {
                         return Err(BorrowAnalysisError::RepeatedBorrow(prev_start.1, node));
                     }
@@ -345,8 +336,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                 return_node if self.is_return_node(node, circuit.hugr()) => {
                     let info = BorrowInfo::try_from_return_node(return_node, circuit)?;
 
-                    // ALAN should we look at the index not the borrowed-resource here?
-                    let Some(interval_start) = interval_starts.remove(&info.borrowed_resource)
+                    let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
                     };
