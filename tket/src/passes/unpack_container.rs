@@ -196,14 +196,15 @@ impl UnpackContainerBuilder {
     ) -> Result<Wire, BuildError> {
         let args = [elem_ty.clone().into()];
         let op = self.get_op(&UNPACK_OPT, args.clone()).expect("known op");
-        self.func_map.insert_with(&op, &[], |func_b| {
-            let [in_wire] = func_b.input_wires_arr();
-            let [out_wire] =
-                func_b.build_expect_sum(1, option_type(elem_ty.clone()), in_wire, |_| {
-                    format!("Value of type Option<{elem_ty:?}> is None so cannot unpack.")
-                })?;
-            Ok(vec![out_wire])
-        })?;
+        self.func_map
+            .insert_with(&op, &[elem_ty.clone().into()], |func_b| {
+                let [in_wire] = func_b.input_wires_arr();
+                let [out_wire] =
+                    func_b.build_expect_sum(1, option_type(elem_ty.clone()), in_wire, |_| {
+                        format!("Value of type Option<{elem_ty}> is None so cannot unpack.")
+                    })?;
+                Ok(vec![out_wire])
+            })?;
         Ok(builder
             .add_dataflow_op(op, [opt_wire])?
             .outputs()
