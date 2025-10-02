@@ -56,6 +56,8 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     /// Two borrows of the same index without a return
     #[display("Nodes {_0} and {_1} both borrow the same element without an intervening return")]
     RepeatedBorrow(N, N),
+    /// A borrow was not followed by a corresponding return
+    BorrowNotReturned(N),
 }
 
 /// Lifespan of a borrowed resource, represented as an interval on the resource
@@ -357,6 +359,10 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                 }
                 _ => {}
             }
+        }
+
+        if let Some((_, n)) = interval_starts.into_values().next() {
+            return Err(BorrowAnalysisError::BorrowNotReturned(n));
         }
 
         Ok(complete_intervals)
