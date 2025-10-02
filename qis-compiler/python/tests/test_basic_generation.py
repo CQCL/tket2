@@ -294,4 +294,4 @@ def test_entry_args() -> None:
         RuntimeError,
         match="Entry point function must have no input parameters",
     ):
-        _ = compile_to_llvm_ir(foo.compile().to_bytes())
+        _ = compile_to_llvm_ir(foo.compile_function().to_bytes())
