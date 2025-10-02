@@ -43,7 +43,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
-      extensions: ${{ steps.filter.outputs.llvm }}
+      extensions: ${{ steps.filter.outputs.extensions }}
       qis: ${{ steps.filter.outputs.qis }}
     steps:
       - uses: actions/checkout@v5
@@ -302,7 +302,7 @@ jobs:
 
   tests-qis-compiler:
     needs: changes
-    if: ${{ needs.changes.outputs.qis == 'true' }}
+    # if: ${{ needs.changes.outputs.qis == 'true' }}
     runs-on: ubuntu-latest
     name: qis-compiler test
     steps:
