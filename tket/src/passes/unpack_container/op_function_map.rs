@@ -50,6 +50,14 @@ impl OpFunctionMap {
 
     /// Insert a function definition for the given operation instance,
     /// if it is not already present.
+    ///
+    /// * `op`: The extension operation to store the function for.
+    /// * `mangle_args`: Type arguments to use when mangling the function name,
+    ///   to ensure uniqueness, with op name as base.
+    /// * `func_builder`: Closure that takes a [`FunctionBuilder`] and
+    ///   builds the function body, returning the output wires.
+    ///   The function signature and name will already have been set
+    ///   in the builder.
     pub fn insert_with<O, F>(
         &self,
         op: &ExtensionOp,
