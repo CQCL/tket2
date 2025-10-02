@@ -25,15 +25,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         let control = self.control_num();
         let dagger = self.modifiers.dagger;
 
-        if control != 0 || dagger {
-            if !op.is_quantum() {
-                return Err(ModifierResolverErrors::UnResolvable(
-                    n,
-                    "None quantum operation cannot be modified".to_string(),
-                    op.into(),
-                )
-                .into());
-            }
+        if (control != 0 || dagger) && !op.is_quantum() {
+            return Err(ModifierResolverErrors::UnResolvable(
+                n,
+                "None quantum operation cannot be modified".to_string(),
+                op.into(),
+            ));
         }
         match op {
             X | CX | Toffoli | Y | CY | Z | CZ | S | Sdg | T | Tdg | V | Vdg | H
@@ -71,7 +68,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 if !dagger {
                     let incoming = control..new_fn.hugr().num_inputs(new);
                     let outgoing = control..new_fn.hugr().num_outputs(new);
-                    Ok(PortVector::port_vector(new, incoming, outgoing))
+                    Ok(PortVector::from_single_node(new, incoming, outgoing))
                 } else {
                     // If dagered
                     let halfturn = new_fn.add_child_node(RotationOp::to_halfturns);
@@ -182,7 +179,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // CU(cs,t,2θ);
                 let mut pv_u = self.modify_tket_op(n, gate, new_fn, ancilla)?;
                 connect(new_fn, &rot_2.into(), &pv_u.incoming[1])?;
-                let mut t = pv_u.outgoing[0].clone().try_into().unwrap();
+                let mut t = pv_u.outgoing[0].try_into().unwrap();
 
                 // CPhase(cs,θ);
                 let theta_inputs = self.with_ancilla(&mut t, ancilla, |this, ancilla| {
@@ -222,11 +219,11 @@ impl<N: HugrNode> ModifierResolver<N> {
                     this.modify_tket_op(nd, Toffoli, new_fn, ancilla)
                 })?;
                 connect(new_fn, &a, &pv1.incoming[2])?;
-                let x_in = pv1.incoming[0].clone();
-                let y_in = pv1.incoming[1].clone();
-                let mut x = pv1.outgoing[0].clone().try_into().unwrap();
-                let mut y = pv1.outgoing[1].clone();
-                a = pv1.outgoing[2].clone();
+                let x_in = pv1.incoming[0];
+                let y_in = pv1.incoming[1];
+                let mut x = pv1.outgoing[0].try_into().unwrap();
+                let mut y = pv1.outgoing[1];
+                a = pv1.outgoing[2];
 
                 println!("P2");
                 // 2. Cm+1X(cs2,a,t)
@@ -236,9 +233,9 @@ impl<N: HugrNode> ModifierResolver<N> {
                     this.modify_tket_op(nd, CX, new_fn, ancilla)
                 })?;
                 connect(new_fn, &a, &pv2.incoming[0])?;
-                a = pv2.outgoing[0].clone();
-                let t_in = pv2.incoming[1].clone();
-                let mut t = pv2.outgoing[1].clone();
+                a = pv2.outgoing[0];
+                let t_in = pv2.incoming[1];
+                let mut t = pv2.outgoing[1];
 
                 println!("P3");
                 // 3. Cn+2X(cs1,x,y,a)
@@ -251,9 +248,9 @@ impl<N: HugrNode> ModifierResolver<N> {
                 connect(new_fn, &x.into(), &pv3.incoming[0])?;
                 connect(new_fn, &y, &pv3.incoming[1])?;
                 connect(new_fn, &a, &pv3.incoming[2])?;
-                x = pv3.outgoing[0].clone().try_into().unwrap();
-                y = pv3.outgoing[1].clone();
-                a = pv3.outgoing[2].clone();
+                x = pv3.outgoing[0].try_into().unwrap();
+                y = pv3.outgoing[1];
+                a = pv3.outgoing[2];
 
                 println!("P4");
                 // 4. Cm+1X(cs2,a,t)
@@ -264,8 +261,8 @@ impl<N: HugrNode> ModifierResolver<N> {
                 })?;
                 connect(new_fn, &a, &pv4.incoming[0])?;
                 connect(new_fn, &t, &pv4.incoming[1])?;
-                a = pv4.outgoing[0].clone();
-                t = pv4.outgoing[1].clone();
+                a = pv4.outgoing[0];
+                t = pv4.outgoing[1];
 
                 self.modifiers.control = control;
                 self.modifiers.dagger = dagger;
@@ -333,13 +330,10 @@ impl<N: HugrNode> ModifierResolver<N> {
 
                 // CnCX(cs,c,t)
                 let pv1 = self.modify_tket_op(n, CX, new_fn, ancilla)?;
-                let mut incoming = vec![
-                    pv1.incoming[0].clone(),
-                    (crz_pos, IncomingPort::from(0)).into(),
-                ];
+                let mut incoming = vec![pv1.incoming[0], (crz_pos, IncomingPort::from(0)).into()];
                 connect(new_fn, &t, &pv1.incoming[1])?;
-                let mut c = pv1.outgoing[0].clone();
-                t = pv1.outgoing[1].clone();
+                let mut c = pv1.outgoing[0];
+                t = pv1.outgoing[1];
 
                 // Rz(t,-theta/2)
                 let crz_neg = new_fn.add_child_node(Rz);
@@ -350,8 +344,8 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let pv2 = self.modify_tket_op(n, CX, new_fn, ancilla)?;
                 connect(new_fn, &c, &pv2.incoming[0])?;
                 connect(new_fn, &t, &pv2.incoming[1])?;
-                c = pv2.outgoing[0].clone();
-                t = pv2.outgoing[1].clone();
+                c = pv2.outgoing[0];
+                t = pv2.outgoing[1];
                 let mut outgoing = vec![c, t];
 
                 self.modifiers.dagger = dagger;
@@ -385,9 +379,10 @@ impl<N: HugrNode> ModifierResolver<N> {
                 };
 
                 last_control = last_dw.try_into().map_err(|_| {
-                    ModifierResolverErrors::Unreachable(format!(
-                        "Expected outgoing wire, found incoming wire while modifying Rz",
-                    ))
+                    ModifierResolverErrors::Unreachable(
+                        "Expected outgoing wire, found incoming wire while modifying Rz"
+                            .to_string(),
+                    )
                 })?;
 
                 self.push_control(last_control);
@@ -419,8 +414,8 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let c = self.controls().pop().unwrap();
                 let cs = mem::replace(self.controls(), vec![c]);
                 let pv_crx1 = self.modify_tket_op(n, V, new_fn, ancilla)?;
-                incoming.push(pv_crx1.incoming[0].clone());
-                let mut targ = pv_crx1.outgoing[0].clone().try_into().unwrap();
+                incoming.push(pv_crx1.incoming[0]);
+                let mut targ = pv_crx1.outgoing[0].try_into().unwrap();
 
                 // CnX(cs,c)
                 self.modifiers.control = control - 1;
@@ -429,9 +424,9 @@ impl<N: HugrNode> ModifierResolver<N> {
                     this.modify_tket_op(n, op, new_fn, ancilla)
                 })?;
                 connect(new_fn, &c.into(), &pv_x1.incoming[gate_control])?;
-                let c = pv_x1.outgoing[gate_control].clone().try_into().unwrap();
+                let c = pv_x1.outgoing[gate_control].try_into().unwrap();
                 for i in 0..gate_control {
-                    incoming.insert(i, pv_x1.incoming[i].clone());
+                    incoming.insert(i, pv_x1.incoming[i]);
                 }
 
                 // CVdg(c,t)
@@ -440,7 +435,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 println!("Control of Vdg: {}", self.controls()[0]);
                 let pv_crx2 = self.modify_tket_op(n, Vdg, new_fn, ancilla)?;
                 connect(new_fn, &targ.into(), &pv_crx2.incoming[0])?;
-                targ = pv_crx2.outgoing[0].clone().try_into().unwrap();
+                targ = pv_crx2.outgoing[0].try_into().unwrap();
 
                 // CnX(cs,c)
                 self.modifiers.control = control - 1;
@@ -450,7 +445,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                     this.modify_tket_op(n, op, new_fn, ancilla)
                 })?;
                 connect(new_fn, &c.into(), &pv_x2.incoming[gate_control])?;
-                c = pv_x2.outgoing[gate_control].clone().try_into().unwrap();
+                c = pv_x2.outgoing[gate_control].try_into().unwrap();
                 for i in 0..gate_control {
                     connect(new_fn, &pv_x1.outgoing[i], &pv_x2.incoming[i])?;
                 }
@@ -458,7 +453,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // CnV(cs,t)
                 // self.control_num() = control + gate_control - 1;
                 for i in 0..gate_control {
-                    self.push_control(pv_x2.outgoing[i].clone().try_into().unwrap());
+                    self.push_control(pv_x2.outgoing[i].try_into().unwrap());
                 }
                 let pv_cnrx = self.with_ancilla(&mut c, ancilla, |this, ancilla| {
                     this.modify_tket_op(n, V, new_fn, ancilla)
@@ -468,7 +463,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 }
                 connect(new_fn, &targ.into(), &pv_cnrx.incoming[0])?;
                 // connect(new_fn, &half_pos.into(), &pv_cnrx.incoming[1])?;
-                outgoing.push(pv_cnrx.outgoing[0].clone());
+                outgoing.push(pv_cnrx.outgoing[0]);
 
                 self.push_control(c);
                 assert_eq!(control, self.control_num());
@@ -488,7 +483,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let new = new_fn.add_child_node(op);
                 let incoming = 0..new_fn.hugr().num_inputs(new);
                 let outgoing = 0..new_fn.hugr().num_outputs(new);
-                Ok(PortVector::port_vector(new, incoming, outgoing))
+                Ok(PortVector::from_single_node(new, incoming, outgoing))
             }
         }
     }
@@ -564,7 +559,7 @@ impl CombinedModifier {
         if self.dagger {
             angle = -angle;
         }
-        return Some((op, angle));
+        Some((op, angle))
     }
 }
 

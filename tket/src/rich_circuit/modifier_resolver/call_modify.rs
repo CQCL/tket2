@@ -1,23 +1,15 @@
 //! Modify nodes related to function calls.
 
-use std::mem;
-
-use chrono::offset;
 use hugr::{
-    builder::{BuildError, Dataflow, FunctionBuilder},
+    builder::{BuildError, Dataflow},
     core::HugrNode,
     extension::simple_op::MakeExtensionOp,
     hugr::hugrmut::HugrMut,
     ops::{Call, CallIndirect, DataflowOpTrait, LoadFunction, OpType},
-    types::EdgeKind,
-    IncomingPort, OutgoingPort, Wire,
+    IncomingPort, Wire,
 };
-use itertools::Itertools;
 
-use crate::rich_circuit::{
-    modifier_resolver::{DirWire, PortExt},
-    Modifier,
-};
+use crate::rich_circuit::Modifier;
 
 use super::{ModifierError, ModifierResolver, ModifierResolverErrors};
 
@@ -153,31 +145,29 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Given a target node `targ` which is expected to be a `LoadFunction`, retrieve the function node it loads.
-    pub(super) fn get_loaded_function<'a>(
+    pub(super) fn get_loaded_function(
         h: &impl HugrMut<Node = N>,
         n: N,
         targ: N,
-        optype: &'a OpType,
+        optype: &OpType,
     ) -> Result<(N, LoadFunction), ModifierError<N>> {
         match optype {
             OpType::LoadFunction(load) => {
                 let (fn_node, _) = h.single_linked_output(targ, 0).unwrap();
                 let fn_optype = h.get_optype(fn_node);
                 let OpType::FuncDefn(_) = fn_optype else {
-                    return Err({
-                        ModifierError::ModifierNotApplicable(n, fn_optype.clone()).into()
-                    });
+                    return Err(ModifierError::ModifierNotApplicable(n, fn_optype.clone()));
                 };
                 // TODO: We want some machinery to prevent generating a lot of copies of modified functions
                 // from the same function.
                 Ok((fn_node, load.clone()))
             }
-            OpType::Input(_) => return Err(ModifierError::NoTarget(n).into()),
+            OpType::Input(_) => Err(ModifierError::NoTarget(n)),
             // If the target is a function, we need to create a new dataflow block of it.
             _ => {
                 // TODO: Handle modifiers provided from other nodes.
                 // For example, conditionals?
-                return Err(ModifierError::ModifierNotApplicable(n, optype.clone()).into());
+                Err(ModifierError::ModifierNotApplicable(n, optype.clone()))
             }
         }
     }

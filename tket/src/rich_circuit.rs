@@ -6,16 +6,13 @@
 //! by applying modifiers: control, dagger, or power.
 //!
 //! ## Global Phase
-//! Global phase is an operation that represents the global phase of a circuit.
+//! Global phase is an operation that applies some global phase to a circuit.
 //! It is implemented as a side-effect that takes a rotation angle as an input.
-//!
-//! ## Safe Drop
-//! A vefiried safe_drop function that deallocates
-//! a qubit from a circuit, which must be at the initial state |0>.
 pub mod control;
 pub mod dagger;
 pub mod modifier_resolver;
 pub mod power;
+pub mod qubit_types_utils;
 use std::{
     str::FromStr,
     sync::{Arc, Weak},
@@ -27,7 +24,6 @@ use crate::{
 };
 use hugr::{
     extension::{
-        prelude::qb_t,
         simple_op::{MakeOpDef, MakeRegisteredOp, OpLoadError},
         ExtensionId, OpDef, SignatureFunc, Version,
     },
@@ -65,9 +61,9 @@ pub enum Modifier {
     PowerModifier,
 }
 
-/// The extension ID for the modifier extension.
+#[allow(missing_docs)]
 pub const MODIFIER_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("modifier");
-/// The version of the modifier extension.
+#[allow(missing_docs)]
 pub const MODIFIER_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
@@ -118,7 +114,6 @@ impl MakeOpDef for Modifier {
     where
         Self: Sized,
     {
-        // [WIP] I still don't understand this.
         hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
     }
 
@@ -160,7 +155,7 @@ pub const GLOBAL_PHASE_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("g
 pub const GLOBAL_PHASE_VERSION: Version = Version::new(0, 1, 0);
 
 lazy_static! {
-    /// The extension definition for
+    /// The extension definition for global phase operation.
     pub static ref GLOBAL_PHASE_EXTENSION: Arc<Extension> =  {
             Extension::new_arc(GLOBAL_PHASE_EXTENSION_ID, GLOBAL_PHASE_VERSION, |op, extension_ref| {
                 op.add_op(
@@ -246,150 +241,169 @@ impl MakeRegisteredOp for GlobalPhase {
     }
 }
 
-/// Safe drop function for qubits.
-/// This function deallocates a qubit from a circuit, which needs to be verified to be at the initial state.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    Hash,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    EnumIter,
-    IntoStaticStr,
-    EnumString,
-)]
-pub enum SafeDrop {
-    /// Verified drop operation.
-    VerifiedZero,
-    // FUTURE: automatic uncomputation.
-}
-
-/// The extension ID for the verified extension.
-pub const SAFEDROP_EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("safe_drop");
-/// The version of the modifier extension.
-pub const SAFEDROP_VERSION: Version = Version::new(0, 1, 0);
-
-lazy_static! {
-    /// The extension definition for TKET2 rotation type and ops.
-    pub static ref SAFEDROP_EXTENSION: Arc<Extension> =  {
-        Extension::new_arc(SAFEDROP_EXTENSION_ID, SAFEDROP_VERSION, |safe_drop, extension_ref| {
-            safe_drop.add_op(
-                VERIFIED_ZERO_OP_ID,
-                "Reset qubit which is guaranteed to be |0>".to_string(),
-                SafeDrop::VerifiedZero.signature(),
-                extension_ref,
-            ).unwrap();
-        }
-    )};
-}
-
-#[allow(missing_docs)]
-pub const VERIFIED_ZERO_OP_ID: OpName = OpName::new_inline("VerifiedZero");
-
-impl MakeOpDef for SafeDrop {
-    fn opdef_id(&self) -> OpName {
-        VERIFIED_ZERO_OP_ID.clone()
-    }
-
-    fn from_def(op_def: &OpDef) -> Result<Self, OpLoadError>
-    where
-        Self: Sized,
-    {
-        hugr::extension::simple_op::try_from_name(op_def.name(), op_def.extension_id())
-    }
-
-    fn init_signature(&self, _extension_ref: &std::sync::Weak<hugr::Extension>) -> SignatureFunc {
-        Self::signature(self)
-    }
-
-    fn extension_ref(&self) -> Weak<hugr::Extension> {
-        Arc::downgrade(&SAFEDROP_EXTENSION)
-    }
-
-    fn extension(&self) -> ExtensionId {
-        SAFEDROP_EXTENSION_ID.to_owned()
-    }
-
-    fn description(&self) -> String {
-        "Safe drop operation for qubits.".into()
-    }
-}
-
-impl SafeDrop {
-    /// Signature for the safe drop operation.
-    pub fn signature(&self) -> SignatureFunc {
-        Signature::new(vec![qb_t()], type_row![]).into()
-    }
-}
-
 #[cfg(test)]
 mod test {
+    use cool_asserts::assert_matches;
     use hugr::{
-        builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
-        extension::prelude::{bool_t, qb_t},
-        ops::CallIndirect,
+        builder::{
+            Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
+            ModuleBuilder,
+        },
+        extension::{
+            prelude::{bool_t, qb_t},
+            simple_op::{MakeExtensionOp, MakeOpDef},
+            OpDef,
+        },
+        ops::{CallIndirect, ExtensionOp},
+        std_extensions::{
+            arithmetic::int_types::{int_type, ConstInt},
+            collections::array::array_type,
+        },
         type_row,
-        types::{Signature, Term},
+        types::{Signature, Term, Type},
         HugrView,
     };
-    use serde::Serialize;
+    use rstest::rstest;
+    use std::sync::Arc;
+    use strum::IntoEnumIterator;
 
-    use crate::rich_circuit::{CONTROL_OP_ID, MODIFIER_EXTENSION};
+    use crate::{
+        extension::rotation::ConstRotation,
+        rich_circuit::{
+            GlobalPhase, Modifier, CONTROL_OP_ID, DAGGER_OP_ID, GLOBAL_PHASE_EXTENSION,
+            GLOBAL_PHASE_EXTENSION_ID, GLOBAL_PHASE_OP_ID, MODIFIER_EXTENSION,
+            MODIFIER_EXTENSION_ID, POWER_OP_ID,
+        },
+    };
+
+    fn get_modifier_opdef(op: Modifier) -> Option<&'static Arc<OpDef>> {
+        MODIFIER_EXTENSION.get_op(&op.op_id())
+    }
 
     #[test]
-    fn test_control_op() {
-        let mut module = ModuleBuilder::new();
-        let decl = module
-            .declare("dummy_decl", Signature::new(bool_t(), type_row![]).into())
-            .unwrap();
-        let mut func = module
-            .define_function(
-                "dummy_function",
-                Signature::new(vec![qb_t(), bool_t()], vec![qb_t()]),
-            )
-            .unwrap();
-        let [fin1, fin2] = func.input_wires_arr();
+    fn create_modifier_extension() {
+        assert_eq!(MODIFIER_EXTENSION.name(), &MODIFIER_EXTENSION_ID);
 
+        for o in Modifier::iter() {
+            assert_eq!(Modifier::from_def(get_modifier_opdef(o).unwrap()), Ok(o));
+        }
+    }
+
+    #[test]
+    fn create_global_phase_extension() {
+        assert_eq!(GLOBAL_PHASE_EXTENSION.name(), &GLOBAL_PHASE_EXTENSION_ID);
+        assert_eq!(
+            GlobalPhase::from_def(GLOBAL_PHASE_EXTENSION.get_op(&GlobalPhase.op_id()).unwrap()),
+            Ok(GlobalPhase)
+        );
+    }
+
+    fn control_op(inout: Type, other_inputs: Type) -> (ExtensionOp, Signature) {
+        let modified_sig = Signature::new(
+            vec![array_type(1, qb_t()), inout.clone(), other_inputs.clone()],
+            vec![array_type(1, qb_t()), inout.clone()],
+        );
         let control_op = MODIFIER_EXTENSION
             .instantiate_extension_op(
                 &CONTROL_OP_ID,
-                [Term::new_list([bool_t().into()]), Term::new_list([])],
+                [
+                    Term::BoundedNat(1),
+                    Term::new_list([inout.into()]),
+                    Term::new_list([other_inputs.into()]),
+                ],
             )
             .unwrap();
+        (control_op, modified_sig)
+    }
 
-        let loaded_func = func.load_func(&decl, &[]).unwrap();
-        let controlled = func
-            .add_dataflow_op(control_op.clone(), vec![loaded_func])
+    fn dagger_op(inout: Type, other_inputs: Type) -> (ExtensionOp, Signature) {
+        let modified_sig = Signature::new(
+            vec![inout.clone(), other_inputs.clone()],
+            vec![inout.clone()],
+        );
+        let dagger_op = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &DAGGER_OP_ID,
+                [
+                    Term::new_list([inout.into()]),
+                    Term::new_list([other_inputs.into()]),
+                ],
+            )
+            .unwrap();
+        (dagger_op, modified_sig)
+    }
+
+    fn power_op(inout: Type, other_inputs: Type) -> (ExtensionOp, Signature) {
+        let modified_sig = Signature::new(
+            vec![inout.clone(), other_inputs.clone()],
+            vec![inout.clone()],
+        );
+        let power_op = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &POWER_OP_ID,
+                [
+                    Term::new_list([inout.into()]),
+                    Term::new_list([other_inputs.into()]),
+                ],
+            )
+            .unwrap();
+        (power_op, modified_sig)
+    }
+
+    #[rstest]
+    #[case(control_op, false)]
+    #[case(dagger_op, false)]
+    #[case(power_op, true)]
+    fn modifier_op(
+        #[case] op_fn: fn(Type, Type) -> (ExtensionOp, Signature),
+        #[case] needs_extra_param: bool,
+    ) {
+        let original_sig = Signature::new(vec![int_type(6), bool_t()], int_type(6));
+        let (control_op, modified_sig) = op_fn(int_type(6), bool_t());
+        let main_sig = modified_sig.clone();
+
+        let mut module = ModuleBuilder::new();
+
+        let decl = module.declare("dummy_decl", original_sig.into()).unwrap();
+
+        let mut main = module.define_function("_main", main_sig).unwrap();
+        let inputs = main.input_wires();
+        let loaded_func = main.load_func(&decl, &[]).unwrap();
+        let modifier_arg = if needs_extra_param {
+            let int = main.add_load_value(ConstInt::new_u(6, 3).unwrap());
+            vec![loaded_func, int]
+            // vec![loaded_func]
+        } else {
+            vec![loaded_func]
+        };
+        let modified = main
+            .add_dataflow_op(control_op, modifier_arg)
             .unwrap()
             .out_wire(0);
-        let ret = func
+        let outputs = main
             .add_dataflow_op(
                 CallIndirect {
-                    signature: Signature::new(vec![qb_t(), bool_t()], vec![qb_t()]),
+                    signature: modified_sig,
                 },
-                vec![controlled, fin1, fin2],
+                [modified].into_iter().chain(inputs),
             )
             .unwrap()
-            .out_wire(0);
+            .outputs();
 
-        func.finish_with_outputs(vec![ret]).unwrap();
+        main.finish_with_outputs(outputs).unwrap();
 
-        let h = module.finish_hugr().unwrap();
-        println!("{}", h.mermaid_string());
+        assert_matches!(module.finish_hugr(), Ok(_));
     }
 
     #[test]
-    fn test_gen_json_modifier() {
-        let ext = &MODIFIER_EXTENSION;
-        // open file "modifier.json"
-        let writer = std::fs::File::create("modifier.json").unwrap();
-        ext.to_owned()
-            .serialize(&mut serde_json::Serializer::pretty(writer))
+    fn global_phase_op() {
+        let mut func = FunctionBuilder::new("test_func", Signature::new_endo(type_row![])).unwrap();
+        let rot = func.add_load_value(ConstRotation::new(1.0).unwrap());
+        let global_phase_op = GLOBAL_PHASE_EXTENSION
+            .instantiate_extension_op(&GLOBAL_PHASE_OP_ID, [])
             .unwrap();
+        func.add_dataflow_op(global_phase_op, [rot]).unwrap();
+        let hugr = func.finish_hugr_with_outputs([]).unwrap();
+        assert_matches!(hugr.validate(), Ok(_));
     }
 }

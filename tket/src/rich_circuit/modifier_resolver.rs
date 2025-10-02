@@ -24,13 +24,13 @@ use std::{
 };
 
 use super::{
-    dagger::contain_quantum_type, modifier_resolver::global_phase_modify::delete_phase,
+    modifier_resolver::global_phase_modify::delete_phase, qubit_types_utils::contain_qubits,
     GlobalPhase, Modifier,
 };
 use crate::TketOp;
 
 /// An accumulated modifier that combines control, dagger, and power modifiers.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct CombinedModifier {
     control: usize,
     accum_ctrl: Vec<usize>,
@@ -39,16 +39,16 @@ pub struct CombinedModifier {
     power: bool,
 }
 
-impl Default for CombinedModifier {
-    fn default() -> Self {
-        CombinedModifier {
-            control: 0,
-            accum_ctrl: vec![],
-            dagger: false,
-            power: false,
-        }
-    }
-}
+// impl Default for CombinedModifier {
+//     fn default() -> Self {
+//         CombinedModifier {
+//             control: 0,
+//             accum_ctrl: vec![],
+//             dagger: false,
+//             power: false,
+//         }
+//     }
+// }
 
 impl CombinedModifier {
     /// Add a modifier
@@ -78,12 +78,10 @@ impl ModifierFlags {
     fn from_metadata<N: HugrNode>(h: &impl HugrView<Node = N>, n: N) -> Option<Self> {
         h.get_metadata(n, "unitary")
             .and_then(serde_json::Value::as_u64)
-            .and_then(|num| {
-                Some(ModifierFlags {
-                    dagger: (num & 1) != 0,
-                    control: (num & 2) != 0,
-                    power: (num & 4) != 0,
-                })
+            .map(|num| ModifierFlags {
+                dagger: (num & 1) != 0,
+                control: (num & 2) != 0,
+                power: (num & 4) != 0,
             })
     }
 
@@ -204,7 +202,8 @@ fn connect<N>(
             )))
         }
     };
-    Ok(new_dfg.hugr_mut().connect(n_o, p_o, n_i, p_i))
+    new_dfg.hugr_mut().connect(n_o, p_o, n_i, p_i);
+    Ok(())
 }
 
 /// Connect a wire to a node by its number, returning the other side of the connection.
@@ -258,7 +257,7 @@ pub struct PortVector<N = Node> {
     outgoing: Vec<DirWire<N>>,
 }
 impl<N: HugrNode> PortVector<N> {
-    fn port_vector(
+    fn from_single_node(
         n: N,
         inputs: impl Iterator<Item = usize>,
         outputs: impl Iterator<Item = usize>,
@@ -443,7 +442,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         new: DirWire, // new: impl Into<Either<IncomingPort, OutgoingPort>>,
     ) -> Result<(), ModifierResolverErrors<N>> {
         self.corresp_map()
-            .insert(old.clone(), vec![new.clone()])
+            .insert(old, vec![new])
             .map_or(Ok(()), |former| {
                 Err(ModifierResolverErrors::Unreachable(format!(
                     "Wire already registered for node {}. Former [{},...], Latter {}.",
@@ -454,7 +453,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     /// Remember that old wire has no correspondence.
     fn map_insert_none(&mut self, old: DirWire<N>) -> Result<(), ModifierResolverErrors<N>> {
-        self.corresp_map().insert(old.clone(), vec![]);
+        self.corresp_map().insert(old, vec![]);
         // .map_or(Ok(()), |former| {
         //     Err(ModifierResolverErrors::Unreachable(format!(
         //         "Failed to forget port {}. [{},...] are already registered.",
@@ -495,7 +494,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         if self.modifiers.dagger {
             PortVector::port_vector_rev(n, inputs, outputs, iter)
         } else {
-            PortVector::port_vector(n, inputs, outputs)
+            PortVector::from_single_node(n, inputs, outputs)
         }
     }
 
@@ -594,7 +593,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             return Err(ModifierError::NotModifier(n, optype.clone()));
         }
         // Check if this is the first modifier in a chain.
-        if let Some((caller, _)) = h.linked_inputs(n, 0).exactly_one().ok() {
+        if let Ok((caller, _)) = h.linked_inputs(n, 0).exactly_one() {
             let optype = h.get_optype(caller);
             if Modifier::from_optype(optype).is_some() {
                 return Err(ModifierError::NotInitialModifier(caller, optype.clone()));
@@ -643,11 +642,11 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         if flatten {
             let n = self.control_num();
-            input.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
-            output.to_mut().splice(0..0, iter::repeat(qb_t()).take(n));
+            input.to_mut().splice(0..0, iter::repeat_n(qb_t(), n));
+            output.to_mut().splice(0..0, iter::repeat_n(qb_t(), n));
         } else {
             for ctrls in &self.modifiers.accum_ctrl {
-                let n = ctrls.clone() as u64;
+                let n = *ctrls as u64;
                 input.to_mut().insert(0, array_type(n, qb_t()));
                 output.to_mut().insert(0, array_type(n, qb_t()));
             }
@@ -717,8 +716,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                     n,
                     "Unmodifiable node found".to_string(),
                     optype.clone(),
-                )
-                .into());
+                ));
             }
             _ => {
                 // Q. Maybe we should just ignore unknown operations?
@@ -803,7 +801,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         loop {
             // Wire inputs until the first quantum type
             while let Some(ty) = in_ty {
-                if contain_quantum_type(ty) {
+                if contain_qubits(ty) {
                     break;
                 }
                 self.map_insert(old_in_wire, new_in_wire)?;
@@ -814,7 +812,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
             // Wire outputs until the first quantum type
             while let Some(ty) = out_ty {
-                if contain_quantum_type(ty) {
+                if contain_qubits(ty) {
                     break;
                 }
                 self.map_insert(old_out_wire, new_out_wire)?;
@@ -825,7 +823,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
             // If both are quantum types, wire them in the opposite direction until the next non-quantum type
             while let Some(ty) = in_ty {
-                if !contain_quantum_type(ty) {
+                if !contain_qubits(ty) {
                     break;
                 }
                 let new_in = if !self.modifiers.dagger {
@@ -842,7 +840,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 in_ty = inputs.next();
             }
             while let Some(ty) = out_ty {
-                if !contain_quantum_type(ty) {
+                if !contain_qubits(ty) {
                     break;
                 }
                 let new_out = if !self.modifiers.dagger {
@@ -938,9 +936,9 @@ impl<N: HugrNode> ModifierResolver<N> {
         } else if Modifier::from_optype(optype).is_some() {
             // TODO: check if this is ok.
             self.forget_node(h, n)
-        } else if self.modify_array_op(h, n, optype, new_dfg)? {
-            Ok(())
-        } else if self.try_array_convert(h, n, optype, new_dfg)? {
+        } else if self.modify_array_op(h, n, optype, new_dfg)?
+            || self.try_array_convert(h, n, optype, new_dfg)?
+        {
             Ok(())
         } else {
             // Some other Hugr extension operation.
@@ -1000,13 +998,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             offset,
         )?;
         // self.wire_others(n, cfg.into(), new, new_dfg.hugr().get_optype(new))?;
-        /// TODO
-        /// TODO
-        /// StateOrder
-        /// TODO
-        /// TODO
-        /// TODO
-        /// TODO
+        // TODO: handle other ports, e.g., state order
         Ok(())
     }
 }

@@ -11,6 +11,6 @@ impl ModifierResolverPass {
     /// Run ModifierResolverPass.
     pub fn run(self, hugr: &mut Hugr) -> Result<(), QSystemPassError> {
         resolve_modifier_with_entrypoints(hugr, [hugr.entrypoint()]).unwrap();
-        return Ok(());
+        Ok(())
     }
 }

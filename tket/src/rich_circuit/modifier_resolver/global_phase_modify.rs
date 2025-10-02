@@ -76,7 +76,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // C^nRz(cs, c, θ)
                 let c_rz = self.modify_tket_op(n, TketOp::Rz, new_fn, ancilla)?;
                 connect(new_fn, &c_rz.incoming[0], &c.into())?;
-                c = c_rz.outgoing[0].clone().try_into().unwrap();
+                c = c_rz.outgoing[0].try_into().unwrap();
 
                 let mut result = vec![(halfturn, IncomingPort::from(0))];
 
@@ -92,7 +92,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                         .map(|out| out.out_wire(0))?;
                     connect(new_fn, &c_rz.incoming[1], &angle.into())?;
                 } else {
-                    let in_wire = c_rz.incoming[1].clone().try_into().unwrap();
+                    let in_wire = c_rz.incoming[1].try_into().unwrap();
                     result.push(in_wire)
                 }
 

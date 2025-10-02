@@ -336,7 +336,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         func: N,
     ) -> Result<N, ModifierResolverErrors<N>> {
-        let old_call_map = mem::replace(self.call_map(), HashMap::new());
+        let old_call_map = mem::take(self.call_map());
 
         // Old function definition
         let OpType::FuncDefn(old_fn_defn) = h.get_optype(func) else {
@@ -383,7 +383,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         &mut self,
         h: &mut impl HugrMut<Node = N>,
         func: N,
-        type_args: &Vec<TypeArg>,
+        type_args: &[TypeArg],
     ) -> Result<N, ModifierResolverErrors<N>> {
         if self.control_num() == 0 {
             return Ok(func);
@@ -399,7 +399,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let mut poly_sig = fn_defn.signature().clone();
         self.modify_signature(poly_sig.body_mut(), false);
         let instantiate = poly_sig
-            .instantiate(&type_args)
+            .instantiate(type_args)
             .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
 
         let offset = self.modifiers.accum_ctrl.len();
@@ -408,7 +408,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let mut builder =
             FunctionBuilder::new(format!("__modified__{}", fn_defn.func_name()), instantiate)?;
         let [in_node, out_node] = builder.io();
-        let call = Call::try_new(poly_sig, type_args.clone())
+        let call = Call::try_new(poly_sig, type_args.to_owned())
             .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
         let call_port = call.called_function_port();
         let call_node = builder.add_child_node(call);
@@ -433,7 +433,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h.connect(func, 0, call_node, call_port);
         let dummy_fn_node = insertion_result.inserted_entrypoint;
 
-        return Ok(dummy_fn_node);
+        Ok(dummy_fn_node)
     }
 
     pub(super) fn insert_sub_dfg(
@@ -503,8 +503,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 n,
                 "tail loop with outputs cannot be daggered.".to_string(),
                 optype.clone(),
-            )
-            .into());
+            ));
         }
         // TODO: Handle the case when TailLoop is generated from Power modifier.
         // Currently, it is not implemented.
@@ -517,7 +516,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             tail_loop.just_inputs.clone(),
             tail_loop
                 .rest
-                .extend(iter::repeat(&qb_t()).take(self.control_num())),
+                .extend(iter::repeat_n(&qb_t(), self.control_num())),
             tail_loop.just_outputs.clone(),
         )?;
         self.modify_dfg_body(h, n, &mut builder)?;
@@ -564,7 +563,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let offset = self.control_num();
 
         // Build a new Conditional with modified body.
-        let control_types: TypeRow = iter::repeat(qb_t()).take(offset).collect::<Vec<_>>().into();
+        let control_types: TypeRow = iter::repeat_n(qb_t(), offset).collect::<Vec<_>>().into();
         let mut builder = ConditionalBuilder::new(
             conditional.sum_rows.clone(),
             control_types.extend(conditional.other_inputs.iter()),
@@ -622,7 +621,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             // This actually does nothing as far as I know.
             let _ = case_builder
                 .finish_sub_container()
-                .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
+                .map_err(|e| ModifierResolverErrors::BuildError(e))?;
         }
 
         // insert the conditional
