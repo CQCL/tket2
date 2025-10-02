@@ -21,7 +21,7 @@ python:
   - "pyproject.toml"
   - "uv.lock"
 
-qis-compiler:
+qis:
   - "qis-compiler/**"
 
 extensions:
