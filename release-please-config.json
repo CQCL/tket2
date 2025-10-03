@@ -70,7 +70,7 @@
                     "jsonpath": "$.package[?(@.name.value=='selene_hugr_qis_compiler')].version"
                 }
             ]
-        },
+        }
     },
     "changelog-sections": [
         {
