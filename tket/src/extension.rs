@@ -22,8 +22,10 @@ use smol_str::SmolStr;
 pub mod bool;
 /// Definition for debug ops.
 pub mod debug;
+pub mod global_phase;
 /// Definition for ops used by Guppy.
 pub mod guppy;
+pub mod modifier;
 /// Definition for Angle ops and types.
 pub mod rotation;
 pub mod sympy;
