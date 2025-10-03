@@ -21,5 +21,23 @@ class ModifierExtension(TketExtension):
 
     def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
-        # todo
-        return []
+        return [
+            self.control,
+            self.dagger,
+            self.power,
+        ]
+
+    @functools.cached_property
+    def control(self) -> OpDef:
+        """Control modifier operation."""
+        return self().get_op("ControlModifier")
+
+    @functools.cached_property
+    def dagger(self) -> OpDef:
+        """Dagger modifier operation."""
+        return self().get_op("DaggerModifier")
+
+    @functools.cached_property
+    def power(self) -> OpDef:
+        """Power modifier operation."""
+        return self().get_op("PowerModifier")

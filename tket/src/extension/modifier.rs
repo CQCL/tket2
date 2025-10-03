@@ -34,11 +34,11 @@ use crate::modifier::{control::ModifierControl, dagger::ModifierDagger, power::M
 )]
 pub enum Modifier {
     /// Control modifier.
-    ControlModifier = 0,
+    ControlModifier,
     /// Dagger modifier.
-    DaggerModifier = 1,
+    DaggerModifier,
     /// Power modifier.
-    PowerModifier = 2,
+    PowerModifier,
 }
 
 #[allow(missing_docs)]

@@ -4,6 +4,7 @@ import functools
 from typing import List
 
 from hugr.ext import Extension, OpDef, TypeDef
+from hugr.ops import ExtOp
 from ._util import TketExtension, load_extension
 
 
@@ -21,5 +22,11 @@ class GlobalPhaseExtension(TketExtension):
 
     def OPS(self) -> List[OpDef]:
         """Return the operations defined by this extension"""
-        # todo
-        return []
+        return [
+            self.global_phase.op_def(),
+        ]
+
+    @functools.cached_property
+    def global_phase(self) -> ExtOp:
+        """Applies a global phase to the circuit."""
+        return self().get_op("GlobalPhase").instantiate()
