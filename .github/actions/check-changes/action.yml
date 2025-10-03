@@ -24,6 +24,9 @@ outputs:
   python:
     description: "Python files have changed"
     value: ${{ steps.override.outputs.out == 'true' || steps.change-filters.outputs.python == 'true' }}
+  qis:
+    description: "The qis-compiler has changed"
+    value: ${{ steps.override.outputs.out == 'true' || steps.change-filters.outputs.qis == 'true' }}
 
 runs:
   using: composite
