@@ -166,3 +166,35 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod test {
+    use std::io::BufReader;
+
+    use crate::{extension::REGISTRY, passes::squash_borrow::BorrowSquashPass};
+    use hugr::{algorithms::ComposablePass, hugr::hugrmut::HugrMut, Hugr, HugrView, Node};
+    use portgraph::NodeIndex;
+    use rstest::{fixture, rstest};
+
+    use crate::Circuit;
+
+    #[fixture]
+    pub(super) fn borrow_circuit() -> Circuit {
+        let reader =
+            BufReader::new(include_bytes!("../../../test_files/squashing_inline.hugr").as_slice());
+        let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
+        hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
+        Circuit::new(hugr)
+    }
+
+    #[rstest]
+    fn test_borrow_squash(borrow_circuit: Circuit) {
+        let mut h = borrow_circuit.into_hugr();
+        let res = BorrowSquashPass::default()
+            .with_regions([h.entrypoint()])
+            .run(&mut h)
+            .unwrap();
+        h.validate().unwrap();
+        assert_eq!(res.len(), 9); // Just what's been seen
+    }
+}

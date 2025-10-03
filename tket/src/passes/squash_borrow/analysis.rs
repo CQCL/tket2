@@ -496,25 +496,14 @@ impl IsBorrowReturn for DefaultBorrowArray {
 
 #[cfg(test)]
 mod tests {
-    use std::io::BufReader;
 
-    use hugr::{hugr::hugrmut::HugrMut, ops::ExtensionOp, Hugr, Node};
-    use portgraph::NodeIndex;
-    use rstest::{fixture, rstest};
+    use hugr::ops::ExtensionOp;
+    use rstest::rstest;
 
-    use crate::{extension::REGISTRY, Circuit};
+    use crate::Circuit;
 
+    use super::super::test::borrow_circuit;
     use super::*;
-
-    #[fixture]
-    fn borrow_circuit() -> Circuit {
-        let reader = BufReader::new(
-            include_bytes!("../../../../test_files/squashing_inline.hugr").as_slice(),
-        );
-        let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
-        hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
-        Circuit::new(hugr)
-    }
 
     /// Make sure that the resources flow correctly through borrow and return
     /// nodes.
