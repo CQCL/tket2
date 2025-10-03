@@ -215,7 +215,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         &self,
         circuit: &Circuit<H>,
         localize_errors: bool,
-    ) -> Result<Vec<Vec<BorrowAction>>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<Vec<(Wire, Vec<BorrowAction>)>, BorrowAnalysisError<H::Node>> {
         let res_tracker = ResourceScope::with_config(
             circuit.hugr(),
             circuit
@@ -234,7 +234,8 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     fn gather_intervals<'a, H: HugrView<Node = Node> + Clone + 'a>(
         &'a self,
         circuit: &'a ResourceScope<&'a H>,
-    ) -> impl Iterator<Item = Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>>> + 'a {
+    ) -> impl Iterator<Item = Result<(Wire, Vec<BorrowAction>), BorrowAnalysisError<H::Node>>> + 'a
+    {
         circuit
             .get_resource_starts()
             .map(|(start_node, resource_id)| {
@@ -249,11 +250,11 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
         inp_node: H::Node,
-    ) -> Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<(Wire, Vec<BorrowAction>), BorrowAnalysisError<H::Node>> {
         let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
         let mut actions = Vec::new();
         let mut must_be_last = None;
-        let mut first = true;
+        let mut source = None;
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
             if let Some(isnt_last) = must_be_last {
@@ -280,24 +281,25 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     }
                 });
 
-            if first {
+            if source.is_none() {
                 // First node on path creates the resource, does not borrow from it
-                first = false;
+                source = Some(node);
                 debug_assert!(circuit.is_resource_start(node, resource_id));
                 assert!(is_br.is_none());
                 continue;
             };
 
-            let Some((br, ports)) = is_br else {
+            let Some((action, ports)) = is_br else {
                 // Some other op that uses the resource, so we are done tracking borrows
                 must_be_last = Some(node);
                 continue;
             };
-            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, br.borrowed_port(), &ports)
-                .map_err(BorrowAnalysisError::NodeInfoError)?;
+            let info =
+                BorrowInfo::try_from_ports(circuit.hugr(), node, action.borrowed_port(), &ports)
+                    .map_err(BorrowAnalysisError::NodeInfoError)?;
 
-            match br {
-                action @ BorrowOrReturn::Borrow(_) => {
+            match action {
+                BorrowOrReturn::Borrow(_) => {
                     let ve = match interval_starts.entry(info.borrow_index_const) {
                         Entry::Occupied(oe) => {
                             return Err(BorrowAnalysisError::RepeatedBorrow(oe.get().1, node))
@@ -315,7 +317,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     });
                     ve.insert((info, node));
                 }
-                action @ BorrowOrReturn::Return(_) => {
+                BorrowOrReturn::Return(_) => {
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
@@ -343,7 +345,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             return Err(BorrowAnalysisError::BorrowNotReturned(n));
         }
 
-        Ok(actions)
+        let source_node = source.unwrap();
+        let source_port = circuit
+            .get_port(source_node, resource_id, Direction::Outgoing)
+            .unwrap()
+            .as_outgoing()
+            .unwrap();
+
+        Ok((Wire::new(source_node, source_port), actions))
     }
 
     fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
@@ -571,6 +580,9 @@ mod tests {
                     .is_some_and(is_borrow_ret)
             })
             .count();
-        assert_eq!(res.iter().map(|v| v.len()).sum::<usize>(), num_boro_rets);
+        assert_eq!(
+            res.iter().map(|(_, v)| v.len()).sum::<usize>(),
+            num_boro_rets
+        );
     }
 }
