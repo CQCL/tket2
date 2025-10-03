@@ -102,9 +102,9 @@ pub struct BorrowInfo {
 impl BorrowInfo {
     fn try_from_borrow_node<N: HugrNode>(
         borrow_node: N,
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
+        hugr: &impl HugrView<Node = N>,
     ) -> Result<Self, BorrowAnalysisError<N>> {
-        let op = circuit.hugr().get_optype(borrow_node);
+        let op = hugr.get_optype(borrow_node);
         let sig = op
             .dataflow_signature()
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
@@ -117,14 +117,14 @@ impl BorrowInfo {
             borrowed_port: OutgoingPort::from(0).into(),
             borrow_from_port_outgoing: OutgoingPort::from(1),
         };
-        Self::try_from_ports(circuit, borrow_node, ports)
+        Self::try_from_ports(hugr, borrow_node, ports)
     }
 
     fn try_from_return_node<N: HugrNode>(
         return_node: N,
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
+        hugr: &impl HugrView<Node = N>,
     ) -> Result<Self, BorrowAnalysisError<N>> {
-        let op = circuit.hugr().get_optype(return_node);
+        let op = hugr.get_optype(return_node);
         let sig = op
             .dataflow_signature()
             .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
@@ -139,7 +139,7 @@ impl BorrowInfo {
             borrow_from_port_outgoing: OutgoingPort::from(0),
         };
 
-        Self::try_from_ports(circuit, return_node, ports)
+        Self::try_from_ports(hugr, return_node, ports)
     }
 
     /// Prefer using [Self::try_from_borrow_node] or
@@ -153,12 +153,12 @@ impl BorrowInfo {
     ///
     /// If the ports are not valid
     fn try_from_ports<N: HugrNode>(
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
+        hugr: &impl HugrView<Node = N>,
         node: N,
         ports: BorrowReturnPorts,
     ) -> Result<Self, BorrowAnalysisError<N>> {
         {
-            let sig = circuit.hugr().signature(node).unwrap();
+            let sig = hugr.signature(node).unwrap();
 
             let borrow_from_ty = sig.port_type(ports.borrow_from_port).unwrap();
             let borrow_index_ty = sig.port_type(ports.borrow_index_port).unwrap();
@@ -188,24 +188,21 @@ impl BorrowInfo {
             borrow_from_port_outgoing,
         } = ports;
 
-        let borrow_from_ty = circuit
-            .hugr()
+        let borrow_from_ty = hugr
             .signature(node)
             .and_then(|sig| sig.port_type(borrow_from_port).cloned())
             .expect("valid port");
 
-        let borrow_index = Wire::from_connected_port(node, borrow_index_port, circuit.hugr());
-        let borrow_index_const = find_const(circuit.hugr(), borrow_index)
+        let borrow_index = Wire::from_connected_port(node, borrow_index_port, hugr);
+        let borrow_index_const = find_const(hugr, borrow_index)
             .ok_or(BorrowAnalysisError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
-        let borrow_index_ty = circuit
-            .hugr()
+        let borrow_index_ty = hugr
             .signature(node)
             .and_then(|sig| sig.port_type(borrow_index_port).cloned())
             .expect("valid port");
 
-        let borrowed_ty = circuit
-            .hugr()
+        let borrowed_ty = hugr
             .get_optype(node)
             .dataflow_signature()
             .and_then(|sig| sig.port_type(borrowed_port).cloned())
@@ -334,7 +331,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
             match node {
                 borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit)?;
+                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit.hugr())?;
                     assert_eq!(
                         Some(resource_id),
                         circuit
@@ -355,7 +352,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                     }
                 }
                 return_node if self.is_return_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_return_node(return_node, circuit)?;
+                    let info = BorrowInfo::try_from_return_node(return_node, circuit.hugr())?;
                     assert_eq!(
                         Some(resource_id),
                         circuit
