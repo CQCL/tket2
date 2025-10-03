@@ -90,7 +90,7 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     #[display("Nodes {_0} and {_1} both borrow the same element without an intervening return")]
     RepeatedBorrow(N, N),
     /// A borrow was not followed by a corresponding return
-    BorrowNotReturned(N),
+    BorrowNotReturned(#[error(not(source))] N),
     /// Could not analyse a node
     NodeInfoError(NodeInfoError),
 }
