@@ -22,7 +22,10 @@ python:
   - "uv.lock"
 
 qis:
+  - *rust-core
   - "qis-compiler/**"
+  - "pyproject.toml"
+  - "uv.lock"
 
 extensions:
   - "tket-exts/src/tket_exts/data/tket/**"

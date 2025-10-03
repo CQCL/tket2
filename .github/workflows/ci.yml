@@ -302,7 +302,7 @@ jobs:
 
   tests-qis-compiler:
     needs: changes
-    # if: ${{ needs.changes.outputs.qis == 'true' }}
+    if: ${{ needs.changes.outputs.qis == 'true' }}
     runs-on: ubuntu-latest
     name: qis-compiler test
     steps:
