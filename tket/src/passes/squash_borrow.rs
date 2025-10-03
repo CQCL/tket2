@@ -4,61 +4,81 @@ pub mod analysis;
 
 pub use analysis::BorrowAnalysis;
 use analysis::BorrowOrReturn;
-use hugr_core::{hugr::hugrmut::HugrMut, Node, Wire};
+use hugr::hugr::hugrmut::HugrMut;
+use hugr::{IncomingPort, Node, OutgoingPort, Wire};
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-fn optimize_one_array<H: HugrMut<Node = Node>>(
+use crate::passes::squash_borrow::analysis::BorrowAction;
+
+#[derive(Clone, Debug)]
+struct BorrowFromPorts {
+    inc: IncomingPort,
+    out: OutgoingPort,
+}
+
+pub fn optimize_one_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     source: Wire,
-    nodes: impl Iterator<Item = (Node, BorrowOrReturn, u64)>,
+    nodes: impl Iterator<Item = BorrowAction>,
 ) {
     let mut last_array_outport = source;
-    let mut borrowed: HashMap<u64, (Node, Option<Node>)> = HashMap::new(); // index -> (borrow_node, optional return_node)
-    let emit = |hugr: &mut H, node, borrow_from_in, borrow_from_out| {
+    struct Borrow(Node, OutgoingPort);
+    struct Return(Node, BorrowFromPorts);
+    let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new();
+    let mut emit = |hugr: &mut H, node, borrow_from: BorrowFromPorts| {
         hugr.disconnect(last_array_outport.node(), last_array_outport.source());
-        hugr.disconnect(node, borrow_from_in);
+        hugr.disconnect(node, borrow_from.inc);
         hugr.connect(
             last_array_outport.node(),
             last_array_outport.source(),
             node,
-            borrow_from_in,
+            borrow_from.inc,
         );
-        last_array_outport = Wire::new(node, borrow_from_out);
+        last_array_outport = Wire::new(node, borrow_from.out);
     };
-    for (node, borrow_or_return, index) in nodes {
-        match (borrow_or_return, borrowed.get(&index)) {
-            (BorrowOrReturn::Borrow, None) => {
+    for BorrowAction {
+        node,
+        borrow_index_const: index,
+        action,
+        borrow_from,
+    } in nodes
+    {
+        match (action, borrowed.entry(index)) {
+            (BorrowOrReturn::Borrow(borrowed_out), Entry::Vacant(ve)) => {
                 // initial borrow - record and emit
-                borrowed.insert(index, (node, None));
-                emit(hugr, node, borrow_from_in, borrow_from_out);
+                ve.insert((Borrow(node, borrowed_out), None));
+                emit(hugr, node, borrow_from);
             }
 
             // "interesting" case - return after borrow - record but do not emit (yet)
-            (BorrowOrReturn::Return, Some((prev_borrow, None))) => {
-                borrowed.insert(index, (*prev_borrow, Some(node)));
+            (BorrowOrReturn::Return(_), Entry::Occupied(mut oe)) => {
+                if oe.get_mut().1.replace(Return(node, borrow_from)).is_some() {
+                    panic!("Double return");
+                }
             }
 
-            (BorrowOrReturn::Borrow, Some((prev_borrow, Some(prev_return)))) => {
+            (BorrowOrReturn::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
+                let (prev_borrow, prev_return) = oe.get_mut();
+                let Some(prev_return) = prev_return.take() else {
+                    panic!("Double borrow");
+                };
                 // The interesting case...elide!
                 let tgt = hugr
-                    .single_linked_input(node, borrowed_in_port)
+                    .single_linked_input(node, borrowed_out)
                     .expect("linear");
-                hugr.connect(prev_borrow, prev_borrow_port, tgt.0, tgt.1);
-                hugr.remove_node(prev_return);
+                hugr.connect(prev_borrow.0, prev_borrow.1, tgt.0, tgt.1);
+                hugr.remove_node(prev_return.0);
                 hugr.remove_node(node);
-                borrowed.insert(index, (prev_borrow, None));
             }
 
-            // The following should all have been ruled out by analysis earlier:
-            (BorrowOrReturn::Borrow, Some((prev_borrow, None))) => panic!("Double borrow"),
-            (BorrowOrReturn::Return, None) => panic!("Return without borrow"),
-            (BorrowOrReturn::Return, Some((_, Some(_)))) => panic!("Double return"),
+            (BorrowOrReturn::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
         }
     }
     // Finally....
-    for (borrow, opt_return) in borrowed.values() {
-        let return_node = opt_return.unwrap(); // analysis should have ensured this will work
-        emit(hugr, return_node, borrow_from_in, borrow_from_out);
+    for (_, opt_return) in borrowed.into_values() {
+        let Return(return_node, borrow_from) = opt_return.unwrap(); // analysis should have ensured this will work
+        emit(hugr, return_node, borrow_from);
     }
 }

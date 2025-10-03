@@ -1,5 +1,6 @@
 //! An analysis pass that identifies borrowed resources and their lifetimes.
 
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
 use derive_more::derive::{Display, Error};
@@ -13,8 +14,8 @@ use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire};
-use itertools::Itertools;
 
+use super::BorrowFromPorts;
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
@@ -22,8 +23,17 @@ use crate::Circuit;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorrowOrReturn {
-    Borrow,
-    Return,
+    Borrow(OutgoingPort),
+    Return(IncomingPort),
+}
+
+impl BorrowOrReturn {
+    pub fn borrowed_port(&self) -> Port {
+        match self {
+            BorrowOrReturn::Borrow(p) => (*p).into(),
+            BorrowOrReturn::Return(p) => (*p).into(),
+        }
+    }
 }
 
 /// A predicate that determines if a node is a borrow or return node.
@@ -85,28 +95,13 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     NodeInfoError(NodeInfoError),
 }
 
-/// Lifespan of a borrowed resource, represented as an interval on the resource
-/// that is borrowed from.
+/// Information about a node that is either a borrow from or return to a resource.
 #[derive(Clone, Debug)]
-pub struct BorrowInterval<N> {
-    /// Identifies what we are borrowing from
-    pub borrow_resource: ResourceId,
-    /// Describes what we are borrowing and how
-    pub info: BorrowInfo,
-    /// The node that borrowed the resource.
-    ///
-    /// This will always be the first node on the resource path of the borrowed
-    /// resource.
-    ///
-    /// This node satisfies that [BorrowAnalysis::is_borrow_node] returns true.
-    /// Typically chosen to be a `BArrayUnsafeOpDef::borrow` op or similar.
-    pub borrow_node: N,
-    /// The node that returns the resource, i.e. the node that "consumes" the
-    /// borrowed resource.
-    ///
-    /// This node satisfies that [BorrowAnalysis::is_return_node] returns true.
-    /// Typically chosen to be a `BArrayUnsafeOpDef::return` op or similar.
-    pub return_node: N,
+pub struct BorrowAction {
+    pub node: Node,
+    pub borrow_index_const: u64,
+    pub action: BorrowOrReturn,
+    pub borrow_from: BorrowFromPorts,
 }
 
 /// Incomplete information about a borrow interval, used during the analysis.
@@ -133,7 +128,8 @@ impl BorrowInfo {
     fn try_from_ports<N: HugrNode>(
         hugr: &impl HugrView<Node = N>,
         node: N,
-        ports: BorrowReturnPorts,
+        borrowed_port: Port,
+        ports: &BorrowReturnPorts,
     ) -> Result<Self, NodeInfoError> {
         let sig = hugr
             .signature(node)
@@ -147,7 +143,7 @@ impl BorrowInfo {
         }
 
         let borrow_index_ty = sig.port_type(ports.elem_index).expect("valid port");
-        let borrowed_ty = sig.port_type(ports.borrowed).expect("valid port");
+        let borrowed_ty = sig.port_type(borrowed_port).expect("valid port");
 
         if !borrow_index_ty.copyable() {
             return Err(NodeInfoError::NonCopyableBorrowIndex);
@@ -219,7 +215,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         &self,
         circuit: &Circuit<H>,
         localize_errors: bool,
-    ) -> Result<Vec<Vec<(Node, BorrowOrReturn, u64)>>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<Vec<Vec<BorrowAction>>, BorrowAnalysisError<H::Node>> {
         let res_tracker = ResourceScope::with_config(
             circuit.hugr(),
             circuit
@@ -238,45 +234,24 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     fn gather_intervals<'a, H: HugrView<Node = Node> + Clone + 'a>(
         &'a self,
         circuit: &'a ResourceScope<&'a H>,
-    ) -> impl Iterator<Item = Result<Vec<(Node, BorrowOrReturn, u64)>, BorrowAnalysisError<H::Node>>> + 'a
-    {
+    ) -> impl Iterator<Item = Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>>> + 'a {
         circuit
             .get_resource_starts()
             .map(|(start_node, resource_id)| {
-                let intervals = self.get_borrow_intervals(circuit, resource_id, start_node)?;
-
-                let nodes = intervals
-                    .into_iter()
-                    .flat_map(|int| {
-                        [
-                            (
-                                int.borrow_node,
-                                (BorrowOrReturn::Borrow, int.info.borrow_index_const),
-                            ),
-                            (
-                                int.return_node,
-                                (BorrowOrReturn::Return, int.info.borrow_index_const),
-                            ),
-                        ]
-                    })
-                    .collect::<BTreeMap<_, _>>();
-                Ok(circuit
-                    .resource_path_iter(resource_id, start_node, Direction::Outgoing)
-                    .filter_map(|n| nodes.get(&n).map(|(br, idx)| (n, *br, *idx)))
-                    .collect())
+                self.check_actions_paired(circuit, resource_id, start_node)
             })
     }
 
     /// Traverse the resource path of the given resource and find all pairs
     /// of borrow and return nodes that match up.
-    fn get_borrow_intervals<H: HugrView<Node = Node>>(
+    fn check_actions_paired<H: HugrView<Node = Node>>(
         &self,
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
         inp_node: H::Node,
-    ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
-        let mut interval_starts = BTreeMap::new();
-        let mut complete_intervals = Vec::new();
+    ) -> Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>> {
+        let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
+        let mut actions = Vec::new();
         let mut must_be_last = None;
         let mut first = true;
 
@@ -292,14 +267,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .is_br
                 .is_borrow_return(node, circuit.hugr())
                 .map_err(BorrowAnalysisError::NodeInfoError)?
-                .filter(|(_, ports)| {
+                .filter(|(act, ports)| {
                     let bf = circuit.get_circuit_unit(node, ports.borrow_from_in);
                     assert_eq!(bf, circuit.get_circuit_unit(node, ports.borrow_from_out));
                     bf.unwrap() == CircuitUnit::Resource(resource_id) || {
                         // Ignore nested array creation/ending (borrowing from/returning back to parent)
                         assert_eq!(
                             Some(CircuitUnit::Resource(resource_id)),
-                            circuit.get_circuit_unit(node, ports.borrowed)
+                            circuit.get_circuit_unit(node, act.borrowed_port())
                         );
                         false
                     }
@@ -318,18 +293,29 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 must_be_last = Some(node);
                 continue;
             };
-            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, ports)
+            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, br.borrowed_port(), &ports)
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
 
             match br {
-                BorrowOrReturn::Borrow => {
-                    if let Some(prev_start) =
-                        interval_starts.insert(info.borrow_index_const, (info, node))
-                    {
-                        return Err(BorrowAnalysisError::RepeatedBorrow(prev_start.1, node));
-                    }
+                action @ BorrowOrReturn::Borrow(_) => {
+                    let ve = match interval_starts.entry(info.borrow_index_const) {
+                        Entry::Occupied(oe) => {
+                            return Err(BorrowAnalysisError::RepeatedBorrow(oe.get().1, node))
+                        }
+                        Entry::Vacant(ve) => ve,
+                    };
+                    actions.push(BorrowAction {
+                        node,
+                        borrow_index_const: info.borrow_index_const,
+                        action,
+                        borrow_from: BorrowFromPorts {
+                            inc: ports.borrow_from_in,
+                            out: ports.borrow_from_out,
+                        },
+                    });
+                    ve.insert((info, node));
                 }
-                BorrowOrReturn::Return => {
+                action @ BorrowOrReturn::Return(_) => {
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
@@ -337,11 +323,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     // Perhaps we should return the error here, but let's see how it's triggered
                     interval_start.0.check_eq(&info).unwrap();
 
-                    complete_intervals.push(BorrowInterval {
-                        borrow_resource: resource_id,
-                        borrow_node: interval_start.1,
-                        return_node: node,
-                        info,
+                    actions.push(BorrowAction {
+                        node,
+                        borrow_index_const: info.borrow_index_const,
+                        action,
+                        borrow_from: BorrowFromPorts {
+                            inc: ports.borrow_from_in,
+                            out: ports.borrow_from_out,
+                        },
                     })
                 }
             }
@@ -354,7 +343,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             return Err(BorrowAnalysisError::BorrowNotReturned(n));
         }
 
-        Ok(complete_intervals)
+        Ok(actions)
     }
 
     fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
@@ -414,11 +403,11 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
                 .is_borrow_return(node, hugr)
                 .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
             {
-                Some((BorrowOrReturn::Borrow, _)) => {
+                Some((BorrowOrReturn::Borrow(_), _)) => {
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![None, Some(borrowed_resource)]
                 }
-                Some((BorrowOrReturn::Return, _)) => {
+                Some((BorrowOrReturn::Return(_), _)) => {
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![Some(borrowed_resource)]
                 }
@@ -438,7 +427,6 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
 pub struct BorrowReturnPorts {
     borrow_from_in: IncomingPort,
     elem_index: IncomingPort,
-    borrowed: Port,
     borrow_from_out: OutgoingPort,
 }
 
@@ -480,11 +468,10 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 let ports = BorrowReturnPorts {
                     borrow_from_in: IncomingPort::from(0),
                     elem_index: IncomingPort::from(1),
-                    borrowed: OutgoingPort::from(0).into(),
                     borrow_from_out: OutgoingPort::from(1),
                 };
 
-                Some((BorrowOrReturn::Borrow, ports))
+                Some((BorrowOrReturn::Borrow(OutgoingPort::from(0)), ports))
             }
             Ok(BArrayUnsafeOpDef::r#return) => {
                 let op = hugr.get_optype(node);
@@ -498,10 +485,9 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 let ports = BorrowReturnPorts {
                     borrow_from_in: IncomingPort::from(0),
                     elem_index: IncomingPort::from(1),
-                    borrowed: IncomingPort::from(2).into(),
                     borrow_from_out: OutgoingPort::from(0),
                 };
-                Some((BorrowOrReturn::Return, ports))
+                Some((BorrowOrReturn::Return(IncomingPort::from(2)), ports))
             }
             _ => None,
         })
@@ -568,6 +554,6 @@ mod tests {
             .run(&borrow_circuit, false)
             .unwrap();
 
-        assert_eq!(res.len(), 17);
+        assert_eq!(res.len(), 38); // Arbitrary!
     }
 }
