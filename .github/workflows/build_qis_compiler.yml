@@ -112,14 +112,6 @@ jobs:
           path: wheelhouse
           merge-multiple: true
 
-      # TODO release-please
-      # - name: GH Release
-      #   if: ${{ steps.check-tag.outputs.run == 'true' }}
-      #   uses: softprops/action-gh-release@v2
-      #   with:
-      #     files: ${{ matrix.target.upload }}
-      #     generate_release_notes: true
-
       - name: Setup Python
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: actions/setup-python@v5

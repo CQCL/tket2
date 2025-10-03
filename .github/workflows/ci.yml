@@ -272,6 +272,8 @@ jobs:
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
     name: tket-py tests (Python, coverage)
+    env:
+      PKGS: tket-py tket-eccs tket-exts
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -285,9 +287,10 @@ jobs:
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Setup dependencies
-        run: uv sync --python ${{ env.PYTHON_LOWEST }} --package=tket --exact
+        # avoid building qis-compiler
+        run: uv sync --package=tket --exact --python ${{ env.PYTHON_LOWEST }}
       - name: Run python tests with coverage instrumentation
-        run: uv run --no-project pytest tket-py --cov=./ --cov-report=xml
+        run: uv run --no-project pytest --cov=./ --cov-report=xml ${{ env.PKGS }} 
       - name: Upload python coverage to codecov.io
         if: github.event_name != 'merge_group'
         uses: codecov/codecov-action@v5
@@ -322,7 +325,18 @@ jobs:
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Run qis-compiler tests
-        run: uv run --python ${{ env.PYTHON_LOWEST }} --exact --package selene_hugr_qis_compiler pytest qis-compiler
+        run: uv run --python ${{ env.PYTHON_LOWEST }} --exact --package selene_hugr_qis_compiler --cov=./ --cov-report=xml pytest qis-compiler
+      - name: Upload python coverage to codecov.io
+        if: github.event_name != 'merge_group'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          # Ensures we only upload this file
+          disable_search: true
+          name: python
+          flags: qis-compiler
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Ensure that serialized extensions match rust implementation
   tket-extensions:
