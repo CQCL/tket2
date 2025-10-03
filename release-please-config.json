@@ -64,6 +64,7 @@
             "prerelease": false,
             "draft-pull-request": true,
             "extra-files": [
+                "qis-compiler/python/selene_hugr_qis_compiler/__init__.py",
                 {
                     "type": "toml",
                     "path": "uv.lock",
