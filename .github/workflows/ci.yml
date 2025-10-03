@@ -290,7 +290,7 @@ jobs:
         # avoid building qis-compiler
         run: uv sync --package=tket --exact --python ${{ env.PYTHON_LOWEST }}
       - name: Run python tests with coverage instrumentation
-        run: uv run --no-project pytest --cov=./ --cov-report=xml ${{ env.PKGS }} 
+        run: uv run --no-project pytest --cov=./ --cov-report=xml ${{ env.PKGS }}
       - name: Upload python coverage to codecov.io
         if: github.event_name != 'merge_group'
         uses: codecov/codecov-action@v5
