@@ -15,7 +15,7 @@ use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
-use super::{BorrowAction, BorrowFromPorts, BorrowOrReturn};
+use super::{BorrowAction, BorrowFromPorts, BorrowIndex, BorrowOrReturn};
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
@@ -190,7 +190,9 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     /// Find all pairs of borrow and return nodes that match within the DFG and
     /// return them as borrow intervals. Nodes may not be matched successfully
     /// for a variety of reasons:
-    ///  - the borrow index is not a statically known constant
+    ///  - the borrow index is not a statically known constant. At the present time
+    ///    the analysis will fail with [NodeInfoError::NonConstIndex] rather
+    ///    than returning [BorrowIndex::Right].
     ///  - it cannot be established that the borrow and return nodes match up
     ///  - the nodes are another unknown op
     ///
@@ -234,6 +236,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         resource_id: ResourceId,
         inp_node: H::Node,
     ) -> Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>> {
+        // Analysis only produces constant indices for now
         let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
         let mut actions = Vec::new();
         let mut must_be_last = None;
@@ -290,7 +293,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     };
                     actions.push(BorrowAction {
                         node,
-                        borrow_index_const: info.borrow_index_const,
+                        borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
                         borrow_from: BorrowFromPorts {
                             inc: ports.borrow_from_in,
@@ -309,7 +312,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
 
                     actions.push(BorrowAction {
                         node,
-                        borrow_index_const: info.borrow_index_const,
+                        borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
                         borrow_from: BorrowFromPorts {
                             inc: ports.borrow_from_in,

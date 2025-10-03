@@ -7,6 +7,7 @@ use hugr::algorithms::ComposablePass;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{IncomingPort, Node, OutgoingPort, Port, Wire};
+use itertools::Either;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -107,13 +108,17 @@ impl BorrowOrReturn {
     }
 }
 
+/// An element index to a borrow/return.
+/// If right, i.e. non-constant, then no elision may be possible.
+pub type BorrowIndex = Either<u64, Wire>;
+
 /// Information about a node that is either a borrow from or return to a resource.
 #[derive(Clone, Debug)]
 pub struct BorrowAction {
     /// The node in the Hugr that this instance describes
     pub node: Node,
     /// The constant index of the element being borrowed/returned
-    pub borrow_index_const: u64,
+    pub borrow_index_const: BorrowIndex,
     /// Whether this is a borrow or return, and the port for the borrowed value.
     pub action: BorrowOrReturn,
     /// The ports by which the container array reaches and leaves this node.
@@ -153,6 +158,12 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
             .expect("linear")
     };
 
+    if nodes.iter().any(|n| n.borrow_index_const.is_right()) {
+        // If any index is non-constant, for now don't elide anything.
+        // (May be able to proceed very carefully...)
+        return Vec::new();
+    }
+
     struct Borrow(Node, OutgoingPort);
     struct Return(Node, IncomingPort);
     // The map is from borrow index to (borrow node, optional return node)
@@ -176,7 +187,8 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
         borrow_from,
     } in nodes
     {
-        match (action, borrowed.entry(index)) {
+        // We bailed out if any indices were Right (i.e. non-Const) above.
+        match (action, borrowed.entry(index.unwrap_left())) {
             (BorrowOrReturn::Borrow(borrowed_out), Entry::Vacant(ve)) => {
                 // initial borrow - record and emit
                 ve.insert((Borrow(node, borrowed_out), None));
@@ -269,6 +281,7 @@ mod test {
 
         let get_index = |n| find_const(&h, to_wire(h.single_linked_output(n, 1).unwrap())).unwrap();
         let all_indices = |b| {
+            // NOTE ALAN: h.nodes() doesn't work, something is non-const...
             h.entry_descendants()
                 .filter(|n| {
                     h.get_optype(*n)
