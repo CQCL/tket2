@@ -498,7 +498,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
 mod tests {
     use std::io::BufReader;
 
-    use hugr::{hugr::hugrmut::HugrMut, Hugr, Node};
+    use hugr::{hugr::hugrmut::HugrMut, ops::ExtensionOp, Hugr, Node};
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
 
@@ -555,5 +555,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.len(), 38); // Arbitrary!
+
+        fn is_borrow_ret(eop: &ExtensionOp) -> bool {
+            matches!(
+                BArrayUnsafeOpDef::from_extension_op(eop),
+                Ok(BArrayUnsafeOpDef::borrow) | Ok(BArrayUnsafeOpDef::r#return)
+            )
+        }
+        let h = borrow_circuit.hugr();
+        let num_boro_rets = h
+            .children(h.entrypoint())
+            .filter(|n| {
+                h.get_optype(*n)
+                    .as_extension_op()
+                    .is_some_and(is_borrow_ret)
+            })
+            .count();
+        assert_eq!(res.iter().map(|v| v.len()).sum::<usize>(), num_boro_rets);
     }
 }
