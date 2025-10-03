@@ -557,10 +557,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 if let Some(EdgeKind::StateOrder) = h.get_optype(out_node).port_kind(out_port) {
-                    // If the dagger is applied, we ignore the state order
-                    if self.modifiers.dagger {
-                        continue;
-                    }
+                    // TODO (k.hirata): Handle StateOrder edges properly.
+                    continue;
                 }
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
                     for a in self.map_get(&(in_node, in_port).into())? {
