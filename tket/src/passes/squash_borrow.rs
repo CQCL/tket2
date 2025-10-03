@@ -73,11 +73,9 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
         };
         let mut results = Vec::new();
         for node in regions {
-            for (source, actions) in analysis.run(
-                &Circuit::new(hugr.with_entrypoint(*node)),
-                self.allow_errors_same_dfg,
-            )? {
-                results.extend(borrow_squash_array(hugr, source, actions));
+            let circ = Circuit::new(hugr.with_entrypoint(*node));
+            for actions in analysis.run(&circ, self.allow_errors_same_dfg)? {
+                results.extend(borrow_squash_array(hugr, actions));
             }
         }
         Ok(results)
@@ -94,27 +92,44 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
 /// # Panics
 ///
 /// If `nodes` are not well-paired
-pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
+fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
-    source: Wire,
-    nodes: impl IntoIterator<Item = BorrowAction>,
+    nodes: Vec<BorrowAction>,
 ) -> Vec<(Node, Node)> {
-    let mut last_array_outport = source;
+    // Find the original source of the array and target. (These may have changed
+    // since the analysis was run, e.g. if this is a nested array produced by an
+    // elided borrow.)
+    let source = {
+        let Some(first) = nodes.first() else {
+            return Vec::new();
+        };
+        hugr.single_linked_output(first.node, first.borrow_from.inc)
+            .expect("linear")
+    };
+
+    let final_array_target = {
+        let last = nodes.last().unwrap();
+        hugr.single_linked_input(last.node, last.borrow_from.out)
+            .expect("linear")
+    };
+
+    let mut current_array = Wire::new(source.0, source.1);
+
     struct Borrow(Node, OutgoingPort);
     struct Return(Node, IncomingPort);
     // The map is from borrow index to (borrow node, optional return node)
     let mut borrowed: HashMap<u64, (Borrow, Option<(Return, BorrowFromPorts)>)> = HashMap::new();
     let mut elisions: Vec<(Return, Borrow)> = Vec::new();
     let mut emit = |node, borrow_from: BorrowFromPorts| {
-        hugr.disconnect(last_array_outport.node(), last_array_outport.source());
+        hugr.disconnect(current_array.node(), current_array.source());
         hugr.disconnect(node, borrow_from.inc);
         hugr.connect(
-            last_array_outport.node(),
-            last_array_outport.source(),
+            current_array.node(),
+            current_array.source(),
             node,
             borrow_from.inc,
         );
-        last_array_outport = Wire::new(node, borrow_from.out);
+        current_array = Wire::new(node, borrow_from.out);
     };
     for BorrowAction {
         node,
@@ -130,8 +145,8 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
                 emit(node, borrow_from);
             }
 
-            // "interesting" case - return after borrow - record but do not emit (yet)
             (BorrowOrReturn::Return(inc), Entry::Occupied(mut oe)) => {
+                // return after borrow - record but do not emit (yet)
                 let (_, ret) = &mut oe.get_mut();
                 if ret.replace((Return(node, inc), borrow_from)).is_some() {
                     panic!("Double return");
@@ -139,6 +154,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             }
 
             (BorrowOrReturn::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
+                // Borrow after return (can't be borrow after borrow as per analysis)
                 let (_, prev_return) = oe.get_mut();
                 let Some(prev_return) = prev_return.take() else {
                     panic!("Double borrow");
@@ -151,9 +167,18 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     }
     // Wire up final (non-elided) returns
     for (_, opt_return) in borrowed.into_values() {
-        let (Return(return_node, _), borrow_from) = opt_return.unwrap(); // analysis should have ensured this will work
+        let (Return(return_node, _), borrow_from) = opt_return.expect("ensured by analysis");
         emit(return_node, borrow_from);
     }
+    // Wire the last-emitted return to the same target as whichever return
+    // was originally last (they can be reordered by the `borrowed` map).
+    emit(
+        final_array_target.0,
+        BorrowFromPorts {
+            inc: final_array_target.1,
+            out: OutgoingPort::from(usize::MAX), // unused
+        },
+    );
     elisions
         .into_iter()
         .map(|(ret, bor)| {
