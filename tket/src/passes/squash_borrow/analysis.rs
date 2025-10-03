@@ -14,7 +14,7 @@ use hugr::{types::Type, HugrView};
 use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 
 use crate::resource::{
-    CircuitUnit, DefaultResourceFlow, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig,
+    DefaultResourceFlow, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig,
     UnsupportedOp,
 };
 use crate::Circuit;
@@ -194,12 +194,8 @@ impl BorrowInfo {
             .and_then(|sig| sig.port_type(borrow_from_port).cloned())
             .expect("valid port");
 
-        let borrow_index_id = circuit
-            .get_circuit_unit(node, borrow_index_port)
-            .and_then(|v| v.as_copyable_wire())
-            .expect("valid port");
-        let borrow_index_const = circuit
-            .as_const(borrow_index_id)
+        let borrow_index = Wire::from_connected_port(node, borrow_index_port, circuit.hugr());
+        let borrow_index_const = find_const(circuit.hugr(), borrow_index)
             .ok_or(BorrowAnalysisError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
         let borrow_index_ty = circuit
@@ -408,46 +404,29 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
     }
 }
 
-impl<H: HugrView> ResourceScope<H> {
-    fn get_value_definition(&self, wire: Wire<H::Node>) -> Option<(H::Node, OutgoingPort)> {
-        let mut all_out_value_ports = self
-            .nodes()
-            .iter()
-            .flat_map(|&n| self.hugr().out_value_types(n).map(move |(p, _)| (n, p)));
-        let res = all_out_value_ports.find(|&(n, p)| {
-            self.get_circuit_unit(n, p).expect("valid port") == CircuitUnit::Copyable(wire)
-        });
-        assert_eq!(res, Some((wire.node(), wire.source())));
-        res
+fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
+    if wire.source().index() > 0 {
+        return None;
     }
 
-    fn as_const(&self, wire: Wire<H::Node>) -> Option<u64> {
-        let (def_node, def_port) = self.get_value_definition(wire)?;
-
-        if def_port.index() > 0 {
-            return None;
+    fn is_const_conversion_op(op: &OpType) -> bool {
+        if matches!(op, OpType::LoadConstant(..)) {
+            true
+        } else if let Some(op) = op.as_extension_op() {
+            ConvertOpDef::from_extension_op(op) == Ok(ConvertOpDef::itousize)
+        } else {
+            false
         }
+    }
 
-        fn is_const_conversion_op(op: &OpType) -> bool {
-            if matches!(op, OpType::LoadConstant(..)) {
-                true
-            } else if let Some(op) = op.as_extension_op() {
-                ConvertOpDef::from_extension_op(op) == Ok(ConvertOpDef::itousize)
-            } else {
-                false
-            }
-        }
-
-        let mut curr_node = def_node;
-        let mut op;
-        while {
-            op = self.hugr().get_optype(curr_node);
-            is_const_conversion_op(op)
-        } {
-            (curr_node, _) = self
-                .hugr()
+    let mut curr_node = wire.node();
+    loop {
+        let op = hugr.get_optype(curr_node);
+        if is_const_conversion_op(op) {
+            (curr_node, _) = hugr
                 .single_linked_output(curr_node, IncomingPort::from(0))
                 .expect("invalid signature for conversion op");
+            continue;
         }
 
         let OpType::Const(const_op) = op else {
