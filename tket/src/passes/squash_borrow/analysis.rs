@@ -141,17 +141,13 @@ impl BorrowInfo {
                 op: hugr.get_optype(node).clone(),
             })?;
 
-        let borrow_from_ty = sig.port_type(ports.borrow_from_port).expect("valid port");
-        if borrow_from_ty
-            != sig
-                .port_type(ports.borrow_from_port_outgoing)
-                .expect("valid port")
-        {
+        let borrow_from_ty = sig.port_type(ports.borrow_from_in).expect("valid port");
+        if borrow_from_ty != sig.port_type(ports.borrow_from_out).expect("valid port") {
             return Err(NodeInfoError::BorrowNodeIncorrectSignature);
         }
 
-        let borrow_index_ty = sig.port_type(ports.borrow_index_port).expect("valid port");
-        let borrowed_ty = sig.port_type(ports.borrowed_port).expect("valid port");
+        let borrow_index_ty = sig.port_type(ports.elem_index).expect("valid port");
+        let borrowed_ty = sig.port_type(ports.borrowed).expect("valid port");
 
         if !borrow_index_ty.copyable() {
             return Err(NodeInfoError::NonCopyableBorrowIndex);
@@ -165,7 +161,7 @@ impl BorrowInfo {
             });
         }
 
-        let borrow_index = Wire::from_connected_port(node, ports.borrow_index_port, hugr);
+        let borrow_index = Wire::from_connected_port(node, ports.elem_index, hugr);
         let borrow_index_const = find_const(hugr, borrow_index)
             .ok_or(NodeInfoError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
@@ -268,17 +264,17 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .map_err(BorrowAnalysisError::NodeInfoError)?
                 .filter(|(_, ports)| {
                     let borrow_from = circuit
-                        .get_circuit_unit(node, ports.borrow_from_port)
+                        .get_circuit_unit(node, ports.borrow_from_in)
                         .unwrap();
                     assert_eq!(
                         Some(borrow_from),
-                        circuit.get_circuit_unit(node, ports.borrow_from_port_outgoing)
+                        circuit.get_circuit_unit(node, ports.borrow_from_out)
                     );
                     borrow_from == CircuitUnit::Resource(resource_id) || {
                         // Ignore nested array creation/ending (borrowing from/returning back to parent)
                         assert_eq!(
                             Some(CircuitUnit::Resource(resource_id)),
-                            circuit.get_circuit_unit(node, ports.borrowed_port)
+                            circuit.get_circuit_unit(node, ports.borrowed)
                         );
                         false
                     }
@@ -412,10 +408,10 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
 /// Ports common to a borrow or return op
 #[derive(Debug, Clone)]
 pub struct BorrowReturnPorts {
-    borrow_from_port: IncomingPort,
-    borrow_index_port: IncomingPort,
-    borrowed_port: Port,
-    borrow_from_port_outgoing: OutgoingPort,
+    borrow_from_in: IncomingPort,
+    elem_index: IncomingPort,
+    borrowed: Port,
+    borrow_from_out: OutgoingPort,
 }
 
 /// Implements [IsBorrowReturn] for `BorrowArray`s.
@@ -454,10 +450,10 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
                 let ports = BorrowReturnPorts {
-                    borrow_from_port: IncomingPort::from(0),
-                    borrow_index_port: IncomingPort::from(1),
-                    borrowed_port: OutgoingPort::from(0).into(),
-                    borrow_from_port_outgoing: OutgoingPort::from(1),
+                    borrow_from_in: IncomingPort::from(0),
+                    elem_index: IncomingPort::from(1),
+                    borrowed: OutgoingPort::from(0).into(),
+                    borrow_from_out: OutgoingPort::from(1),
                 };
 
                 Some((BorrowOrReturn::Borrow, ports))
@@ -472,10 +468,10 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
                 let ports = BorrowReturnPorts {
-                    borrow_from_port: IncomingPort::from(0),
-                    borrow_index_port: IncomingPort::from(1),
-                    borrowed_port: IncomingPort::from(2).into(),
-                    borrow_from_port_outgoing: OutgoingPort::from(0),
+                    borrow_from_in: IncomingPort::from(0),
+                    elem_index: IncomingPort::from(1),
+                    borrowed: IncomingPort::from(2).into(),
+                    borrow_from_out: OutgoingPort::from(0),
                 };
                 Some((BorrowOrReturn::Return, ports))
             }
