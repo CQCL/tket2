@@ -3,10 +3,10 @@ name: Build qis-compiler wheels Release
 on:
   push:
     branches:
-      # TODO REMOVE
-      - "*"
-    tags:
-      - "selene-hugr-qis-compiler-v*"
+      - main
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-14, macos-13, windows-2022]
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-14
+          # macos-13 runners are being retired, re-enable if needed
+          # - macos-13
+          - windows-2022
     name: "qis-compiler wheels (${{matrix.os}})"
     runs-on: ${{ matrix.os }}
     steps:
@@ -84,8 +90,10 @@ jobs:
     runs-on: ubuntu-latest
     # always do a full build and test before release of any package
     needs: [build_qis_compiler_wheels]
+    environment: release
     permissions:
       contents: write
+      # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
     steps:
       # note: we can't use if: on the entire job, as if statements are evaluated
@@ -129,10 +137,10 @@ jobs:
         env:
           TWINE_REPOSITORY_URL: ${{ secrets.JFROG_URL }}
           TWINE_USERNAME: ${{ secrets.JFROG_USER }}
-          TWINE_PASSWORD: ${{ secrets.JFROG_TOKEN }}
-      
-      # TODO trusted publishing
-      # - name: Upload to pypi
-      #   if: ${{ steps.check-tag.outputs.run == 'true' }}
-      #   run: |
-      #     twine upload --verbose --non-interactive ${{ matrix.target.upload }}
+
+      - name: Publish package distributions to PyPIz
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          skip-existing: true
