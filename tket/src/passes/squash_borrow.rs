@@ -1,27 +1,21 @@
 //! Reorder and squash pairs of borrow and return nodes where possible.
 
 pub mod analysis;
-
 pub use analysis::BorrowAnalysis;
-use analysis::BorrowOrReturn;
+
 use hugr::algorithms::ComposablePass;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait};
-use hugr::{IncomingPort, Node, OutgoingPort, Wire};
+use hugr::{IncomingPort, Node, OutgoingPort, Port, Wire};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use crate::passes::squash_borrow::analysis::{
-    BorrowAction, BorrowAnalysisError, DefaultBorrowAnalysis,
-};
 use crate::Circuit;
+use analysis::{BorrowAnalysisError, DefaultBorrowAnalysis};
 
-#[derive(Clone, Debug)]
-struct BorrowFromPorts {
-    inc: IncomingPort,
-    out: OutgoingPort,
-}
+/// A pass for eliding `BorrowArray` reborrows of elements (with constant indices)
+/// along with the preceding return.
 
 #[derive(Clone, Debug, Default)]
 pub struct BorrowSquashPass {
@@ -82,6 +76,50 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
     }
 }
 
+/// The ports by which the container array reaches and leaves a
+/// particular borrow or return node.
+#[derive(Clone, Debug)]
+pub struct BorrowFromPorts {
+    /// The port receiving the array before the borrow/return.
+    inc: IncomingPort,
+    /// The port returning the array after the borrow/return.
+    out: OutgoingPort,
+}
+
+/// Whether a node is a borrow or return, along with the port for
+/// the borrowed value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BorrowOrReturn {
+    /// A borrow action, containing the port on which the borrowed value is output.
+    Borrow(OutgoingPort),
+    /// A return action, containing the port on which the value to return is input.
+    Return(IncomingPort),
+}
+
+impl BorrowOrReturn {
+    /// Gets the port on which the borrowed value is output (for a [Self::Borrow])
+    /// or input (for a [Self::Return]).
+    pub fn borrowed_port(&self) -> Port {
+        match self {
+            BorrowOrReturn::Borrow(p) => (*p).into(),
+            BorrowOrReturn::Return(p) => (*p).into(),
+        }
+    }
+}
+
+/// Information about a node that is either a borrow from or return to a resource.
+#[derive(Clone, Debug)]
+pub struct BorrowAction {
+    /// The node in the Hugr that this instance describes
+    pub node: Node,
+    /// The constant index of the element being borrowed/returned
+    pub borrow_index_const: u64,
+    /// Whether this is a borrow or return, and the port for the borrowed value.
+    pub action: BorrowOrReturn,
+    /// The ports by which the container array reaches and leaves this node.
+    pub borrow_from: BorrowFromPorts,
+}
+
 /// Elide return-borrow pairs for a single array, given `nodes` that are well-paired
 /// i.e. from [BorrowAnalysis]
 ///
@@ -99,12 +137,14 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
     // Find the original source of the array and target. (These may have changed
     // since the analysis was run, e.g. if this is a nested array produced by an
     // elided borrow.)
-    let source = {
+    let mut current_array = {
         let Some(first) = nodes.first() else {
             return Vec::new();
         };
-        hugr.single_linked_output(first.node, first.borrow_from.inc)
-            .expect("linear")
+        to_wire(
+            hugr.single_linked_output(first.node, first.borrow_from.inc)
+                .expect("linear"),
+        )
     };
 
     let final_array_target = {
@@ -112,8 +152,6 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
         hugr.single_linked_input(last.node, last.borrow_from.out)
             .expect("linear")
     };
-
-    let mut current_array = Wire::new(source.0, source.1);
 
     struct Borrow(Node, OutgoingPort);
     struct Return(Node, IncomingPort);
@@ -190,6 +228,10 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
             (ret.0, bor.0)
         })
         .collect()
+}
+
+fn to_wire((n, p): (Node, OutgoingPort)) -> Wire {
+    Wire::new(n, p)
 }
 
 #[cfg(test)]

@@ -13,34 +13,27 @@ use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
-use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire};
+use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
-use super::BorrowFromPorts;
+use super::{BorrowAction, BorrowFromPorts, BorrowOrReturn};
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
 use crate::Circuit;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BorrowOrReturn {
-    Borrow(OutgoingPort),
-    Return(IncomingPort),
-}
-
-impl BorrowOrReturn {
-    pub fn borrowed_port(&self) -> Port {
-        match self {
-            BorrowOrReturn::Borrow(p) => (*p).into(),
-            BorrowOrReturn::Return(p) => (*p).into(),
-        }
-    }
-}
 
 /// A predicate that determines if a node is a borrow or return node.
 ///
 /// Note: parametrized by [HugrNode] because it has to be to implement [ResourceFlow];
 /// we can't actually operate over non-[Node] views because [Circuit::subgraph] is not parametrized.
 pub trait IsBorrowReturn: Clone {
+    /// Determine if the given node is a borrow or return node, and if so,
+    /// return the ports identifying the operands
+    ///
+    /// # Errors
+    ///
+    /// [NodeInfoError] if the analysis cannot safely determine whether the
+    /// node is a borrow/return with known operands. (Assuming a not-understood
+    /// node is *not* a borrow/return might lead to unsafe transformation.)
     fn is_borrow_return<H: HugrView>(
         &self,
         node: H::Node,
@@ -93,15 +86,6 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     BorrowNotReturned(#[error(not(source))] N),
     /// Could not analyse a node
     NodeInfoError(NodeInfoError),
-}
-
-/// Information about a node that is either a borrow from or return to a resource.
-#[derive(Clone, Debug)]
-pub struct BorrowAction {
-    pub node: Node,
-    pub borrow_index_const: u64,
-    pub action: BorrowOrReturn,
-    pub borrow_from: BorrowFromPorts,
 }
 
 /// Incomplete information about a borrow interval, used during the analysis.
