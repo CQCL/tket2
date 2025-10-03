@@ -2,11 +2,9 @@ name: Build qis-compiler wheels Release
 
 on:
   push:
-    branches:
-      # TODO REMOVE
-      - "*"
-    tags:
-      - "selene-hugr-qis-compiler-v*"
+    # TODO only enable for tags
+    # tags:
+    #   - "selene-hugr-qis-compiler-v*"
   workflow_dispatch:
 
 permissions:

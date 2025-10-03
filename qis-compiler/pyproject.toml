@@ -93,8 +93,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 test-requires = [
     "pytest",
     "pytest-snapshot",
-    "git+https://github.com/CQCL/guppylang@accept-any-selene#subdirectory=guppylang",
-    "git+https://github.com/CQCL/guppylang@accept-any-selene#subdirectory=guppylang-internals",
+    "guppylang~=0.21.0",
     "pytket~=2.9.1",
     "tket~=0.12.7",
 ]
