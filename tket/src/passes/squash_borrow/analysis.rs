@@ -157,63 +157,47 @@ impl BorrowInfo {
         node: N,
         ports: BorrowReturnPorts,
     ) -> Result<Self, BorrowAnalysisError<N>> {
+        let sig = hugr
+            .signature(node)
+            .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow {
+                op: hugr.get_optype(node).clone(),
+            })?;
+
+        let borrow_from_ty = sig.port_type(ports.borrow_from_port).expect("valid port");
+        if borrow_from_ty
+            != sig
+                .port_type(ports.borrow_from_port_outgoing)
+                .expect("valid port")
         {
-            let sig = hugr.signature(node).unwrap();
-
-            let borrow_from_ty = sig.port_type(ports.borrow_from_port).unwrap();
-            let borrow_index_ty = sig.port_type(ports.borrow_index_port).unwrap();
-            let borrowed_ty = sig.port_type(ports.borrowed_port).unwrap();
-
-            if !borrow_index_ty.copyable() {
-                return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
-            }
-
-            if borrow_from_ty.copyable() || borrowed_ty.copyable() {
-                let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
-                return Err(BorrowAnalysisError::NonLinearBorrowedResource {
-                    borrow_from_ty,
-                    borrowed_ty,
-                });
-            }
-
-            if sig.port_type(ports.borrow_from_port_outgoing) != Some(&borrow_from_ty) {
-                return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-            }
+            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
         }
 
-        let BorrowReturnPorts {
-            borrow_from_port,
-            borrow_index_port,
-            borrowed_port,
-            borrow_from_port_outgoing,
-        } = ports;
+        let borrow_index_ty = sig.port_type(ports.borrow_index_port).expect("valid port");
+        let borrowed_ty = sig.port_type(ports.borrowed_port).expect("valid port");
 
-        let borrow_from_ty = hugr
-            .signature(node)
-            .and_then(|sig| sig.port_type(borrow_from_port).cloned())
-            .expect("valid port");
+        if !borrow_index_ty.copyable() {
+            return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
+        }
 
-        let borrow_index = Wire::from_connected_port(node, borrow_index_port, hugr);
+        if borrow_from_ty.copyable() || borrowed_ty.copyable() {
+            let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
+            return Err(BorrowAnalysisError::NonLinearBorrowedResource {
+                borrow_from_ty,
+                borrowed_ty,
+            });
+        }
+
+        let borrow_index = Wire::from_connected_port(node, ports.borrow_index_port, hugr);
         let borrow_index_const = find_const(hugr, borrow_index)
             .ok_or(BorrowAnalysisError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
-        let borrow_index_ty = hugr
-            .signature(node)
-            .and_then(|sig| sig.port_type(borrow_index_port).cloned())
-            .expect("valid port");
-
-        let borrowed_ty = hugr
-            .get_optype(node)
-            .dataflow_signature()
-            .and_then(|sig| sig.port_type(borrowed_port).cloned())
-            .expect("valid port");
 
         Ok(Self {
-            borrow_from_ty,
-            borrow_from: borrow_from_port,
-            borrow_from_outgoing: borrow_from_port_outgoing,
-            borrowed_ty,
-            borrow_index_ty,
+            borrow_from_ty: borrow_from_ty.clone(),
+            borrow_from: ports.borrow_from_port,
+            borrow_from_outgoing: ports.borrow_from_port_outgoing,
+            borrowed_ty: borrowed_ty.clone(),
+            borrow_index_ty: borrow_index_ty.clone(),
             borrow_index_const,
         })
     }
