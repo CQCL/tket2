@@ -1,10 +1,10 @@
 {
   "version": "0.1.0",
-  "name": "global_phase_ext",
+  "name": "tket.global_phase",
   "types": {},
   "operations": {
     "global_phase": {
-      "extension": "global_phase_ext",
+      "extension": "tket.global_phase",
       "name": "global_phase",
       "description": "Global phase of a circuit",
       "signature": {

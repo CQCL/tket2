@@ -1,10 +1,10 @@
 {
   "version": "0.1.0",
-  "name": "modifier",
+  "name": "tket.modifier",
   "types": {},
   "operations": {
     "ControlModifier": {
-      "extension": "modifier",
+      "extension": "tket.modifier",
       "name": "ControlModifier",
       "description": "Quantum control operation",
       "signature": {
@@ -126,7 +126,7 @@
       "binary": false
     },
     "DaggerModifier": {
-      "extension": "modifier",
+      "extension": "tket.modifier",
       "name": "DaggerModifier",
       "description": "Dagger Operator",
       "signature": {
@@ -200,7 +200,7 @@
       "binary": false
     },
     "PowerModifier": {
-      "extension": "modifier",
+      "extension": "tket.modifier",
       "name": "PowerModifier",
       "description": "Power Operator",
       "signature": {

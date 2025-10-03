@@ -14,6 +14,8 @@ fn main() -> Result<()> {
                 tket::extension::bool::BOOL_EXTENSION.to_owned(),
                 tket::extension::debug::DEBUG_EXTENSION.to_owned(),
                 tket::extension::guppy::GUPPY_EXTENSION.to_owned(),
+                tket::extension::global_phase::GLOBAL_PHASE_EXTENSION.to_owned(),
+                tket::extension::modifier::MODIFIER_EXTENSION.to_owned(),
                 tket_qsystem::extension::gpu::EXTENSION.to_owned(),
                 tket_qsystem::extension::qsystem::EXTENSION.to_owned(),
                 tket_qsystem::extension::futures::EXTENSION.to_owned(),

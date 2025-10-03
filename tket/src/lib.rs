@@ -47,12 +47,12 @@
 
 pub mod circuit;
 pub mod extension;
+pub mod modifier;
 pub(crate) mod ops;
 pub mod optimiser;
 pub mod passes;
 pub mod resource;
 pub mod rewrite;
-pub mod rich_circuit;
 pub mod serialize;
 
 #[cfg(feature = "portmatching")]
