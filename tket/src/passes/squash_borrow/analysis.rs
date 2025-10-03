@@ -112,8 +112,6 @@ pub struct BorrowInterval<N> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BorrowInfo {
     borrow_from_ty: Type,
-    borrow_from: IncomingPort,
-    borrow_from_outgoing: OutgoingPort,
 
     borrowed_ty: Type,
 
@@ -173,8 +171,6 @@ impl BorrowInfo {
 
         Ok(Self {
             borrow_from_ty: borrow_from_ty.clone(),
-            borrow_from: ports.borrow_from_port,
-            borrow_from_outgoing: ports.borrow_from_port_outgoing,
             borrowed_ty: borrowed_ty.clone(),
             borrow_index_ty: borrow_index_ty.clone(),
             borrow_index_const,
@@ -183,12 +179,7 @@ impl BorrowInfo {
 
     fn check_eq(&self, other: &Self) -> Result<(), String> {
         // Do not check borrow_from/borrow_from_outgoing ports
-        if &(Self {
-            borrow_from: other.borrow_from,
-            borrow_from_outgoing: other.borrow_from_outgoing,
-            ..self.clone()
-        }) == other
-        {
+        if self == other {
             return Ok(());
         }
 
@@ -197,8 +188,6 @@ impl BorrowInfo {
             borrowed_ty,
             borrow_index_ty,
             borrow_index_const,
-            borrow_from,
-            borrow_from_outgoing,
         } = self;
         fn compare<T: std::fmt::Debug + PartialEq>(a: T, b: T, name: &str) -> Option<String> {
             (a != b).then_some(format!("{}: {:?} != {:?}", name, a, b))
@@ -208,12 +197,6 @@ impl BorrowInfo {
             compare(borrowed_ty, &other.borrowed_ty, "elem_ty"),
             compare(borrow_index_ty, &other.borrow_index_ty, "b_index_ty"),
             compare(borrow_index_const, &other.borrow_index_const, "b_idx"),
-            compare(borrow_from, &other.borrow_from, "b_from_port"),
-            compare(
-                borrow_from_outgoing,
-                &other.borrow_from_outgoing,
-                "b_from_port_out",
-            ),
         ]
         .into_iter()
         .flatten()
