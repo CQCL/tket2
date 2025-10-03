@@ -214,27 +214,57 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     ///  - it cannot be established that the borrow and return nodes match up
     ///  - the nodes are another unknown op
     ///
-    /// In those cases, the analysis pass proceeds ignoring the node, which may
-    /// result in missing borrow intervals.
+    /// In such cases, an error will be returned without any results.
     pub fn run<H: HugrView<Node = Node> + Clone>(
         &self,
         circuit: &Circuit<H>,
-    ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
-        let circuit = ResourceScope::with_config(
+        localize_errors: bool,
+    ) -> Result<Vec<Vec<(Node, BorrowOrReturn, u64)>>, BorrowAnalysisError<H::Node>> {
+        let res_tracker = ResourceScope::with_config(
             circuit.hugr(),
             circuit
                 .subgraph()
                 .map_err(BorrowAnalysisError::InvalidSubgraph)?,
             &self.resource_scope_config(),
         );
+        let intervals = self.gather_intervals(&res_tracker);
+        if localize_errors {
+            Ok(intervals.filter_map(Result::ok).collect())
+        } else {
+            intervals.collect::<Result<Vec<_>, _>>()
+        }
+    }
 
-        Ok(circuit
+    fn gather_intervals<'a, H: HugrView<Node = Node> + Clone + 'a>(
+        &'a self,
+        circuit: &'a ResourceScope<&'a H>,
+    ) -> impl Iterator<Item = Result<Vec<(Node, BorrowOrReturn, u64)>, BorrowAnalysisError<H::Node>>> + 'a
+    {
+        circuit
             .get_resource_starts()
-            .map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .flatten()
-            .collect())
+            .map(|(start_node, resource_id)| {
+                let intervals = self.get_borrow_intervals(circuit, resource_id, start_node)?;
+
+                let nodes = intervals
+                    .into_iter()
+                    .flat_map(|int| {
+                        [
+                            (
+                                int.borrow_node,
+                                (BorrowOrReturn::Borrow, int.info.borrow_index_const),
+                            ),
+                            (
+                                int.return_node,
+                                (BorrowOrReturn::Return, int.info.borrow_index_const),
+                            ),
+                        ]
+                    })
+                    .collect::<BTreeMap<_, _>>();
+                Ok(circuit
+                    .resource_path_iter(resource_id, start_node, Direction::Outgoing)
+                    .filter_map(|n| nodes.get(&n).map(|(br, idx)| (n, *br, *idx)))
+                    .collect())
+            })
     }
 
     /// Traverse the resource path of the given resource and find all pairs
@@ -535,7 +565,7 @@ mod tests {
     #[rstest]
     fn test_borrow_analysis(borrow_circuit: Circuit) {
         let res = DefaultBorrowAnalysis::default()
-            .run(&borrow_circuit)
+            .run(&borrow_circuit, false)
             .unwrap();
 
         assert_eq!(res.len(), 17);
