@@ -247,14 +247,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
         let mut interval_starts = BTreeMap::new();
         let mut complete_intervals = Vec::new();
-        let mut last = None;
+        let mut must_be_last = None;
         let mut first = true;
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
-            if let Some(last) = last {
+            if let Some(isnt_last) = must_be_last {
                 panic!(
-                    "Resource path continued through node {last} with unexpected type {:?}",
-                    circuit.hugr().get_optype(last)
+                    "Resource path continued through node {isnt_last} with type {:?}",
+                    circuit.hugr().get_optype(isnt_last)
                 );
             }
 
@@ -278,14 +278,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             if first {
                 // First node on path creates the resource, does not borrow from it
                 first = false;
-                assert!(circuit.is_resource_start(node, resource_id));
+                debug_assert!(circuit.is_resource_start(node, resource_id));
                 assert!(is_br.is_none());
                 continue;
             };
 
             let Some((br, ports)) = is_br else {
                 // Some other op that uses the resource, so we are done tracking borrows
-                last = Some(node);
+                must_be_last = Some(node);
                 continue;
             };
             let info = BorrowInfo::try_from_ports(circuit.hugr(), node, ports)
@@ -316,6 +316,9 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 }
             }
         }
+        // Would like to:
+        // assert!(must_be_last.is_some());
+        // here, but the ResourceScope does not include e.g. final Output node.
 
         if let Some((_, n)) = interval_starts.into_values().next() {
             return Err(BorrowAnalysisError::BorrowNotReturned(n));
