@@ -25,9 +25,11 @@ pub fn optimize_one_array<H: HugrMut<Node = Node>>(
 ) {
     let mut last_array_outport = source;
     struct Borrow(Node, OutgoingPort);
-    struct Return(Node, BorrowFromPorts);
-    let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new();
-    let mut emit = |hugr: &mut H, node, borrow_from: BorrowFromPorts| {
+    struct Return(Node, IncomingPort);
+    // The map is from borrow index to (borrow node, optional return node)
+    let mut borrowed: HashMap<u64, (Borrow, Option<(Return, BorrowFromPorts)>)> = HashMap::new();
+    let mut elisions: Vec<(Return, Borrow)> = Vec::new();
+    let mut emit = |node, borrow_from: BorrowFromPorts| {
         hugr.disconnect(last_array_outport.node(), last_array_outport.source());
         hugr.disconnect(node, borrow_from.inc);
         hugr.connect(
@@ -49,36 +51,38 @@ pub fn optimize_one_array<H: HugrMut<Node = Node>>(
             (BorrowOrReturn::Borrow(borrowed_out), Entry::Vacant(ve)) => {
                 // initial borrow - record and emit
                 ve.insert((Borrow(node, borrowed_out), None));
-                emit(hugr, node, borrow_from);
+                emit(node, borrow_from);
             }
 
             // "interesting" case - return after borrow - record but do not emit (yet)
-            (BorrowOrReturn::Return(_), Entry::Occupied(mut oe)) => {
-                if oe.get_mut().1.replace(Return(node, borrow_from)).is_some() {
+            (BorrowOrReturn::Return(inc), Entry::Occupied(mut oe)) => {
+                let (_, ret) = &mut oe.get_mut();
+                if ret.replace((Return(node, inc), borrow_from)).is_some() {
                     panic!("Double return");
                 }
             }
 
             (BorrowOrReturn::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
-                let (prev_borrow, prev_return) = oe.get_mut();
+                let (_, prev_return) = oe.get_mut();
                 let Some(prev_return) = prev_return.take() else {
                     panic!("Double borrow");
                 };
-                // The interesting case...elide!
-                let tgt = hugr
-                    .single_linked_input(node, borrowed_out)
-                    .expect("linear");
-                hugr.connect(prev_borrow.0, prev_borrow.1, tgt.0, tgt.1);
-                hugr.remove_node(prev_return.0);
-                hugr.remove_node(node);
+                elisions.push((prev_return.0, Borrow(node, borrowed_out)));
             }
 
             (BorrowOrReturn::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
         }
     }
-    // Finally....
+    // Wire up final (non-elided) returns
     for (_, opt_return) in borrowed.into_values() {
-        let Return(return_node, borrow_from) = opt_return.unwrap(); // analysis should have ensured this will work
-        emit(hugr, return_node, borrow_from);
+        let (Return(return_node, _), borrow_from) = opt_return.unwrap(); // analysis should have ensured this will work
+        emit(return_node, borrow_from);
+    }
+    for (ret, bor) in elisions {
+        let src = hugr.single_linked_output(ret.0, ret.1).expect("linear");
+        let tgt = hugr.single_linked_input(bor.0, bor.1).expect("linear");
+        hugr.connect(src.0, src.1, tgt.0, tgt.1);
+        hugr.remove_node(ret.0);
+        hugr.remove_node(bor.0);
     }
 }
