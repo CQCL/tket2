@@ -10,8 +10,9 @@ use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::ops::{OpTrait, OpType, Value};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
-use hugr::{types::Type, HugrView};
-use hugr::{Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
+use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
+use hugr::types::Type;
+use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire};
 
 use crate::resource::{
     DefaultResourceFlow, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig,
@@ -19,25 +20,39 @@ use crate::resource::{
 };
 use crate::Circuit;
 
-/// An analysis pass that identifies borrowed resources and their lifetimes.
-pub struct BorrowAnalysis<H: HugrView = hugr::Hugr> {
-    /// A predicate that determines if a node is a borrow node.
-    pub is_borrow_node: Box<dyn Fn(H::Node, &H) -> bool>,
-    /// A predicate that determines if a node is a return node.
-    pub is_return_node: Box<dyn Fn(H::Node, &H) -> bool>,
+pub enum BorrowOrReturn {
+    Borrow,
+    Return,
 }
 
-/// The errors that can occur when running the borrow analysis pass.
+/// A predicate that determines if a node is a borrow or return node.
+///
+/// Note: parametrized by [HugrNode] because it has to be to implement [ResourceFlow];
+/// we can't actually operate over non-[Node] views because [Circuit::subgraph] is not parametrized.
+pub trait IsBorrowReturn: Clone {
+    fn is_borrow_return<H: HugrView>(
+        &self,
+        node: H::Node,
+        hugr: &H,
+    ) -> Result<Option<(BorrowOrReturn, BorrowReturnPorts)>, NodeInfoError>;
+}
+
+/// An analysis pass that identifies borrowed resources and their lifetimes.
+pub struct BorrowAnalysis<BR: IsBorrowReturn> {
+    is_br: BR,
+}
+
+/// Reasons that a [IsBorrowReturn] may be unable to determine whether a node is a borrow/return.
 #[derive(Debug, Display, Error)]
-pub enum BorrowAnalysisError<N: HugrNode> {
-    /// The analysis could not run on an invalid subgraph
-    InvalidSubgraph(#[error(source)] InvalidSubgraph),
+pub enum NodeInfoError {
     /// Borrow op is not a dataflow op.
     #[display("expected dataflow op: {op}")]
     NodeNotDataflow {
         /// The operation that is not a dataflow op.
         op: OpType,
     },
+    /// Index was not a const....ALAN need to handle gracefully inside rather than fail analysis
+    NonConstIndex,
     /// Borrow op has incorrect signature.
     #[display("borrow_node has incorrect signature")]
     BorrowNodeIncorrectSignature,
@@ -51,8 +66,13 @@ pub enum BorrowAnalysisError<N: HugrNode> {
         borrowed_ty: Type,
         borrow_from_ty: Type,
     },
-    /// Index was not a const....ALAN need to handle gracefully inside rather than fail analysis
-    NonConstIndex,
+}
+
+/// The errors that can occur when running the borrow analysis pass.
+#[derive(Debug, Display, Error)]
+pub enum BorrowAnalysisError<N: HugrNode> {
+    /// The analysis could not run on an invalid subgraph
+    InvalidSubgraph(#[error(source)] InvalidSubgraph),
     /// A node returns to an index that was not borrowed
     ReturnWithoutBorrow(#[error(not(source))] N),
     /// Two borrows of the same index without a return
@@ -60,6 +80,8 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     RepeatedBorrow(N, N),
     /// A borrow was not followed by a corresponding return
     BorrowNotReturned(N),
+    /// Could not analyse a node
+    NodeInfoError(NodeInfoError),
 }
 
 /// Lifespan of a borrowed resource, represented as an interval on the resource
@@ -100,54 +122,11 @@ pub struct BorrowInfo {
 }
 
 impl BorrowInfo {
-    fn try_from_borrow_node<N: HugrNode>(
-        borrow_node: N,
-        hugr: &impl HugrView<Node = N>,
-    ) -> Result<Self, BorrowAnalysisError<N>> {
-        let op = hugr.get_optype(borrow_node);
-        let sig = op
-            .dataflow_signature()
-            .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
-        if sig.input_count() != 2 || sig.output_count() != 2 {
-            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-        }
-        let ports = BorrowReturnPorts {
-            borrow_from_port: IncomingPort::from(0),
-            borrow_index_port: IncomingPort::from(1),
-            borrowed_port: OutgoingPort::from(0).into(),
-            borrow_from_port_outgoing: OutgoingPort::from(1),
-        };
-        Self::try_from_ports(hugr, borrow_node, ports)
-    }
-
-    fn try_from_return_node<N: HugrNode>(
-        return_node: N,
-        hugr: &impl HugrView<Node = N>,
-    ) -> Result<Self, BorrowAnalysisError<N>> {
-        let op = hugr.get_optype(return_node);
-        let sig = op
-            .dataflow_signature()
-            .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
-
-        if sig.input_count() != 3 || sig.output_count() != 1 {
-            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
-        }
-        let ports = BorrowReturnPorts {
-            borrow_from_port: IncomingPort::from(0),
-            borrow_index_port: IncomingPort::from(1),
-            borrowed_port: IncomingPort::from(2).into(),
-            borrow_from_port_outgoing: OutgoingPort::from(0),
-        };
-
-        Self::try_from_ports(hugr, return_node, ports)
-    }
-
-    /// Prefer using [Self::try_from_borrow_node] or
-    /// [Self::try_from_return_node].
+    /// Construct a new instance given the ports
     ///
     /// # Errors
     ///
-    /// If the index is not a constant, return the Wire.
+    /// If the index is not a constant, or the node does not conform in some other way, return the Wire.
     ///
     /// # Panics
     ///
@@ -156,10 +135,10 @@ impl BorrowInfo {
         hugr: &impl HugrView<Node = N>,
         node: N,
         ports: BorrowReturnPorts,
-    ) -> Result<Self, BorrowAnalysisError<N>> {
+    ) -> Result<Self, NodeInfoError> {
         let sig = hugr
             .signature(node)
-            .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow {
+            .ok_or_else(|| NodeInfoError::NodeNotDataflow {
                 op: hugr.get_optype(node).clone(),
             })?;
 
@@ -169,19 +148,19 @@ impl BorrowInfo {
                 .port_type(ports.borrow_from_port_outgoing)
                 .expect("valid port")
         {
-            return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
+            return Err(NodeInfoError::BorrowNodeIncorrectSignature);
         }
 
         let borrow_index_ty = sig.port_type(ports.borrow_index_port).expect("valid port");
         let borrowed_ty = sig.port_type(ports.borrowed_port).expect("valid port");
 
         if !borrow_index_ty.copyable() {
-            return Err(BorrowAnalysisError::NonCopyableBorrowIndex);
+            return Err(NodeInfoError::NonCopyableBorrowIndex);
         }
 
         if borrow_from_ty.copyable() || borrowed_ty.copyable() {
             let (borrow_from_ty, borrowed_ty) = (borrow_from_ty.clone(), borrowed_ty.clone());
-            return Err(BorrowAnalysisError::NonLinearBorrowedResource {
+            return Err(NodeInfoError::NonLinearBorrowedResource {
                 borrow_from_ty,
                 borrowed_ty,
             });
@@ -189,7 +168,7 @@ impl BorrowInfo {
 
         let borrow_index = Wire::from_connected_port(node, ports.borrow_index_port, hugr);
         let borrow_index_const = find_const(hugr, borrow_index)
-            .ok_or(BorrowAnalysisError::NonConstIndex)? // flag the wire here, or return in Self
+            .ok_or(NodeInfoError::NonConstIndex)? // flag the wire here, or return in Self
             .clone();
 
         Ok(Self {
@@ -244,7 +223,7 @@ impl BorrowInfo {
     }
 }
 
-impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
+impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     /// Run the borrow analysis on the given circuit, i.e. on the DFG sibling
     /// graph of the circuit entrypoint.
     ///
@@ -257,7 +236,7 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
     ///
     /// In those cases, the analysis pass proceeds ignoring the node, which may
     /// result in missing borrow intervals.
-    pub fn run(
+    pub fn run<H: HugrView<Node = Node> + Clone>(
         &self,
         circuit: &Circuit<H>,
     ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
@@ -271,7 +250,11 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
 
         Ok(circuit
             .get_resource_starts()
-            .filter(|(n, _)| !self.is_borrow_node(*n, circuit.hugr()))
+            .filter(|(n, _)| {
+                self.is_br
+                    .is_borrow_return(*n, circuit.hugr())
+                    .is_ok_and(|opt| opt.is_none())
+            })
             .map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -279,31 +262,9 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
             .collect())
     }
 
-    /// Check if a node is a borrow node.
-    ///
-    /// A borrow node must have the signature
-    /// ```ignore
-    /// borrow_array<size, T>, index -> T, borrow_array<size, T>
-    /// ```
-    /// where `T` is a linear type and `index` is a copyable type.
-    pub fn is_borrow_node(&self, node: H::Node, hugr: &H) -> bool {
-        (self.is_borrow_node)(node, hugr)
-    }
-
-    /// Check if a node is a return node.
-    ///
-    /// A return node must have the signature
-    /// ```ignore
-    /// borrow_array<size, T>, index, T -> borrow_array<size, T>
-    /// ```
-    /// where `T` is a linear type and `index` is a copyable type.
-    pub fn is_return_node(&self, node: H::Node, hugr: &H) -> bool {
-        (self.is_return_node)(node, hugr)
-    }
-
     /// Traverse the resource path of the given resource and find all pairs
     /// of borrow and return nodes that match up.
-    fn get_borrow_intervals(
+    fn get_borrow_intervals<H: HugrView<Node = Node>>(
         &self,
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
@@ -313,43 +274,37 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
         let mut complete_intervals = Vec::new();
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
-            match node {
-                borrow_node if self.is_borrow_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_borrow_node(borrow_node, circuit.hugr())?;
-                    assert_eq!(
-                        Some(resource_id),
-                        circuit
-                            .get_circuit_unit(node, info.borrow_from)
-                            .and_then(|v| v.as_resource())
-                    );
-                    assert_eq!(
-                        Some(resource_id),
-                        circuit
-                            .get_circuit_unit(node, info.borrow_from_outgoing)
-                            .and_then(|v| v.as_resource())
-                    );
+            let Some((br, ports)) = self
+                .is_br
+                .is_borrow_return(node, circuit.hugr())
+                .map_err(BorrowAnalysisError::NodeInfoError)?
+            else {
+                continue;
+            };
+            assert_eq!(
+                Some(resource_id),
+                circuit
+                    .get_circuit_unit(node, ports.borrow_from_port)
+                    .and_then(|v| v.as_resource())
+            );
+            assert_eq!(
+                Some(resource_id),
+                circuit
+                    .get_circuit_unit(node, ports.borrow_from_port_outgoing)
+                    .and_then(|v| v.as_resource())
+            );
+            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, ports)
+                .map_err(BorrowAnalysisError::NodeInfoError)?;
 
+            match br {
+                BorrowOrReturn::Borrow => {
                     if let Some(prev_start) =
-                        interval_starts.insert(info.borrow_index_const, (info, borrow_node))
+                        interval_starts.insert(info.borrow_index_const, (info, node))
                     {
                         return Err(BorrowAnalysisError::RepeatedBorrow(prev_start.1, node));
                     }
                 }
-                return_node if self.is_return_node(node, circuit.hugr()) => {
-                    let info = BorrowInfo::try_from_return_node(return_node, circuit.hugr())?;
-                    assert_eq!(
-                        Some(resource_id),
-                        circuit
-                            .get_circuit_unit(node, info.borrow_from)
-                            .and_then(|v| v.as_resource())
-                    );
-                    assert_eq!(
-                        Some(resource_id),
-                        circuit
-                            .get_circuit_unit(node, info.borrow_from_outgoing)
-                            .and_then(|v| v.as_resource())
-                    );
-
+                BorrowOrReturn::Return => {
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
@@ -360,11 +315,10 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
                     complete_intervals.push(BorrowInterval {
                         borrow_resource: resource_id,
                         borrow_node: interval_start.1,
-                        return_node,
+                        return_node: node,
                         info,
                     })
                 }
-                _ => {}
             }
         }
 
@@ -375,9 +329,9 @@ impl<H: Clone + HugrView<Node = hugr::Node>> BorrowAnalysis<H> {
         Ok(complete_intervals)
     }
 
-    fn resource_scope_config(&self) -> ResourceScopeConfig<'_, &H> {
+    fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
         [
-            HandleBorrowReturn::new(&self.is_borrow_node, &self.is_return_node).into_boxed(),
+            self.is_br.clone().into_boxed(),
             DefaultResourceFlow.into_boxed(),
         ]
         .into_iter()
@@ -425,59 +379,108 @@ fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
     }
 }
 
-struct HandleBorrowReturn<'a, H: HugrView> {
-    /// A predicate that determines if a node is a borrow node.
-    pub is_borrow_node: &'a Box<dyn Fn(H::Node, &H) -> bool>,
-    /// A predicate that determines if a node is a return node.
-    pub is_return_node: &'a Box<dyn Fn(H::Node, &H) -> bool>,
-}
-
-impl<'a, H: HugrView> HandleBorrowReturn<'a, H> {
-    pub fn new(
-        is_borrow_node: &'a Box<dyn Fn(H::Node, &H) -> bool>,
-        is_return_node: &'a Box<dyn Fn(H::Node, &H) -> bool>,
-    ) -> Self {
-        Self {
-            is_borrow_node,
-            is_return_node,
-        }
-    }
-}
-
-impl<'a, 'h, H: HugrView> ResourceFlow<&'h H> for HandleBorrowReturn<'a, H> {
+impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
     fn map_resources(
         &self,
         node: <H>::Node,
         hugr: &&'h H,
         inputs: &[Option<ResourceId>],
     ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp> {
-        if (self.is_borrow_node)(node, hugr) {
-            let borrowed_resource = inputs[0].expect("linear input");
-            Ok(vec![None, Some(borrowed_resource)])
-        } else if (self.is_return_node)(node, hugr) {
-            let borrowed_resource = inputs[0].expect("linear input");
-            Ok(vec![Some(borrowed_resource)])
-        } else {
-            Err(UnsupportedOp(hugr.get_optype(node).clone()))
+        match self
+            .is_borrow_return(node, hugr)
+            .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
+        {
+            Some((BorrowOrReturn::Borrow, _)) => {
+                let borrowed_resource = inputs[0].expect("linear input");
+                Ok(vec![None, Some(borrowed_resource)])
+            }
+            Some((BorrowOrReturn::Return, _)) => {
+                let borrowed_resource = inputs[0].expect("linear input");
+                Ok(vec![Some(borrowed_resource)])
+            }
+            None => Err(UnsupportedOp(hugr.get_optype(node).clone())),
         }
     }
 }
 
-struct BorrowReturnPorts {
+/// Ports common to a borrow or return op
+pub struct BorrowReturnPorts {
     borrow_from_port: IncomingPort,
     borrow_index_port: IncomingPort,
     borrowed_port: Port,
     borrow_from_port_outgoing: OutgoingPort,
 }
 
+/// Implements [IsBorrowReturn] for `BorrowArray`s.
+#[derive(Debug, Display, Clone)]
+pub struct DefaultBorrowArray;
+
+/// Default [BorrowAnalysis] for `BorrowArray`s
+pub type DefaultBorrowAnalysis = BorrowAnalysis<DefaultBorrowArray>;
+
+impl Default for DefaultBorrowAnalysis {
+    fn default() -> Self {
+        Self {
+            is_br: DefaultBorrowArray,
+        }
+    }
+}
+
+impl IsBorrowReturn for DefaultBorrowArray {
+    fn is_borrow_return<H: HugrView>(
+        &self,
+        node: H::Node,
+        hugr: &H,
+    ) -> Result<Option<(BorrowOrReturn, BorrowReturnPorts)>, NodeInfoError> {
+        let op = hugr.get_optype(node);
+        let Some(ext_op) = op.as_extension_op() else {
+            return Ok(None);
+        };
+        Ok(match BArrayUnsafeOpDef::from_extension_op(ext_op) {
+            Ok(BArrayUnsafeOpDef::borrow) => {
+                let op = hugr.get_optype(node);
+                let sig = op
+                    .dataflow_signature()
+                    .ok_or_else(|| NodeInfoError::NodeNotDataflow { op: op.clone() })?;
+                if sig.input_count() != 2 || sig.output_count() != 2 {
+                    return Err(NodeInfoError::BorrowNodeIncorrectSignature);
+                }
+                let ports = BorrowReturnPorts {
+                    borrow_from_port: IncomingPort::from(0),
+                    borrow_index_port: IncomingPort::from(1),
+                    borrowed_port: OutgoingPort::from(0).into(),
+                    borrow_from_port_outgoing: OutgoingPort::from(1),
+                };
+
+                Some((BorrowOrReturn::Borrow, ports))
+            }
+            Ok(BArrayUnsafeOpDef::r#return) => {
+                let op = hugr.get_optype(node);
+                let sig = op
+                    .dataflow_signature()
+                    .ok_or_else(|| NodeInfoError::NodeNotDataflow { op: op.clone() })?;
+
+                if sig.input_count() != 3 || sig.output_count() != 1 {
+                    return Err(NodeInfoError::BorrowNodeIncorrectSignature);
+                }
+                let ports = BorrowReturnPorts {
+                    borrow_from_port: IncomingPort::from(0),
+                    borrow_index_port: IncomingPort::from(1),
+                    borrowed_port: IncomingPort::from(2).into(),
+                    borrow_from_port_outgoing: OutgoingPort::from(0),
+                };
+                Some((BorrowOrReturn::Return, ports))
+            }
+            _ => None,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::BufReader;
 
-    use hugr::{
-        hugr::hugrmut::HugrMut, std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr,
-        Node,
-    };
+    use hugr::{hugr::hugrmut::HugrMut, Hugr, Node};
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
 
@@ -495,30 +498,11 @@ mod tests {
         Circuit::new(hugr)
     }
 
-    #[fixture]
-    fn inline_borrow_analysis() -> BorrowAnalysis<Hugr> {
-        BorrowAnalysis {
-            is_borrow_node: Box::new(|node, hugr: &Hugr| {
-                let op = hugr.get_optype(node);
-                let Some(ext_op) = op.as_extension_op() else {
-                    return false;
-                };
-                BArrayUnsafeOpDef::from_extension_op(ext_op) == Ok(BArrayUnsafeOpDef::borrow)
-            }),
-            is_return_node: Box::new(|node, hugr: &Hugr| {
-                let op = hugr.get_optype(node);
-                let Some(ext_op) = op.as_extension_op() else {
-                    return false;
-                };
-                BArrayUnsafeOpDef::from_extension_op(ext_op) == Ok(BArrayUnsafeOpDef::r#return)
-            }),
-        }
-    }
-
     /// Make sure that the resources flow correctly through borrow and return
     /// nodes.
     #[rstest]
-    fn test_borrow_flow(inline_borrow_analysis: BorrowAnalysis, borrow_circuit: Circuit) {
+    fn test_borrow_flow(borrow_circuit: Circuit) {
+        let inline_borrow_analysis = DefaultBorrowAnalysis::default();
         let scope = ResourceScope::with_config(
             borrow_circuit.hugr(),
             borrow_circuit.subgraph().unwrap(),
@@ -547,8 +531,10 @@ mod tests {
     }
 
     #[rstest]
-    fn test_borrow_analysis(inline_borrow_analysis: BorrowAnalysis, borrow_circuit: Circuit) {
-        let res = inline_borrow_analysis.run(&borrow_circuit).unwrap();
+    fn test_borrow_analysis(borrow_circuit: Circuit) {
+        let res = DefaultBorrowAnalysis::default()
+            .run(&borrow_circuit)
+            .unwrap();
 
         assert_eq!(res.len(), 17);
     }
