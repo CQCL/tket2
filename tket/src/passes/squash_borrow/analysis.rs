@@ -13,13 +13,14 @@ use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire};
+use itertools::Itertools;
 
 use crate::resource::{
-    DefaultResourceFlow, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig,
-    UnsupportedOp,
+    CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
 use crate::Circuit;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BorrowOrReturn {
     Borrow,
     Return,
@@ -233,11 +234,6 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
 
         Ok(circuit
             .get_resource_starts()
-            .filter(|(n, _)| {
-                self.is_br
-                    .is_borrow_return(*n, circuit.hugr())
-                    .is_ok_and(|opt| opt.is_none())
-            })
             .map(|(node, resource_id)| self.get_borrow_intervals(&circuit, resource_id, node))
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -255,27 +251,52 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     ) -> Result<Vec<BorrowInterval<H::Node>>, BorrowAnalysisError<H::Node>> {
         let mut interval_starts = BTreeMap::new();
         let mut complete_intervals = Vec::new();
+        let mut last = None;
+        let mut first = true;
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
-            let Some((br, ports)) = self
+            if let Some(last) = last {
+                panic!(
+                    "Resource path continued through node {last} with unexpected type {:?}",
+                    circuit.hugr().get_optype(last)
+                );
+            }
+
+            let is_br = self
                 .is_br
                 .is_borrow_return(node, circuit.hugr())
                 .map_err(BorrowAnalysisError::NodeInfoError)?
-            else {
+                .filter(|(_, ports)| {
+                    let borrow_from = circuit
+                        .get_circuit_unit(node, ports.borrow_from_port)
+                        .unwrap();
+                    assert_eq!(
+                        Some(borrow_from),
+                        circuit.get_circuit_unit(node, ports.borrow_from_port_outgoing)
+                    );
+                    borrow_from == CircuitUnit::Resource(resource_id) || {
+                        // Ignore nested array creation/ending (borrowing from/returning back to parent)
+                        assert_eq!(
+                            Some(CircuitUnit::Resource(resource_id)),
+                            circuit.get_circuit_unit(node, ports.borrowed_port)
+                        );
+                        false
+                    }
+                });
+
+            if first {
+                // First node on path creates the resource, does not borrow from it
+                first = false;
+                assert!(circuit.is_resource_start(node, resource_id));
+                assert!(is_br.is_none());
                 continue;
             };
-            assert_eq!(
-                Some(resource_id),
-                circuit
-                    .get_circuit_unit(node, ports.borrow_from_port)
-                    .and_then(|v| v.as_resource())
-            );
-            assert_eq!(
-                Some(resource_id),
-                circuit
-                    .get_circuit_unit(node, ports.borrow_from_port_outgoing)
-                    .and_then(|v| v.as_resource())
-            );
+
+            let Some((br, ports)) = is_br else {
+                // Some other op that uses the resource, so we are done tracking borrows
+                last = Some(node);
+                continue;
+            };
             let info = BorrowInfo::try_from_ports(circuit.hugr(), node, ports)
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
 
@@ -313,12 +334,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     }
 
     fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
-        [
-            self.is_br.clone().into_boxed(),
-            DefaultResourceFlow.into_boxed(),
-        ]
-        .into_iter()
-        .collect()
+        std::iter::once(self.is_br.clone().into_boxed()).collect()
     }
 }
 
@@ -365,28 +381,36 @@ fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
 impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
     fn map_resources(
         &self,
-        node: <H>::Node,
+        node: H::Node,
         hugr: &&'h H,
         inputs: &[Option<ResourceId>],
     ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp> {
-        match self
-            .is_borrow_return(node, hugr)
-            .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
-        {
-            Some((BorrowOrReturn::Borrow, _)) => {
-                let borrowed_resource = inputs[0].expect("linear input");
-                Ok(vec![None, Some(borrowed_resource)])
-            }
-            Some((BorrowOrReturn::Return, _)) => {
-                let borrowed_resource = inputs[0].expect("linear input");
-                Ok(vec![Some(borrowed_resource)])
-            }
-            None => Err(UnsupportedOp(hugr.get_optype(node).clone())),
-        }
+        Ok(
+            match self
+                .is_borrow_return(node, hugr)
+                .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
+            {
+                Some((BorrowOrReturn::Borrow, _)) => {
+                    let borrowed_resource = inputs[0].expect("linear input");
+                    vec![None, Some(borrowed_resource)]
+                }
+                Some((BorrowOrReturn::Return, _)) => {
+                    let borrowed_resource = inputs[0].expect("linear input");
+                    vec![Some(borrowed_resource)]
+                }
+                None => {
+                    // All borrows should have been returned before any other op.
+                    // Thus, any op touching an array, effectively creates a new array
+                    // (begins a fresh sequence of ops)
+                    vec![None; hugr.value_types(node, Direction::Outgoing).count()]
+                }
+            },
+        )
     }
 }
 
 /// Ports common to a borrow or return op
+#[derive(Debug, Clone)]
 pub struct BorrowReturnPorts {
     borrow_from_port: IncomingPort,
     borrow_index_port: IncomingPort,
@@ -416,6 +440,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
         hugr: &H,
     ) -> Result<Option<(BorrowOrReturn, BorrowReturnPorts)>, NodeInfoError> {
         let op = hugr.get_optype(node);
+
         let Some(ext_op) = op.as_extension_op() else {
             return Ok(None);
         };
