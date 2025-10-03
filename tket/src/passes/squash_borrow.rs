@@ -238,12 +238,15 @@ fn to_wire((n, p): (Node, OutgoingPort)) -> Wire {
 mod test {
     use std::io::BufReader;
 
-    use crate::{extension::REGISTRY, passes::squash_borrow::BorrowSquashPass};
-    use hugr::{algorithms::ComposablePass, hugr::hugrmut::HugrMut, Hugr, HugrView, Node};
+    use super::{analysis::find_const, to_wire, BorrowSquashPass};
+    use crate::{extension::REGISTRY, Circuit};
+    use hugr::{
+        algorithms::ComposablePass, extension::simple_op::MakeExtensionOp, hugr::hugrmut::HugrMut,
+        std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr, HugrView, Node,
+    };
+    use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
-
-    use crate::Circuit;
 
     #[fixture]
     pub(super) fn borrow_circuit() -> Circuit {
@@ -263,5 +266,22 @@ mod test {
             .unwrap();
         h.validate().unwrap();
         assert_eq!(res.len(), 9); // Just what's been seen
+
+        let get_index = |n| find_const(&h, to_wire(h.single_linked_output(n, 1).unwrap())).unwrap();
+        let all_indices = |b| {
+            h.entry_descendants()
+                .filter(|n| {
+                    h.get_optype(*n)
+                        .as_extension_op()
+                        .is_some_and(|eop| BArrayUnsafeOpDef::from_extension_op(eop) == Ok(b))
+                })
+                .map(get_index)
+                .sorted()
+                .collect_vec()
+        };
+
+        let indices = Vec::from_iter(0..=7);
+        assert_eq!(all_indices(BArrayUnsafeOpDef::borrow), indices);
+        assert_eq!(all_indices(BArrayUnsafeOpDef::r#return), indices);
     }
 }

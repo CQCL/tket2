@@ -335,7 +335,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     }
 }
 
-fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
+pub(super) fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
     if wire.source().index() > 0 {
         return None;
     }
@@ -488,38 +488,6 @@ mod tests {
 
     use super::super::test::borrow_circuit;
     use super::*;
-
-    /// Make sure that the resources flow correctly through borrow and return
-    /// nodes.
-    #[rstest]
-    fn test_borrow_flow(borrow_circuit: Circuit) {
-        let inline_borrow_analysis = DefaultBorrowAnalysis::default();
-        let scope = ResourceScope::with_config(
-            borrow_circuit.hugr(),
-            borrow_circuit.subgraph().unwrap(),
-            &inline_borrow_analysis.resource_scope_config(),
-        );
-
-        for resource_start in borrow_circuit
-            .hugr()
-            .node_outputs(borrow_circuit.input_node())
-        {
-            let resource_id = scope
-                .get_circuit_unit(borrow_circuit.input_node(), resource_start)
-                .and_then(|v| v.as_resource());
-            println!("resource_id: {:?}", resource_id);
-            println!(
-                "resource_path: {:?}",
-                scope
-                    .resource_path_iter(
-                        resource_id.unwrap(),
-                        borrow_circuit.input_node(),
-                        Direction::Outgoing
-                    )
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
 
     #[rstest]
     fn test_borrow_analysis(borrow_circuit: Circuit) {
