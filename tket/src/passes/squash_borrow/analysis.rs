@@ -263,14 +263,9 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .is_borrow_return(node, circuit.hugr())
                 .map_err(BorrowAnalysisError::NodeInfoError)?
                 .filter(|(_, ports)| {
-                    let borrow_from = circuit
-                        .get_circuit_unit(node, ports.borrow_from_in)
-                        .unwrap();
-                    assert_eq!(
-                        Some(borrow_from),
-                        circuit.get_circuit_unit(node, ports.borrow_from_out)
-                    );
-                    borrow_from == CircuitUnit::Resource(resource_id) || {
+                    let bf = circuit.get_circuit_unit(node, ports.borrow_from_in);
+                    assert_eq!(bf, circuit.get_circuit_unit(node, ports.borrow_from_out));
+                    bf.unwrap() == CircuitUnit::Resource(resource_id) || {
                         // Ignore nested array creation/ending (borrowing from/returning back to parent)
                         assert_eq!(
                             Some(CircuitUnit::Resource(resource_id)),
