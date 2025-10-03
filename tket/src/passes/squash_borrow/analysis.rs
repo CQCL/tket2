@@ -128,7 +128,7 @@ impl BorrowInfo {
     fn try_from_ports<N: HugrNode>(
         hugr: &impl HugrView<Node = N>,
         node: N,
-        borrowed_port: Port,
+        action: BorrowOrReturn,
         ports: &BorrowReturnPorts,
     ) -> Result<Self, NodeInfoError> {
         let sig = hugr
@@ -143,7 +143,7 @@ impl BorrowInfo {
         }
 
         let borrow_index_ty = sig.port_type(ports.elem_index).expect("valid port");
-        let borrowed_ty = sig.port_type(borrowed_port).expect("valid port");
+        let borrowed_ty = sig.port_type(action.borrowed_port()).expect("valid port");
 
         if !borrow_index_ty.copyable() {
             return Err(NodeInfoError::NonCopyableBorrowIndex);
@@ -288,16 +288,16 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 continue;
             };
 
-            let Some((br, ports)) = is_br else {
+            let Some((action, ports)) = is_br else {
                 // Some other op that uses the resource, so we are done tracking borrows
                 must_be_last = Some(node);
                 continue;
             };
-            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, br.borrowed_port(), &ports)
+            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, action, &ports)
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
 
-            match br {
-                action @ BorrowOrReturn::Borrow(_) => {
+            match action {
+                BorrowOrReturn::Borrow(_) => {
                     let ve = match interval_starts.entry(info.borrow_index_const) {
                         Entry::Occupied(oe) => {
                             return Err(BorrowAnalysisError::RepeatedBorrow(oe.get().1, node))
@@ -315,7 +315,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     });
                     ve.insert((info, node));
                 }
-                action @ BorrowOrReturn::Return(_) => {
+                BorrowOrReturn::Return(_) => {
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
