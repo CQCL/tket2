@@ -5,7 +5,7 @@ pub use analysis::BorrowAnalysis;
 
 use hugr::algorithms::ComposablePass;
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::ops::{OpTag, OpTrait};
+use hugr::ops::{OpTag, OpTrait, OpType};
 use hugr::{IncomingPort, Node, OutgoingPort, Port, Wire};
 use itertools::Either;
 
@@ -56,11 +56,17 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
     /// Perform the pass on the given hugr.
     fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, BorrowAnalysisError<Node>> {
         let analysis = DefaultBorrowAnalysis::default();
+        fn valid_circuit_parent(op: &OpType) -> bool {
+            match op {
+                OpType::FuncDefn(fd) => fd.signature().params().is_empty(),
+                _ => OpTag::DataflowParent.is_superset(op.tag()),
+            }
+        }
         let temp: Vec<Node>; // to keep alive
         let regions = if self.regions.is_empty() {
             temp = hugr
                 .entry_descendants()
-                .filter(|n| OpTag::DataflowParent.is_superset(hugr.get_optype(*n).tag()))
+                .filter(|n| valid_circuit_parent(hugr.get_optype(*n)))
                 .collect();
             &temp
         } else {

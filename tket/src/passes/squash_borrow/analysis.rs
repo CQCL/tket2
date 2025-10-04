@@ -202,13 +202,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         circuit: &Circuit<H>,
         localize_errors: bool,
     ) -> Result<Vec<Vec<BorrowAction>>, BorrowAnalysisError<H::Node>> {
-        let res_tracker = ResourceScope::with_config(
-            circuit.hugr(),
-            circuit
-                .subgraph()
-                .map_err(BorrowAnalysisError::InvalidSubgraph)?,
-            &self.resource_scope_config(),
-        );
+        let subgraph = match circuit.subgraph() {
+            Ok(sg) => sg,
+            Err(InvalidSubgraph::EmptySubgraph) => return Ok(vec![]),
+            Err(e) => return Err(BorrowAnalysisError::InvalidSubgraph(e)),
+        };
+        // TODO Possibly add ResourceScope::from_circuit_with_config?
+        let res_tracker =
+            ResourceScope::with_config(circuit.hugr(), subgraph, &self.resource_scope_config());
         let intervals = self.gather_intervals(&res_tracker);
         if localize_errors {
             Ok(intervals.filter_map(Result::ok).collect())
