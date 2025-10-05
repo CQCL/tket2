@@ -295,7 +295,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     };
                     actions.push(BorrowOrReturn {
                         node,
-                        borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
+                        elem_index: BorrowIndex::Left(info.borrow_index_const),
                         action: ports.action,
                         borrow_from: ports.borrow_from,
                     });
@@ -311,7 +311,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
 
                     actions.push(BorrowOrReturn {
                         node,
-                        borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
+                        elem_index: BorrowIndex::Left(info.borrow_index_const),
                         action: ports.action,
                         borrow_from: ports.borrow_from,
                     })

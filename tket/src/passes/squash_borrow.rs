@@ -123,10 +123,10 @@ pub type BorrowIndex = Either<u64, Wire>;
 pub struct BorrowOrReturn {
     /// The node in the Hugr that this instance describes
     pub node: Node,
-    /// The constant index of the element being borrowed/returned
-    pub borrow_index_const: BorrowIndex,
     /// Whether this is a borrow or return, and the port for the borrowed value.
     pub action: BRAction,
+    /// The (hopefully-)constant index of the element being borrowed/returned
+    pub elem_index: BorrowIndex,
     /// The ports by which the container array reaches and leaves this node.
     pub borrow_from: BorrowFromPorts,
 }
@@ -141,6 +141,7 @@ pub struct BorrowOrReturn {
 /// # Panics
 ///
 /// If `nodes` are not well-paired
+// TODO ALAN: pub? (Returning result rather than panic? But leaves Hugr invalid...)
 fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     nodes: Vec<BorrowOrReturn>,
@@ -164,7 +165,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
             .expect("linear")
     };
 
-    if nodes.iter().any(|n| n.borrow_index_const.is_right()) {
+    if nodes.iter().any(|n| n.elem_index.is_right()) {
         // If any index is non-constant, for now don't elide anything.
         // (May be able to proceed very carefully...)
         return Vec::new();
@@ -188,7 +189,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
     };
     for BorrowOrReturn {
         node,
-        borrow_index_const: index,
+        elem_index: index,
         action,
         borrow_from,
     } in nodes
@@ -203,6 +204,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
 
             (BRAction::Return(inc), Entry::Occupied(mut oe)) => {
                 // return after borrow - record but do not emit (yet)
+                // TODO elide borrow-return if this is returning the output of the borrow (!)
                 let (_, ret) = &mut oe.get_mut();
                 if ret.replace((Return(node, inc), borrow_from)).is_some() {
                     panic!("Double return");
