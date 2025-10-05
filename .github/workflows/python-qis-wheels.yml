@@ -1,0 +1,138 @@
+name: Build qis-compiler wheels Release
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types:
+      - published
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CACHE_CARGO: true
+  UV_VERSION: "0.8.22"
+jobs:
+  build_qis_compiler_wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-14
+          # macos-13 runners are being retired, re-enable if needed
+          # - macos-13
+          - windows-2022
+    name: "qis-compiler wheels (${{matrix.os}})"
+    runs-on: ${{ matrix.os }}
+    steps:
+      # ---------------------------------
+      # Bootstrap the build environment
+      # ---------------------------------
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up UV
+        if: ${{ matrix.os != 'ubuntu-latest' }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          version: ${{ env.UV_VERSION }}
+
+      # Note that we are using CIBuildWheel to build the wheels.
+      # This treats linux differently to macos and windows.
+      #
+      # On linux, building on the host platform adds an implicit
+      # requirement on the host platform's glibc version and other
+      # system libraries that happen to be available. To mitigate
+      # this, builds are performed within a docker container that
+      # is compatible with manylinux (in our case, manylinux_2_28).
+      #
+      # See https://github.com/pypa/manylinux for more information
+      # about the manylinux project.
+      #
+      # This is an important aspect of wheel building, as it means
+      # that wheels are built in an isolated environment. We use
+      # /tmp/ci-cache for caching, which is then accessed as
+      # /host/tmp/ci-cache within the container.
+
+
+      # if the hugr_qis compiler has changed, we build it.
+      - name: Build selene-hugr-qis-compiler wheel
+        uses: pypa/cibuildwheel@v3.1.4
+        with:
+          package-dir: qis-compiler
+
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: qis-compiler-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  release:
+    strategy:
+      matrix:
+        target:
+          - name: selene-hugr-qis-compiler
+            upload: wheelhouse/selene_hugr_qis_compiler-*.whl
+
+    name: Release ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    # always do a full build and test before release of any package
+    needs: [build_qis_compiler_wheels]
+    environment: release
+    permissions:
+      contents: write
+      # IMPORTANT: this permission is mandatory for trusted publishing
+      id-token: write
+    steps:
+      # note: we can't use if: on the entire job, as if statements are evaluated
+      # before matrix expansion, so we follow the convention of guppylang and
+      # use a step to check if we should run the release job
+      - name: Check tag
+        id: check-tag
+        run: |
+          echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+        env:
+          SHOULD_RUN: ${{ github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) }}
+
+      - uses: actions/download-artifact@v4
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        with:
+          path: wheelhouse
+          merge-multiple: true
+
+      - name: Setup Python
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+
+      - name: Install twine
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        run: python -m pip install twine
+
+      - name: Upload to jfrog
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        run: |
+          twine upload --verbose --non-interactive ${{ matrix.target.upload }}
+        env:
+          TWINE_REPOSITORY_URL: ${{ secrets.JFROG_URL }}
+          TWINE_USERNAME: ${{ secrets.JFROG_USER }}
+
+      - name: Publish package distributions to PyPIz
+        if: ${{ steps.check-tag.outputs.run == 'true' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+          skip-existing: true
