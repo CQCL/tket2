@@ -83,6 +83,26 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
     }
 }
 
+/// A list or [BorrowOrReturn] nodes for a single resource, satisfying that
+///   * each [Borrow] is followed by a [Return] (without any intervening [Borrow]), and
+///   * each [Return] follows a [Borrow] (without any intervening [Return]),
+/// both of the same element index.
+///
+/// [Borrow]: BRAction::Borrow
+/// [Return]: BRAction::Return
+#[derive(Clone, Debug)]
+pub struct BorrowIntervals {
+    actions: Vec<BorrowOrReturn>,
+}
+
+impl BorrowIntervals {
+    /// Gets the list of borrow/return actions satisfying the
+    /// pairing conditions.
+    pub fn actions(&self) -> &[BorrowOrReturn] {
+        &self.actions
+    }
+}
+
 /// The ports by which the container array reaches and leaves a
 /// particular borrow or return node.
 #[derive(Clone, Debug)]
@@ -131,21 +151,16 @@ pub struct BorrowOrReturn {
     pub borrow_from: BorrowFromPorts,
 }
 
-/// Elide return-borrow pairs for a single array, given `nodes` that are well-paired
-/// i.e. from [BorrowAnalysis]
+/// Elide return-borrow pairs for a single array.
 ///
 /// # Returns
 ///
 /// Pairs of (Return node, Borrow node) that were elided.
-///
-/// # Panics
-///
-/// If `nodes` are not well-paired
-// TODO ALAN: pub? (Returning result rather than panic? But leaves Hugr invalid...)
-fn borrow_squash_array<H: HugrMut<Node = Node>>(
+pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
-    nodes: Vec<BorrowOrReturn>,
+    intervals: BorrowIntervals,
 ) -> Vec<(Node, Node)> {
+    let nodes = intervals.actions();
     // Find the original source of the array and target. (These may have changed
     // since the analysis was run, e.g. if this is a nested array produced by an
     // elided borrow.)
@@ -192,7 +207,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
         elem_index: index,
         action,
         borrow_from,
-    } in nodes
+    } in intervals.actions
     {
         // We bailed out if any indices were Right (i.e. non-Const) above.
         match (action, borrowed.entry(index.unwrap_left())) {

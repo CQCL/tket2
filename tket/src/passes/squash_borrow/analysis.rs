@@ -16,6 +16,7 @@ use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
 use super::{BRAction, BorrowFromPorts, BorrowIndex, BorrowOrReturn};
+use crate::passes::squash_borrow::BorrowIntervals;
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
@@ -88,9 +89,8 @@ pub enum BorrowAnalysisError<N: HugrNode> {
     NodeInfoError(NodeInfoError),
 }
 
-/// Incomplete information about a borrow interval, used during the analysis.
 #[derive(Clone, Debug, PartialEq)]
-pub struct BorrowInfo {
+struct BorrowInfo {
     borrow_from_ty: Type,
 
     borrowed_ty: Type,
@@ -202,7 +202,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         &self,
         circuit: &Circuit<H>,
         localize_errors: bool,
-    ) -> Result<Vec<Vec<BorrowOrReturn>>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<Vec<BorrowIntervals>, BorrowAnalysisError<H::Node>> {
         let subgraph = match circuit.subgraph() {
             Ok(sg) => sg,
             Err(InvalidSubgraph::EmptySubgraph) => return Ok(vec![]),
@@ -222,7 +222,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     fn gather_intervals<'a, H: HugrView<Node = Node> + Clone + 'a>(
         &'a self,
         circuit: &'a ResourceScope<&'a H>,
-    ) -> impl Iterator<Item = Result<Vec<BorrowOrReturn>, BorrowAnalysisError<H::Node>>> + 'a {
+    ) -> impl Iterator<Item = Result<BorrowIntervals, BorrowAnalysisError<H::Node>>> + 'a {
         circuit
             .get_resource_starts()
             .map(|(start_node, resource_id)| {
@@ -237,7 +237,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
         inp_node: H::Node,
-    ) -> Result<Vec<BorrowOrReturn>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<BorrowIntervals, BorrowAnalysisError<H::Node>> {
         // Analysis only produces constant indices for now
         let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
         let mut actions = Vec::new();
@@ -326,7 +326,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             return Err(BorrowAnalysisError::BorrowNotReturned(n));
         }
 
-        Ok(actions)
+        Ok(BorrowIntervals { actions })
     }
 
     fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
@@ -506,6 +506,9 @@ mod tests {
                     .is_some_and(is_borrow_ret)
             })
             .count();
-        assert_eq!(res.iter().map(|v| v.len()).sum::<usize>(), num_boro_rets);
+        assert_eq!(
+            res.iter().map(|v| v.actions().len()).sum::<usize>(),
+            num_boro_rets
+        );
     }
 }
