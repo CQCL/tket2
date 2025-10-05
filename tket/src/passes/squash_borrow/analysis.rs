@@ -38,7 +38,7 @@ pub trait IsBorrowReturn: Clone {
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<(BRAction, BorrowReturnPorts)>, NodeInfoError>;
+    ) -> Result<Option<BorrowReturnPorts>, NodeInfoError>;
 }
 
 /// An analysis pass that identifies borrowed resources and their lifetimes.
@@ -112,7 +112,6 @@ impl BorrowInfo {
     fn try_from_ports<N: HugrNode>(
         hugr: &impl HugrView<Node = N>,
         node: N,
-        action: BRAction,
         ports: &BorrowReturnPorts,
     ) -> Result<Self, NodeInfoError> {
         let sig = hugr
@@ -127,7 +126,9 @@ impl BorrowInfo {
         }
 
         let borrow_index_ty = sig.port_type(ports.elem_index).expect("valid port");
-        let borrowed_ty = sig.port_type(action.borrowed_port()).expect("valid port");
+        let borrowed_ty = sig
+            .port_type(ports.action.borrowed_port())
+            .expect("valid port");
 
         if !borrow_index_ty.copyable() {
             return Err(NodeInfoError::NonCopyableBorrowIndex);
@@ -255,14 +256,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .is_br
                 .is_borrow_return(node, circuit.hugr())
                 .map_err(BorrowAnalysisError::NodeInfoError)?
-                .filter(|(act, ports)| {
+                .filter(|ports| {
                     let bf = circuit.get_circuit_unit(node, ports.borrow_from.inc);
                     assert_eq!(bf, circuit.get_circuit_unit(node, ports.borrow_from.out));
                     bf.unwrap() == CircuitUnit::Resource(resource_id) || {
                         // Ignore nested array creation/ending (borrowing from/returning back to parent)
                         assert_eq!(
                             Some(CircuitUnit::Resource(resource_id)),
-                            circuit.get_circuit_unit(node, act.borrowed_port())
+                            circuit.get_circuit_unit(node, ports.action.borrowed_port())
                         );
                         false
                     }
@@ -276,15 +277,15 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 continue;
             };
 
-            let Some((action, ports)) = is_br else {
+            let Some(ports) = is_br else {
                 // Some other op that uses the resource, so we are done tracking borrows
                 must_be_last = Some(node);
                 continue;
             };
-            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, action, &ports)
+            let info = BorrowInfo::try_from_ports(circuit.hugr(), node, &ports)
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
 
-            match action {
+            match ports.action {
                 BRAction::Borrow(_) => {
                     let ve = match interval_starts.entry(info.borrow_index_const) {
                         Entry::Occupied(oe) => {
@@ -295,7 +296,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     actions.push(BorrowOrReturn {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
-                        action,
+                        action: ports.action,
                         borrow_from: ports.borrow_from,
                     });
                     ve.insert((info, node));
@@ -311,7 +312,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     actions.push(BorrowOrReturn {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
-                        action,
+                        action: ports.action,
                         borrow_from: ports.borrow_from,
                     })
                 }
@@ -384,12 +385,15 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
             match self
                 .is_borrow_return(node, hugr)
                 .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
+                .map(|ports| ports.action)
             {
-                Some((BRAction::Borrow(_), _)) => {
+                Some(BRAction::Borrow(_)) => {
+                    // TODO ALAN use ports.borrow_from_in
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![None, Some(borrowed_resource)]
                 }
-                Some((BRAction::Return(_), _)) => {
+                Some(BRAction::Return(_)) => {
+                    // TODO ALAN use ports.borrow_from_in
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![Some(borrowed_resource)]
                 }
@@ -407,6 +411,7 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
 /// Ports common to a borrow or return op
 #[derive(Debug, Clone)]
 pub struct BorrowReturnPorts {
+    action: BRAction,
     elem_index: IncomingPort,
     borrow_from: BorrowFromPorts,
 }
@@ -431,7 +436,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<(BRAction, BorrowReturnPorts)>, NodeInfoError> {
+    ) -> Result<Option<BorrowReturnPorts>, NodeInfoError> {
         let op = hugr.get_optype(node);
 
         let Some(ext_op) = op.as_extension_op() else {
@@ -446,15 +451,14 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 if sig.input_count() != 2 || sig.output_count() != 2 {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
-                let ports = BorrowReturnPorts {
+                Some(BorrowReturnPorts {
+                    action: BRAction::Borrow(OutgoingPort::from(0)),
                     borrow_from: BorrowFromPorts {
                         inc: IncomingPort::from(0),
                         out: OutgoingPort::from(1),
                     },
                     elem_index: IncomingPort::from(1),
-                };
-
-                Some((BRAction::Borrow(OutgoingPort::from(0)), ports))
+                })
             }
             Ok(BArrayUnsafeOpDef::r#return) => {
                 let op = hugr.get_optype(node);
@@ -465,14 +469,14 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 if sig.input_count() != 3 || sig.output_count() != 1 {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
-                let ports = BorrowReturnPorts {
+                Some(BorrowReturnPorts {
+                    action: BRAction::Return(IncomingPort::from(2)),
                     borrow_from: BorrowFromPorts {
                         inc: IncomingPort::from(0),
                         out: OutgoingPort::from(0),
                     },
                     elem_index: IncomingPort::from(1),
-                };
-                Some((BRAction::Return(IncomingPort::from(2)), ports))
+                })
             }
             _ => None,
         })
