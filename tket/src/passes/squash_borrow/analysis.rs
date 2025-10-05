@@ -14,7 +14,7 @@ use hugr::ops::{OpTrait, OpType, Value};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
-use hugr::types::Type;
+use hugr::types::{Term, Type};
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
 use super::{BRAction, BorrowFromPorts, BorrowIndex, BorrowOrReturn};
@@ -40,6 +40,13 @@ trait IsBorrowReturn: Clone {
         node: H::Node,
         hugr: &H,
     ) -> Result<Option<BorrowReturnPorts>, NodeInfoError>;
+
+    /// If the specified type is an array that can be borrowed from,
+    /// return `Some` of:
+    ///   * `Some(size)` if the array's size is statically known.
+    ///   * `None` if the array's size is not statically known.
+    /// Otherwise (if the type is not such an array), return `None`.
+    fn get_array_size(&self, ty: &Type) -> Option<Option<u64>>;
 }
 
 /// An analysis pass that identifies borrowed resources and their lifetimes.
@@ -69,6 +76,14 @@ pub enum NodeInfoError {
     #[allow(missing_docs)]
     NonLinearBorrowedResource {
         borrowed_ty: Type,
+        borrow_from_ty: Type,
+    },
+    /// An operation does not borrow from the same type as the array had when created
+    #[display("Array was created as {source_ty} but borrowing from {borrow_from_ty}")]
+    InconsistentArrayType {
+        /// The type as which the array was created
+        source_ty: Type,
+        /// The type from which the op claims to be borrowing
         borrow_from_ty: Type,
     },
 }
@@ -235,6 +250,8 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
 
     /// Traverse the resource path of the given resource and find all pairs
     /// of borrow and return nodes that match up.
+    ///
+    /// Returns `Ok(None)` if the resource path does not represent an array.
     fn check_actions_paired<H: HugrView<Node = Node>>(
         &self,
         circuit: &ResourceScope<&H>,
@@ -245,7 +262,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
         let mut actions = Vec::new();
         let mut must_be_last = None;
-        let mut first = true;
+        let mut array_ty = None; // Set on resource start (before first borrow)
 
         for node in circuit.resource_path_iter(resource_id, inp_node, Direction::Outgoing) {
             if let Some(isnt_last) = must_be_last {
@@ -272,12 +289,33 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     }
                 });
 
-            if first {
-                // First node on path creates the resource, does not borrow from it
-                first = false;
-                debug_assert!(circuit.is_resource_start(node, resource_id));
-                assert!(is_br.is_none());
-                continue;
+            let array_ty = match &array_ty {
+                Some(ty) => ty,
+                None => {
+                    // First node on path creates the resource, does not borrow from it
+                    debug_assert!(circuit.is_resource_start(node, resource_id));
+                    assert!(is_br.is_none());
+                    let src_port = circuit
+                        .get_circuit_units_slice(node, Direction::Outgoing)
+                        .unwrap()
+                        .into_iter()
+                        .position(|cu| cu == &CircuitUnit::Resource(resource_id))
+                        .unwrap();
+                    let arr_ty = circuit
+                        .hugr()
+                        .out_value_types(node)
+                        .nth(src_port)
+                        .expect("valid port")
+                        .1;
+                    if self.is_br.get_array_size(&arr_ty).is_none() {
+                        return Ok(BorrowIntervals {
+                            array_size: None,
+                            actions: Vec::new(),
+                        });
+                    }
+                    array_ty = Some(arr_ty);
+                    continue;
+                }
             };
 
             let Some(ports) = is_br else {
@@ -287,7 +325,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             };
             let info = BorrowInfo::try_from_ports(circuit.hugr(), node, &ports)
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
-
+            if &info.borrow_from_ty != array_ty {
+                return Err(BorrowAnalysisError::NodeInfoError(
+                    NodeInfoError::InconsistentArrayType {
+                        source_ty: array_ty.clone(),
+                        borrow_from_ty: info.borrow_from_ty,
+                    },
+                ));
+            }
             match ports.action {
                 BRAction::Borrow(_) => {
                     let ve = match interval_starts.entry(info.borrow_index_const) {
@@ -328,8 +373,11 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         if let Some((_, n)) = interval_starts.into_values().next() {
             return Err(BorrowAnalysisError::BorrowNotReturned(n));
         }
-
-        Ok(BorrowIntervals { actions })
+        let array_size = self.is_br.get_array_size(&array_ty.unwrap()).unwrap();
+        Ok(BorrowIntervals {
+            array_size,
+            actions,
+        })
     }
 
     fn resource_scope_config<H: HugrView>(&self) -> ResourceScopeConfig<'_, &H> {
@@ -472,6 +520,19 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 })
             }
             _ => None,
+        })
+    }
+
+    fn get_array_size(&self, ty: &Type) -> Option<Option<u64>> {
+        let ext = ty.as_extension()?;
+        (ext.name() == "borrow_array").then(|| {
+            let [sz, _elem] = ext.args() else {
+                panic!("BorrowArray must have two type arguments");
+            };
+            match sz {
+                Term::BoundedNat(n) => Some(*n),
+                _ => None,
+            }
         })
     }
 }

@@ -93,10 +93,16 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
 /// [Return]: BRAction::Return
 #[derive(Clone, Debug)]
 pub struct BorrowIntervals {
+    array_size: Option<u64>,
     actions: Vec<BorrowOrReturn>,
 }
 
 impl BorrowIntervals {
+    /// Gets the size of the array if statically known.
+    pub fn array_size(&self) -> Option<u64> {
+        self.array_size
+    }
+
     /// Gets the list of borrow/return actions satisfying the
     /// pairing conditions.
     pub fn actions(&self) -> &[BorrowOrReturn] {
@@ -230,12 +236,13 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         })
         .collect();
     // Now also elide Borrow-Returns if the returned value is exactly that from the borrow.
-    // TODO ALAN noooo, this removes potential panics. Need to check against array size.
-    for (bor, opt_return) in borrowed.into_values() {
+    for (idx, (bor, opt_return)) in borrowed {
         let ret = opt_return.unwrap(); // ensured by analysis
-        if hugr.linked_inputs(bor.0, bor.1).exactly_one().ok() == Some((ret.0, ret.1)) {
-            elide_node(hugr, bor.0, &bor.2);
-            elide_node(hugr, ret.0, &ret.2);
+        // Don't elide unless we know the borrowed index is within bounds and would not panic.
+        if intervals.array_size.is_some_and(|sz| idx < sz) &&
+            hugr.linked_inputs(bor.0, bor.1).exactly_one().ok() == Some((ret.0, ret.1)) {
+                elide_node(hugr, bor.0, &bor.2);
+                elide_node(hugr, ret.0, &ret.2);
         }
     }
 
