@@ -15,7 +15,7 @@ use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
-use super::{BorrowOrReturn, BorrowFromPorts, BorrowIndex, BRAction};
+use super::{BRAction, BorrowFromPorts, BorrowIndex, BorrowOrReturn};
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
@@ -121,8 +121,8 @@ impl BorrowInfo {
                 op: hugr.get_optype(node).clone(),
             })?;
 
-        let borrow_from_ty = sig.port_type(ports.borrow_from_in).expect("valid port");
-        if borrow_from_ty != sig.port_type(ports.borrow_from_out).expect("valid port") {
+        let borrow_from_ty = sig.port_type(ports.borrow_from.inc).expect("valid port");
+        if borrow_from_ty != sig.port_type(ports.borrow_from.out).expect("valid port") {
             return Err(NodeInfoError::BorrowNodeIncorrectSignature);
         }
 
@@ -256,8 +256,8 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .is_borrow_return(node, circuit.hugr())
                 .map_err(BorrowAnalysisError::NodeInfoError)?
                 .filter(|(act, ports)| {
-                    let bf = circuit.get_circuit_unit(node, ports.borrow_from_in);
-                    assert_eq!(bf, circuit.get_circuit_unit(node, ports.borrow_from_out));
+                    let bf = circuit.get_circuit_unit(node, ports.borrow_from.inc);
+                    assert_eq!(bf, circuit.get_circuit_unit(node, ports.borrow_from.out));
                     bf.unwrap() == CircuitUnit::Resource(resource_id) || {
                         // Ignore nested array creation/ending (borrowing from/returning back to parent)
                         assert_eq!(
@@ -296,10 +296,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
-                        borrow_from: BorrowFromPorts {
-                            inc: ports.borrow_from_in,
-                            out: ports.borrow_from_out,
-                        },
+                        borrow_from: ports.borrow_from,
                     });
                     ve.insert((info, node));
                 }
@@ -315,10 +312,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
-                        borrow_from: BorrowFromPorts {
-                            inc: ports.borrow_from_in,
-                            out: ports.borrow_from_out,
-                        },
+                        borrow_from: ports.borrow_from,
                     })
                 }
             }
@@ -413,9 +407,8 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
 /// Ports common to a borrow or return op
 #[derive(Debug, Clone)]
 pub struct BorrowReturnPorts {
-    borrow_from_in: IncomingPort,
     elem_index: IncomingPort,
-    borrow_from_out: OutgoingPort,
+    borrow_from: BorrowFromPorts,
 }
 
 /// Implements [IsBorrowReturn] for `BorrowArray`s.
@@ -454,9 +447,11 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
                 let ports = BorrowReturnPorts {
-                    borrow_from_in: IncomingPort::from(0),
+                    borrow_from: BorrowFromPorts {
+                        inc: IncomingPort::from(0),
+                        out: OutgoingPort::from(1),
+                    },
                     elem_index: IncomingPort::from(1),
-                    borrow_from_out: OutgoingPort::from(1),
                 };
 
                 Some((BRAction::Borrow(OutgoingPort::from(0)), ports))
@@ -471,9 +466,11 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     return Err(NodeInfoError::BorrowNodeIncorrectSignature);
                 }
                 let ports = BorrowReturnPorts {
-                    borrow_from_in: IncomingPort::from(0),
+                    borrow_from: BorrowFromPorts {
+                        inc: IncomingPort::from(0),
+                        out: OutgoingPort::from(0),
+                    },
                     elem_index: IncomingPort::from(1),
-                    borrow_from_out: OutgoingPort::from(0),
                 };
                 Some((BRAction::Return(IncomingPort::from(2)), ports))
             }
