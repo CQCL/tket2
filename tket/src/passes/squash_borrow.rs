@@ -96,20 +96,20 @@ pub struct BorrowFromPorts {
 /// Whether a node is a borrow or return, along with the port for
 /// the borrowed value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BorrowOrReturn {
+pub enum BRAction {
     /// A borrow action, containing the port on which the borrowed value is output.
     Borrow(OutgoingPort),
     /// A return action, containing the port on which the value to return is input.
     Return(IncomingPort),
 }
 
-impl BorrowOrReturn {
+impl BRAction {
     /// Gets the port on which the borrowed value is output (for a [Self::Borrow])
     /// or input (for a [Self::Return]).
     pub fn borrowed_port(&self) -> Port {
         match self {
-            BorrowOrReturn::Borrow(p) => (*p).into(),
-            BorrowOrReturn::Return(p) => (*p).into(),
+            BRAction::Borrow(p) => (*p).into(),
+            BRAction::Return(p) => (*p).into(),
         }
     }
 }
@@ -120,13 +120,13 @@ pub type BorrowIndex = Either<u64, Wire>;
 
 /// Information about a node that is either a borrow from or return to a resource.
 #[derive(Clone, Debug)]
-pub struct BorrowAction {
+pub struct BorrowOrReturn {
     /// The node in the Hugr that this instance describes
     pub node: Node,
     /// The constant index of the element being borrowed/returned
     pub borrow_index_const: BorrowIndex,
     /// Whether this is a borrow or return, and the port for the borrowed value.
-    pub action: BorrowOrReturn,
+    pub action: BRAction,
     /// The ports by which the container array reaches and leaves this node.
     pub borrow_from: BorrowFromPorts,
 }
@@ -143,7 +143,7 @@ pub struct BorrowAction {
 /// If `nodes` are not well-paired
 fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
-    nodes: Vec<BorrowAction>,
+    nodes: Vec<BorrowOrReturn>,
 ) -> Vec<(Node, Node)> {
     // Find the original source of the array and target. (These may have changed
     // since the analysis was run, e.g. if this is a nested array produced by an
@@ -186,7 +186,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
         );
         current_array = Wire::new(node, borrow_from.out);
     };
-    for BorrowAction {
+    for BorrowOrReturn {
         node,
         borrow_index_const: index,
         action,
@@ -195,13 +195,13 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
     {
         // We bailed out if any indices were Right (i.e. non-Const) above.
         match (action, borrowed.entry(index.unwrap_left())) {
-            (BorrowOrReturn::Borrow(borrowed_out), Entry::Vacant(ve)) => {
+            (BRAction::Borrow(borrowed_out), Entry::Vacant(ve)) => {
                 // initial borrow - record and emit
                 ve.insert((Borrow(node, borrowed_out), None));
                 emit(node, borrow_from);
             }
 
-            (BorrowOrReturn::Return(inc), Entry::Occupied(mut oe)) => {
+            (BRAction::Return(inc), Entry::Occupied(mut oe)) => {
                 // return after borrow - record but do not emit (yet)
                 let (_, ret) = &mut oe.get_mut();
                 if ret.replace((Return(node, inc), borrow_from)).is_some() {
@@ -209,7 +209,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
                 }
             }
 
-            (BorrowOrReturn::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
+            (BRAction::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
                 // Borrow after return (can't be borrow after borrow as per analysis)
                 let (_, prev_return) = oe.get_mut();
                 let Some(prev_return) = prev_return.take() else {
@@ -218,7 +218,7 @@ fn borrow_squash_array<H: HugrMut<Node = Node>>(
                 elisions.push((prev_return.0, Borrow(node, borrowed_out)));
             }
 
-            (BorrowOrReturn::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
+            (BRAction::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
         }
     }
     // Wire up final (non-elided) returns

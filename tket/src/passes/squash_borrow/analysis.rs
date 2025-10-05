@@ -15,7 +15,7 @@ use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::Type;
 use hugr::{Direction, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 
-use super::{BorrowAction, BorrowFromPorts, BorrowIndex, BorrowOrReturn};
+use super::{BorrowOrReturn, BorrowFromPorts, BorrowIndex, BRAction};
 use crate::resource::{
     CircuitUnit, ResourceFlow, ResourceId, ResourceScope, ResourceScopeConfig, UnsupportedOp,
 };
@@ -38,7 +38,7 @@ pub trait IsBorrowReturn: Clone {
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<(BorrowOrReturn, BorrowReturnPorts)>, NodeInfoError>;
+    ) -> Result<Option<(BRAction, BorrowReturnPorts)>, NodeInfoError>;
 }
 
 /// An analysis pass that identifies borrowed resources and their lifetimes.
@@ -112,7 +112,7 @@ impl BorrowInfo {
     fn try_from_ports<N: HugrNode>(
         hugr: &impl HugrView<Node = N>,
         node: N,
-        action: BorrowOrReturn,
+        action: BRAction,
         ports: &BorrowReturnPorts,
     ) -> Result<Self, NodeInfoError> {
         let sig = hugr
@@ -201,7 +201,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         &self,
         circuit: &Circuit<H>,
         localize_errors: bool,
-    ) -> Result<Vec<Vec<BorrowAction>>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<Vec<Vec<BorrowOrReturn>>, BorrowAnalysisError<H::Node>> {
         let subgraph = match circuit.subgraph() {
             Ok(sg) => sg,
             Err(InvalidSubgraph::EmptySubgraph) => return Ok(vec![]),
@@ -221,7 +221,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     fn gather_intervals<'a, H: HugrView<Node = Node> + Clone + 'a>(
         &'a self,
         circuit: &'a ResourceScope<&'a H>,
-    ) -> impl Iterator<Item = Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>>> + 'a {
+    ) -> impl Iterator<Item = Result<Vec<BorrowOrReturn>, BorrowAnalysisError<H::Node>>> + 'a {
         circuit
             .get_resource_starts()
             .map(|(start_node, resource_id)| {
@@ -236,7 +236,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
         circuit: &ResourceScope<&H>,
         resource_id: ResourceId,
         inp_node: H::Node,
-    ) -> Result<Vec<BorrowAction>, BorrowAnalysisError<H::Node>> {
+    ) -> Result<Vec<BorrowOrReturn>, BorrowAnalysisError<H::Node>> {
         // Analysis only produces constant indices for now
         let mut interval_starts: BTreeMap<u64, (BorrowInfo, Node)> = BTreeMap::new();
         let mut actions = Vec::new();
@@ -285,14 +285,14 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                 .map_err(BorrowAnalysisError::NodeInfoError)?;
 
             match action {
-                BorrowOrReturn::Borrow(_) => {
+                BRAction::Borrow(_) => {
                     let ve = match interval_starts.entry(info.borrow_index_const) {
                         Entry::Occupied(oe) => {
                             return Err(BorrowAnalysisError::RepeatedBorrow(oe.get().1, node))
                         }
                         Entry::Vacant(ve) => ve,
                     };
-                    actions.push(BorrowAction {
+                    actions.push(BorrowOrReturn {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
@@ -303,7 +303,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     });
                     ve.insert((info, node));
                 }
-                BorrowOrReturn::Return(_) => {
+                BRAction::Return(_) => {
                     let Some(interval_start) = interval_starts.remove(&info.borrow_index_const)
                     else {
                         return Err(BorrowAnalysisError::ReturnWithoutBorrow(node));
@@ -311,7 +311,7 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
                     // Perhaps we should return the error here, but let's see how it's triggered
                     interval_start.0.check_eq(&info).unwrap();
 
-                    actions.push(BorrowAction {
+                    actions.push(BorrowOrReturn {
                         node,
                         borrow_index_const: BorrowIndex::Left(info.borrow_index_const),
                         action,
@@ -391,11 +391,11 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
                 .is_borrow_return(node, hugr)
                 .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
             {
-                Some((BorrowOrReturn::Borrow(_), _)) => {
+                Some((BRAction::Borrow(_), _)) => {
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![None, Some(borrowed_resource)]
                 }
-                Some((BorrowOrReturn::Return(_), _)) => {
+                Some((BRAction::Return(_), _)) => {
                     let borrowed_resource = inputs[0].expect("linear input");
                     vec![Some(borrowed_resource)]
                 }
@@ -438,7 +438,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<(BorrowOrReturn, BorrowReturnPorts)>, NodeInfoError> {
+    ) -> Result<Option<(BRAction, BorrowReturnPorts)>, NodeInfoError> {
         let op = hugr.get_optype(node);
 
         let Some(ext_op) = op.as_extension_op() else {
@@ -459,7 +459,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     borrow_from_out: OutgoingPort::from(1),
                 };
 
-                Some((BorrowOrReturn::Borrow(OutgoingPort::from(0)), ports))
+                Some((BRAction::Borrow(OutgoingPort::from(0)), ports))
             }
             Ok(BArrayUnsafeOpDef::r#return) => {
                 let op = hugr.get_optype(node);
@@ -475,7 +475,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
                     elem_index: IncomingPort::from(1),
                     borrow_from_out: OutgoingPort::from(0),
                 };
-                Some((BorrowOrReturn::Return(IncomingPort::from(2)), ports))
+                Some((BRAction::Return(IncomingPort::from(2)), ports))
             }
             _ => None,
         })
