@@ -1,47 +1,45 @@
-//! A multi-producer multi-consumer min-priority channel of Hugrs.
+//! A priority queue of states, running in a dedicated thread.
+//!
+//! Communication with other threads is achieved over multi-producer
+//! multi-consumer channels.
 
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Instant;
 
 use crossbeam_channel::{select, Receiver, RecvError, SendError, Sender};
-use fxhash::FxHashSet;
 
 use crate::circuit::cost::CircuitCost;
-use crate::Circuit;
 
-use super::hugr_pqueue::{Entry, HugrPQ};
+use crate::optimiser::pqueue::{Entry, StatePQueue};
 
-/// A unit of work for a worker, consisting of a circuit to process, along its
+/// A unit of work for a worker, consisting of a state to process, along its
 /// hash and cost.
-pub type Work<P> = Entry<Circuit, P, u64>;
+pub type Work<S, P> = Entry<S, P, u64>;
 
-/// A priority channel for circuits.
+/// A priority queue [`StatePQueue`] running in a dedicated thread.
 ///
-/// Queues circuits using a cost function `C` that produces priority values `P`.
-///
-/// Uses a thread internally to orchestrate the queueing.
+/// When initiated, provides channels that other threads and workers can use to
+/// add and remove states from the queue.
 #[derive(Debug, Clone)]
-pub struct HugrPriorityChannel<C, P: Ord> {
-    /// Channel to add circuits from the queue.
-    push: Receiver<Vec<Work<P>>>,
-    /// Channel to pop circuits from the queue.
-    pop: Sender<Work<P>>,
+pub struct StatePQWorker<S, P: Ord> {
+    /// Channel to add states to the queue.
+    push: Receiver<Vec<Work<S, P>>>,
+    /// Channel to pop states from the queue.
+    pop: Sender<Work<S, P>>,
     /// Outbound channel to log to main thread.
-    log: Sender<PriorityChannelLog<P>>,
+    log: Sender<LogMessage<S, P>>,
     /// Timestamp of the last progress log.
     /// Used to avoid spamming the log.
     last_progress_log: Instant,
     /// The priority queue data structure.
-    pq: HugrPQ<P, C>,
-    /// The set of hashes we've seen.
-    seen_hashes: FxHashSet<u64>,
+    pq: StatePQueue<S, P>,
     /// The minimum cost we've seen.
     min_cost: Option<P>,
-    /// The number of circuits we've processed.
-    circ_cnt: usize,
+    /// The number of states we've processed.
+    state_cnt: usize,
     /// The maximum cost in the queue. Shared with the workers so they can cull
-    /// the circuits they generate.
+    /// the states they generate.
     max_cost: Arc<RwLock<Option<P>>>,
     /// Local copy of `max_cost`, used to avoid locking when checking the value.
     local_max_cost: Option<P>,
@@ -49,53 +47,53 @@ pub struct HugrPriorityChannel<C, P: Ord> {
 
 /// Logging information from the priority channel.
 #[derive(Debug, Clone)]
-pub enum PriorityChannelLog<P> {
-    NewBestCircuit(Circuit, P),
-    CircuitCount {
+pub enum LogMessage<S, P> {
+    NewBestState(S, P),
+    StateCount {
         processed_count: usize,
         seen_count: usize,
         queue_length: usize,
     },
 }
 
-/// Channels for communication with the priority channel.
+/// Channels for communication with the priority queue of [`StatePQWorker`].
 #[derive(Clone)]
-pub struct PriorityChannelCommunication<P> {
-    /// A channel to add batches of circuits to the queue.
-    push: Sender<Vec<Work<P>>>,
-    /// A channel to remove the best candidate circuit from the queue.
-    pop: Receiver<Work<P>>,
-    /// A maximum accepted cost for the queue. Circuits with higher costs will
+pub struct StatePQueueChannels<S, P> {
+    /// A channel to add batches of states to the queue.
+    push: Sender<Vec<Work<S, P>>>,
+    /// A channel to remove the best candidate state from the queue.
+    pop: Receiver<Work<S, P>>,
+    /// A maximum accepted cost for the queue. States with higher costs will
     /// be dropped.
     ///
-    /// Shared with the workers so they can cull the circuits they generate.
+    /// Shared with the workers so they can cull the states they generate.
     max_cost: Arc<RwLock<Option<P>>>,
 }
 
-impl<P: CircuitCost> PriorityChannelCommunication<P> {
+impl<S, P: CircuitCost> StatePQueueChannels<S, P> {
     /// Signal the priority channel to stop.
     ///
     /// This will in turn signal the workers to stop.
-    pub fn close(&self) -> Result<(), SendError<Vec<Work<P>>>> {
+    pub fn close(&self) -> Result<(), SendError<Vec<Work<S, P>>>> {
         self.push.send(Vec::new())
     }
 
-    /// Send a lot of circuits to the priority channel.
-    pub fn send(&self, work: Vec<Work<P>>) -> Result<(), SendError<Vec<Work<P>>>> {
+    /// Send a lot of states to the priority channel.
+    pub fn send(&self, work: Vec<Work<S, P>>) -> Result<(), SendError<Vec<Work<S, P>>>> {
         if work.is_empty() {
             return Ok(());
         }
         self.push.send(work)
     }
 
-    /// Receive a circuit from the priority channel.
+    /// Receive a state from the priority channel.
     ///
-    /// Blocks until a circuit is available.
-    pub fn recv(&self) -> Result<Work<P>, RecvError> {
+    /// Blocks until a state is available.
+    pub fn recv(&self) -> Result<Work<S, P>, RecvError> {
         self.pop.recv()
     }
 
-    /// Get the maximum accepted circuit cost.
+    /// Get the maximum accepted state cost.
     ///
     /// This function requires locking, so its value should be cached where
     /// appropriate.
@@ -104,43 +102,31 @@ impl<P: CircuitCost> PriorityChannelCommunication<P> {
     }
 }
 
-impl<C, P> HugrPriorityChannel<C, P>
+impl<S, P> StatePQWorker<S, P>
 where
-    C: Fn(&Circuit) -> P + Send + Sync + 'static,
     P: CircuitCost + Send + Sync + 'static,
+    S: Clone + Send + Sync + 'static,
 {
     /// Initialize the queueing system.
     ///
-    /// Start the circuit priority queue in a new thread.
+    /// Start the state priority queue in a new thread.
     ///
-    /// Get back a [`PriorityChannelCommunication`] for adding and removing circuits to/from the queue,
-    /// and a channel receiver to receive logging information.
-    pub fn init(
-        cost_fn: C,
-        queue_capacity: usize,
-    ) -> (
-        PriorityChannelCommunication<P>,
-        Receiver<PriorityChannelLog<P>>,
-    ) {
+    /// Get back a [`StatePQueueChannels`] for adding and removing states
+    /// to/from the queue, and a channel receiver to receive logging
+    /// information.
+    pub fn init(queue_capacity: usize) -> (StatePQueueChannels<S, P>, Receiver<LogMessage<S, P>>) {
         // Shared maximum cost in the queue.
         let max_cost = Arc::new(RwLock::new(None));
-        // Channels for pushing and popping circuits from pqueue
+        // Channels for pushing and popping states from pqueue
         let (tx_push, rx_push) = crossbeam_channel::unbounded();
         let (tx_pop, rx_pop) = crossbeam_channel::bounded(0);
         // Channel for logging results and statistics to the main thread.
         let (tx_log, rx_log) = crossbeam_channel::unbounded();
 
-        let pq = HugrPriorityChannel::new(
-            rx_push,
-            tx_pop,
-            tx_log,
-            max_cost.clone(),
-            cost_fn,
-            queue_capacity,
-        );
+        let pq = Self::new(rx_push, tx_pop, tx_log, max_cost.clone(), queue_capacity);
         pq.run();
         (
-            PriorityChannelCommunication {
+            StatePQueueChannels {
                 push: tx_push,
                 pop: rx_pop,
                 max_cost,
@@ -150,32 +136,28 @@ where
     }
 
     fn new(
-        push: Receiver<Vec<Work<P>>>,
-        pop: Sender<Work<P>>,
-        log: Sender<PriorityChannelLog<P>>,
+        push: Receiver<Vec<Work<S, P>>>,
+        pop: Sender<Work<S, P>>,
+        log: Sender<LogMessage<S, P>>,
         max_cost: Arc<RwLock<Option<P>>>,
-        cost_fn: C,
         queue_capacity: usize,
     ) -> Self {
         // The priority queue, local to this thread.
-        let pq = HugrPQ::new(cost_fn, queue_capacity);
-        // The set of hashes we've seen.
-        let seen_hashes = FxHashSet::default();
+        let pq = StatePQueue::new(queue_capacity, None);
         // The minimum cost we've seen.
         let min_cost = None;
-        // The number of circuits we've seen (for logging).
-        let circ_cnt = 0;
+        // The number of states we've seen (for logging).
+        let state_cnt = 0;
 
-        HugrPriorityChannel {
+        StatePQWorker {
             push,
             pop,
             log,
             // Ensure we log the first progress.
             last_progress_log: Instant::now() - std::time::Duration::from_secs(60),
             pq,
-            seen_hashes,
             min_cost,
-            circ_cnt,
+            state_cnt,
             max_cost,
             local_max_cost: None,
         }
@@ -222,9 +204,9 @@ where
                 }
                 // Send a last set of logs before terminating.
                 self.log
-                    .send(PriorityChannelLog::CircuitCount {
-                        processed_count: self.circ_cnt,
-                        seen_count: self.seen_hashes.len(),
+                    .send(LogMessage::StateCount {
+                        processed_count: self.state_cnt,
+                        seen_count: self.pq.num_seen_hashes(),
                         queue_length: self.pq.len(),
                     })
                     .unwrap();
@@ -232,37 +214,29 @@ where
             .unwrap();
     }
 
-    /// Add circuits to queue.
-    #[tracing::instrument(target = "badger::metrics", skip(self, circs))]
-    fn enqueue_circs(&mut self, circs: Vec<Work<P>>) {
-        for Work { cost, hash, circ } in circs {
-            if !self.seen_hashes.insert(hash) {
-                // Ignore this circuit: we've seen it before.
-                continue;
-            }
-
-            // A new best circuit
+    /// Add states to queue.
+    #[tracing::instrument(target = "badger::metrics", skip(self, states))]
+    fn enqueue_circs(&mut self, states: Vec<Work<S, P>>) {
+        for Work { cost, hash, state } in states {
+            // A new best state
             if self.min_cost.is_none() || Some(&cost) < self.min_cost.as_ref() {
                 self.min_cost = Some(cost.clone());
                 self.log
-                    .send(PriorityChannelLog::NewBestCircuit(
-                        circ.clone(),
-                        cost.clone(),
-                    ))
+                    .send(LogMessage::NewBestState(state.clone(), cost.clone()))
                     .unwrap();
             }
 
-            self.pq.push_unchecked(circ, hash, cost);
+            self.pq.push_unchecked(state, hash, cost);
         }
         self.update_max_cost();
 
-        // This is the result from processing a circuit. Add it to the count.
-        self.circ_cnt += 1;
+        // This is the result from processing a state. Add it to the count.
+        self.state_cnt += 1;
         if Instant::now() - self.last_progress_log > std::time::Duration::from_millis(100) {
             self.log
-                .send(PriorityChannelLog::CircuitCount {
-                    processed_count: self.circ_cnt,
-                    seen_count: self.seen_hashes.len(),
+                .send(LogMessage::StateCount {
+                    processed_count: self.state_cnt,
+                    seen_count: self.pq.num_seen_hashes(),
                     queue_length: self.pq.len(),
                 })
                 .unwrap();

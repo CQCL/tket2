@@ -2,12 +2,12 @@
 
 use std::thread::{self, JoinHandle};
 
-use crate::circuit::cost::CircuitCost;
 use crate::circuit::CircuitHash;
 use crate::rewrite::strategy::RewriteStrategy;
 use crate::rewrite::Rewriter;
+use crate::{circuit::cost::CircuitCost, Circuit};
 
-use super::hugr_pchannel::{PriorityChannelCommunication, Work};
+use super::pqueue_worker::{StatePQueueChannels, Work};
 
 /// A worker that processes circuits for the Badger optimiser.
 pub struct BadgerWorker<R, S, P: Ord> {
@@ -15,7 +15,7 @@ pub struct BadgerWorker<R, S, P: Ord> {
     #[allow(unused)]
     id: usize,
     /// The channel to send and receive work from.
-    priority_channel: PriorityChannelCommunication<P>,
+    priority_channel: StatePQueueChannels<Circuit, P>,
     /// The rewriter to use.
     rewriter: R,
     /// The rewrite strategy to use.
@@ -32,7 +32,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         id: usize,
-        priority_channel: PriorityChannelCommunication<P>,
+        priority_channel: StatePQueueChannels<Circuit, P>,
         rewriter: R,
         strategy: S,
     ) -> JoinHandle<()> {
@@ -58,7 +58,10 @@ where
     #[tracing::instrument(target = "badger::metrics", skip(self))]
     fn run_loop(&mut self) {
         loop {
-            let Ok(Work { circ, cost, .. }) = self.priority_channel.recv() else {
+            let Ok(Work {
+                state: circ, cost, ..
+            }) = self.priority_channel.recv()
+            else {
                 break;
             };
 
@@ -69,7 +72,7 @@ where
                 .apply_rewrites(rewrites, &circ)
                 .filter_map(|r| {
                     let new_cost = cost.add_delta(&r.cost_delta);
-                    if max_cost.is_some() && &new_cost >= max_cost.as_ref().unwrap() {
+                    if max_cost.is_some() && new_cost >= *max_cost.as_ref().unwrap() {
                         return None;
                     }
 
@@ -83,7 +86,7 @@ where
                     Some(Work {
                         cost: new_cost,
                         hash,
-                        circ: r.circ,
+                        state: r.circ,
                     })
                 })
                 .collect();
