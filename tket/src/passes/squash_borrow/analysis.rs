@@ -381,30 +381,19 @@ impl<'h, H: HugrView, BR: IsBorrowReturn> ResourceFlow<&'h H> for BR {
         hugr: &&'h H,
         inputs: &[Option<ResourceId>],
     ) -> Result<Vec<Option<ResourceId>>, UnsupportedOp> {
-        Ok(
-            match self
-                .is_borrow_return(node, hugr)
-                .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
-                .map(|ports| ports.action)
-            {
-                Some(BRAction::Borrow(_)) => {
-                    // TODO ALAN use ports.borrow_from_in
-                    let borrowed_resource = inputs[0].expect("linear input");
-                    vec![None, Some(borrowed_resource)]
-                }
-                Some(BRAction::Return(_)) => {
-                    // TODO ALAN use ports.borrow_from_in
-                    let borrowed_resource = inputs[0].expect("linear input");
-                    vec![Some(borrowed_resource)]
-                }
-                None => {
-                    // All borrows should have been returned before any other op.
-                    // Thus, any op touching an array, effectively creates a new array
-                    // (begins a fresh sequence of ops)
-                    vec![None; hugr.value_types(node, Direction::Outgoing).count()]
-                }
-            },
-        )
+        // By default, assume any non-borrow/return op can only execute on an array
+        // if all borrows have been returned; thus, any such effectively creates a
+        // new array (beginning a new sequence of borrows+returns).
+        let mut res = vec![None; hugr.value_types(node, Direction::Outgoing).count()];
+        if let Some(ports) = self
+            .is_borrow_return(node, hugr)
+            .map_err(|_| UnsupportedOp(hugr.get_optype(node).clone()))?
+        {
+            let array_in = inputs[ports.borrow_from.inc.index()];
+            assert!(array_in.is_some(), "array is linear");
+            res[ports.borrow_from.out.index()] = array_in;
+        }
+        Ok(res)
     }
 }
 
