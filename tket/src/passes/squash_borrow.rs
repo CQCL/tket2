@@ -86,7 +86,8 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
 /// A list or [BorrowOrReturn] nodes for a single resource, satisfying that
 ///   * each [Borrow] is followed by a [Return] (without any intervening [Borrow]), and
 ///   * each [Return] follows a [Borrow] (without any intervening [Return]),
-/// both of the same element index.
+///
+/// ...both of the same element index.
 ///
 /// [Borrow]: BRAction::Borrow
 /// [Return]: BRAction::Return

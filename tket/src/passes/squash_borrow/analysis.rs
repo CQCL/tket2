@@ -1,4 +1,6 @@
 //! An analysis pass that identifies borrowed resources and their lifetimes.
+//!
+//! Note: not parametrized by [HugrNode] because [Circuit::subgraph] is [Node]-only.
 
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
@@ -23,10 +25,8 @@ use crate::resource::{
 use crate::Circuit;
 
 /// A predicate that determines if a node is a borrow or return node.
-///
-/// Note: parametrized by [HugrNode] because it has to be to implement [ResourceFlow];
-/// we can't actually operate over non-[Node] views because [Circuit::subgraph] is not parametrized.
-pub trait IsBorrowReturn: Clone {
+// NOTE: in future, make `pub`; but expecting breaking changes.
+trait IsBorrowReturn: Clone {
     /// Determine if the given node is a borrow or return node, and if so,
     /// return the ports identifying the operands
     ///
@@ -43,7 +43,7 @@ pub trait IsBorrowReturn: Clone {
 }
 
 /// An analysis pass that identifies borrowed resources and their lifetimes.
-pub struct BorrowAnalysis<BR: IsBorrowReturn> {
+pub struct BorrowAnalysis<BR = DefaultBorrowArray> {
     is_br: BR,
 }
 
@@ -104,7 +104,7 @@ impl BorrowInfo {
     ///
     /// # Errors
     ///
-    /// If the index is not a constant, or the node does not conform in some other way, return the Wire.
+    /// If the index is not a constant, or the node does not conform in some other way
     ///
     /// # Panics
     ///
@@ -143,9 +143,8 @@ impl BorrowInfo {
         }
 
         let borrow_index = Wire::from_connected_port(node, ports.elem_index, hugr);
-        let borrow_index_const = find_const(hugr, borrow_index)
-            .ok_or(NodeInfoError::NonConstIndex)? // flag the wire here, or return in Self
-            .clone();
+        let borrow_index_const =
+            find_const(hugr, borrow_index).ok_or(NodeInfoError::NonConstIndex)?;
 
         Ok(Self {
             borrow_from_ty: borrow_from_ty.clone(),
@@ -184,6 +183,7 @@ impl BorrowInfo {
     }
 }
 
+#[allow(private_bounds)]
 impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
     /// Run the borrow analysis on the given circuit, i.e. on the DFG sibling
     /// graph of the circuit entrypoint.
