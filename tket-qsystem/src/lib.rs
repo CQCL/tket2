@@ -7,6 +7,7 @@ pub mod extension;
 #[cfg(feature = "llvm")]
 pub mod llvm;
 mod lower_drops;
+mod modifier;
 pub mod pytket;
 pub mod replace_bools;
 pub mod replace_borrow_arrays;
@@ -24,6 +25,7 @@ use hugr::{
     Hugr, HugrView, Node,
 };
 use lower_drops::LowerDropsPass;
+use modifier::ModifierResolverPass;
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
 use replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
 use tket::TketOp;
@@ -46,6 +48,7 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    modifier: bool,
     lower_borrow_arrays: bool,
 }
 
@@ -56,6 +59,7 @@ impl Default for QSystemPass {
             monomorphize: true,
             force_order: true,
             lazify: true,
+            modifier: true,
             lower_borrow_arrays: true,
         }
     }
@@ -111,6 +115,11 @@ impl QSystemPass {
         } else {
             hugr.entrypoint()
         };
+
+        // experimental modifier support
+        if self.modifier {
+            self.resolve_modifier().run(hugr)?
+        }
 
         // passes that run on whole module
         hugr.set_entrypoint(hugr.module_root());
@@ -221,6 +230,10 @@ impl QSystemPass {
 
     fn linearize_arrays(&self) -> LinearizeArrayPass {
         LinearizeArrayPass::default()
+    }
+
+    fn resolve_modifier(&self) -> ModifierResolverPass {
+        ModifierResolverPass
     }
 
     /// Returns a new `QSystemPass` with constant folding enabled according to
