@@ -47,7 +47,7 @@ pub struct BorrowAnalysis<BR = DefaultBorrowArray> {
     is_br: BR,
 }
 
-/// Reasons that a [IsBorrowReturn] may be unable to determine whether a node is a borrow/return.
+/// Reasons we may fail to determine whether a node is a borrow/return.
 #[derive(Debug, Display, Error)]
 pub enum NodeInfoError {
     /// Borrow op is not a dataflow op.
@@ -410,6 +410,7 @@ pub struct BorrowReturnPorts {
 
 /// Implements [IsBorrowReturn] for `BorrowArray`s.
 #[derive(Debug, Display, Clone)]
+#[allow(rustdoc::private_intra_doc_links)]
 pub struct DefaultBorrowArray;
 
 /// Default [BorrowAnalysis] for `BorrowArray`s
