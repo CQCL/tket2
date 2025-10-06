@@ -1,8 +1,8 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, inputs, ... }:
 let
+  pkgs-stable = import inputs.nixpkgs-2505 { system = pkgs.stdenv.system; };
   llvmVersion = "14";
-  llvmPackages = pkgs."llvmPackages_${llvmVersion}";
-
+  llvmPackages = pkgs-stable."llvmPackages_${llvmVersion}";
 in
 {
   # https://devenv.sh/packages/
