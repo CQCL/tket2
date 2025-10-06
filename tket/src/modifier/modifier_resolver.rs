@@ -99,6 +99,7 @@
 //! - User defined extension ops: There is no way to infer modified unknown extension ops.
 //!   We currently try to insert the original optype without any modification,
 //!   but this could result in an unexpected error.
+use derive_more::Error;
 use itertools::{Either, Itertools};
 use std::{
     collections::{HashMap, VecDeque},
@@ -108,6 +109,8 @@ use std::{
 pub mod array_modify;
 pub mod call_modify;
 pub mod dfg_modify;
+pub mod global_phase_modify;
+pub mod tket_op_modify;
 
 use super::qubit_types_utils::contain_qubits;
 use super::{CombinedModifier, ModifierFlags};
@@ -117,7 +120,7 @@ use hugr::{
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::hugrmut::HugrMut,
-    ops::{Const, OpType, CFG},
+    ops::{Const, ExtensionOp, OpType, CFG},
     std_extensions::collections::array::array_type,
     type_row,
     types::{EdgeKind, FuncTypeBase, Signature, Type},
@@ -205,6 +208,26 @@ fn connect<N>(
     Ok(())
 }
 
+/// Connect a wire to a node by its number, returning the other side of the connection.
+fn connect_by_num(
+    new_dfg: &mut impl Dataflow,
+    dw: &DirWire<Node>,
+    node: Node,
+    num: usize,
+) -> DirWire<Node> {
+    let dw_node = dw.0;
+    match dw.1.as_directed() {
+        Either::Left(incoming) => {
+            new_dfg.hugr_mut().connect(node, num, dw_node, incoming);
+            (node, IncomingPort::from(num)).into()
+        }
+        Either::Right(outgoing) => {
+            new_dfg.hugr_mut().connect(dw_node, outgoing, node, num);
+            (node, OutgoingPort::from(num)).into()
+        }
+    }
+}
+
 trait PortExt {
     fn shift(self, offset: usize) -> Self;
 }
@@ -226,6 +249,51 @@ impl PortExt for OutgoingPort {
 impl<N> PortExt for DirWire<N> {
     fn shift(self, offset: usize) -> Self {
         DirWire(self.0, self.1.shift(offset))
+    }
+}
+
+/// A vector of ports for each node.
+/// The `if_rev` vector is used to swap the wires if the dagger is applied.
+pub struct PortVector<N = Node> {
+    incoming: Vec<DirWire<N>>,
+    outgoing: Vec<DirWire<N>>,
+}
+impl<N: HugrNode> PortVector<N> {
+    fn port_vector(
+        n: N,
+        inputs: impl Iterator<Item = usize>,
+        outputs: impl Iterator<Item = usize>,
+    ) -> Self {
+        let incoming = inputs.map(|p| (n, IncomingPort::from(p)).into()).collect();
+        let outgoing = outputs.map(|p| (n, OutgoingPort::from(p)).into()).collect();
+        PortVector { incoming, outgoing }
+    }
+    fn port_vector_rev(
+        n: N,
+        inputs: impl Iterator<Item = usize>,
+        outputs: impl Iterator<Item = usize>,
+        iter: impl Iterator<Item = usize>,
+    ) -> Self {
+        let iter = iter.collect::<Vec<_>>();
+        let incoming = inputs
+            .map(|p| {
+                if iter.contains(&p) {
+                    (n, OutgoingPort::from(p)).into()
+                } else {
+                    (n, IncomingPort::from(p)).into()
+                }
+            })
+            .collect();
+        let outgoing = outputs
+            .map(|p| {
+                if iter.contains(&p) {
+                    (n, IncomingPort::from(p)).into()
+                } else {
+                    (n, OutgoingPort::from(p)).into()
+                }
+            })
+            .collect();
+        PortVector { incoming, outgoing }
     }
 }
 
@@ -399,6 +467,50 @@ impl<N: HugrNode> ModifierResolver<N> {
         *self.modifiers_mut() = modifiers;
         r
     }
+    fn with_ancilla<T>(
+        &mut self,
+        wire: &mut Wire<Node>,
+        ancilla: &mut Vec<Wire<Node>>,
+        f: impl FnOnce(&mut Self, &mut Vec<Wire<Node>>) -> T,
+    ) -> T {
+        ancilla.push(*wire);
+        let r = f(self, ancilla);
+        *wire = ancilla.pop().unwrap();
+        r
+    }
+
+    fn pop_control(&mut self) -> Option<Wire<Node>> {
+        if let Some(c) = self.controls().pop() {
+            self.modifiers.control -= 1;
+            Some(c)
+        } else {
+            None
+        }
+    }
+
+    fn push_control(&mut self, c: Wire<Node>) {
+        self.controls().push(c);
+        self.modifiers.control += 1;
+    }
+
+    fn pop_control(&mut self) -> Option<Wire<Node>> {
+        if let Some(c) = self.controls().pop() {
+            self.modifiers.control -= 1;
+            Some(c)
+        } else {
+            None
+        }
+    }
+    fn with_modifiers<T>(
+        &mut self,
+        modifiers: CombinedModifier,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let modifiers = mem::replace(self.modifiers_mut(), modifiers);
+        let r = f(self);
+        *self.modifiers_mut() = modifiers;
+        r
+    }
 
     /// Register a correspondence from old to new wire.
     fn map_insert(
@@ -412,9 +524,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // If the old wire is already registered, raise an error.
                 Err(ModifierResolverErrors::unreachable(format!(
                     "Wire already registered for node {}. Former [{},...], Latter {}.",
-                    old, former[0], new
-                )))
-            })
+                )))})
     }
 
     /// Remember that old wire has no correspondence.
@@ -460,6 +570,48 @@ impl<N: HugrNode> ModifierResolver<N> {
             self.map_insert(DirWire(old_n, port), DirWire(node, port))?;
         }
         Ok(node)
+    }
+
+    fn port_vector_dagger(
+        &self,
+        n: Node,
+        inputs: impl Iterator<Item = usize>,
+        outputs: impl Iterator<Item = usize>,
+        iter: impl Iterator<Item = usize>,
+    ) -> PortVector<Node> {
+        if self.modifiers.dagger {
+            PortVector::port_vector_rev(n, inputs, outputs, iter)
+        } else {
+            PortVector::port_vector(n, inputs, outputs)
+        }
+    }
+
+    fn add_edge_from_pv(
+        &mut self,
+        h: &impl HugrMut<Node = N>,
+        n: N,
+        pv: PortVector<Node>,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        let PortVector { incoming, outgoing } = pv;
+        for (old_in, new) in (0..h.num_inputs(n)).map(IncomingPort::from).zip(incoming) {
+            self.map_insert((n, old_in).into(), new)?
+        }
+        for (old_out, new) in (0..h.num_outputs(n)).map(OutgoingPort::from).zip(outgoing) {
+            self.map_insert((n, old_out).into(), new)?
+        }
+        Ok(())
+    }
+
+    /// Add a node to the builder, plugging the control qubits to the first n-inputs and outputs.
+    fn add_node_control(&mut self, new_dfg: &mut impl Container, op: impl Into<OpType>) -> Node {
+        let node = new_dfg.add_child_node(op);
+        for (i, ctrl) in self.controls().iter_mut().enumerate() {
+            new_dfg
+                .hugr_mut()
+                .connect(ctrl.node(), ctrl.source(), node, i);
+            *ctrl = Wire::new(node, i);
+        }
+        node
     }
 
     /// connects all the wires in the builder.
@@ -781,6 +933,28 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
+    // WIP
+    fn _wire_others(
+        &mut self,
+        n: N,
+        n_optype: &OpType,
+        node: Node,
+        node_optype: &OpType,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        if let (Some(old), Some(new)) =
+            (n_optype.other_input_port(), node_optype.other_input_port())
+        {
+            self.map_insert((n, old).into(), (node, new).into())?;
+        }
+        if let (Some(old), Some(new)) = (
+            n_optype.other_output_port(),
+            node_optype.other_output_port(),
+        ) {
+            self.map_insert((n, old).into(), (node, new).into())?;
+        }
+        Ok(())
+    }
+
     fn modify_constant(
         &mut self,
         n: N,
@@ -821,12 +995,22 @@ impl<N: HugrNode> ModifierResolver<N> {
             ));
         }
 
-        if Modifier::from_optype(optype).is_some() {
-            // This is fine if we assume all the modifiers are used by `IndirectCall` at the end.
+        if let Some(op) = TketOp::from_optype(optype) {
+            let pv = self.modify_tket_op(n, op, new_dfg, &mut vec![])?;
+            self.add_edge_from_pv(h, n, pv)
+        } else if GlobalPhase::from_optype(optype).is_some() {
+            let inputs = self.modify_global_phase(n, new_dfg, &mut vec![])?;
+            self.corresp_map().insert(
+                (n, IncomingPort::from(0)).into(),
+                inputs.into_iter().map(Into::into).collect(),
+            );
+            Ok(())
+        } else if Modifier::from_optype(optype).is_some() {
+            // TODO: check if this is ok.
             self.forget_node(h, n)
-        } else if self.modify_array_op(h, n, optype, new_dfg)?
-            || self.try_array_convert(h, n, optype, new_dfg)?
-        {
+        } else if self.modify_array_op(h, n, optype, new_dfg)? {
+            Ok(())
+        } else if self.try_array_convert(h, n, optype, new_dfg)? {
             Ok(())
         } else {
             // Some other Hugr extension operation.
@@ -920,17 +1104,15 @@ pub fn resolve_modifier_with_entrypoints(
         }
     }
 
-    // TODO:
-    // This might be insufficient as a cleanup since the resolution procedure might
-    // generate nodes that are not reachable from the entry points.
-    // If more thorough cleanup is needed, we should run dead code elimination.
-    let mut deletelist = entry_points;
-    let mut visited = vec![];
-    while let Some(node) = deletelist.pop_front() {
-        deletelist.extend(h.children(node).filter(|n| !visited.contains(n)));
-        deletelist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
-        visited.push(node);
-        if h.contains_node(node) {
+    // TODO: Ad hoc implementation
+    // Remove all the remaining modifier nodes.
+    let entry_points = vec![h.module_root()];
+    for entry_point in entry_points.clone() {
+        let descendants = h.descendants(entry_point).collect::<Vec<_>>();
+        for node in descendants {
+            if !h.contains_node(node) {
+                continue;
+            }
             let optype = h.get_optype(node);
             if Modifier::from_optype(optype).is_some() {
                 let mut l = vec![node];
