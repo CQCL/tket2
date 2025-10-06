@@ -228,6 +228,9 @@ impl<BR: IsBorrowReturn> BorrowAnalysis<BR> {
             .map(|(start_node, resource_id)| {
                 self.check_actions_paired(circuit, resource_id, start_node)
             })
+            .filter(|res|
+                // Ignore resources with no borrow/returns
+                !res.as_ref().is_ok_and(|ints| ints.actions().is_empty()))
     }
 
     /// Traverse the resource path of the given resource and find all pairs
@@ -489,7 +492,8 @@ mod tests {
             .run(&borrow_circuit, false)
             .unwrap();
 
-        assert_eq!(res.len(), 38); // Arbitrary!
+        // Only one resource has any borrow/returns on it:
+        assert_eq!(res.len(), 1);
 
         fn is_borrow_ret(eop: &ExtensionOp) -> bool {
             matches!(
