@@ -21,7 +21,10 @@ use hugr::{
     hugr::hugrmut::HugrMut,
     ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
     std_extensions::{
-        collections::array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+        collections::{
+            array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+            borrow_array::{self, borrow_array_type},
+        },
         logic::LogicOp,
     },
     types::{SumType, Type},
@@ -219,8 +222,7 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-fn array_clone_dest(size: u64, elem_ty: Type) -> NodeTemplate {
-    let array_ty = array_type(size, elem_ty.clone());
+fn array_clone_dest(array_ty: Type) -> NodeTemplate {
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![array_ty.clone()],
         vec![array_ty.clone(), array_ty],
@@ -297,8 +299,8 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_op(&qsystem_measure, measure_dest());
     lw.replace_op(&qsystem_measure_reset, measure_reset_dest());
 
-    // Replace array ops with copyable bounds with DFGs that the linearizer can act on
-    // now that the elements are no longer copyable.
+    // Replace array and borrow ops with copyable bounds with DFGs that the linearizer
+    // can act on now that the elements are no longer copyable.
     lw.replace_parametrized_op_with(
         array::EXTENSION.get_op(ARRAY_CLONE_OP_ID.as_str()).unwrap(),
         move |args| {
@@ -307,10 +309,33 @@ fn lowerer() -> ReplaceTypes {
             };
             let size = size.as_nat().unwrap();
             let elem_ty = elem_ty.as_runtime().unwrap();
-            (!elem_ty.copyable()).then(|| array_clone_dest(size, elem_ty))
+            (!elem_ty.copyable()).then(|| {
+                let array_ty = array_type(size, elem_ty.clone());
+                array_clone_dest(array_ty)
+            })
         },
         ReplacementOptions::default().with_linearization(true),
     );
+
+    lw.replace_parametrized_op_with(
+        borrow_array::EXTENSION
+            .get_op(ARRAY_CLONE_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            (!elem_ty.copyable()).then(|| {
+                let array_ty = borrow_array_type(size, elem_ty.clone());
+                array_clone_dest(array_ty)
+            })
+        },
+        ReplacementOptions::default().with_linearization(true),
+    );
+
+    let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
 
     lw.replace_parametrized_op(
         array::EXTENSION
@@ -325,10 +350,31 @@ fn lowerer() -> ReplaceTypes {
             if elem_ty.copyable() {
                 return None;
             }
-            let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
             let drop_op = ExtensionOp::new(
                 drop_op_def.clone(),
                 vec![array_type(size, elem_ty.clone()).into()],
+            )
+            .unwrap();
+            Some(NodeTemplate::SingleOp(drop_op.into()))
+        },
+    );
+
+    lw.replace_parametrized_op(
+        borrow_array::EXTENSION
+            .get_op(ARRAY_DISCARD_OP_ID.as_str())
+            .unwrap(),
+        move |args| {
+            let [size, elem_ty] = args else {
+                unreachable!()
+            };
+            let size = size.as_nat().unwrap();
+            let elem_ty = elem_ty.as_runtime().unwrap();
+            if elem_ty.copyable() {
+                return None;
+            }
+            let drop_op = ExtensionOp::new(
+                drop_op_def.clone(),
+                vec![borrow_array_type(size, elem_ty.clone()).into()],
             )
             .unwrap();
             Some(NodeTemplate::SingleOp(drop_op.into()))
@@ -344,7 +390,7 @@ mod test {
 
     use super::*;
     use hugr::ops::OpType;
-    use hugr::std_extensions::collections::array::ArrayOpBuilder;
+    use hugr::std_extensions::collections::borrow_array::BArrayOpBuilder;
     use hugr::type_row;
     use hugr::{
         builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
@@ -502,14 +548,14 @@ mod test {
     fn test_array_clone_bool() {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = array_type(size, elem_ty.clone());
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(
             vec![arr_ty.clone()],
             vec![arr_ty.clone(), arr_ty.clone()],
         ))
         .unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        let (arr1, arr2) = dfb.add_array_clone(elem_ty, size, arr_in).unwrap();
+        let (arr1, arr2) = dfb.add_borrow_array_clone(elem_ty, size, arr_in).unwrap();
         let mut h = dfb.finish_hugr_with_outputs([arr1, arr2]).unwrap();
 
         h.validate().unwrap();
@@ -519,7 +565,7 @@ mod test {
 
         let sig = h.signature(h.entrypoint()).unwrap();
         let bool_dest_ty = bool_dest();
-        let arr_dest_ty = array_type(size, bool_dest_ty);
+        let arr_dest_ty = borrow_array_type(size, bool_dest_ty);
         assert_eq!(sig.input(), &TypeRow::from(vec![arr_dest_ty.clone()]));
         assert_eq!(
             sig.output(),
@@ -531,10 +577,10 @@ mod test {
     fn test_array_discard_bool() {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = array_type(size, elem_ty.clone());
+        let arr_ty = borrow_array_type(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(vec![arr_ty.clone()], type_row![])).unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        dfb.add_array_discard(elem_ty, size, arr_in).unwrap();
+        dfb.add_borrow_array_discard(elem_ty, size, arr_in).unwrap();
         let mut h = dfb.finish_hugr_with_outputs([]).unwrap();
 
         h.validate().unwrap();
