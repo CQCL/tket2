@@ -68,15 +68,17 @@ impl<N: HugrNode> ModifierResolver<N> {
                 worklist.push_back(node_map.from_portgraph(old_n_id));
             }
         }
-        mem::swap(self.worklist(), &mut worklist);
-        while let Some(old_n) = self.worklist().pop_front() {
-            self.modify_op(h, old_n, new_dfg)?;
-        }
-        let _ = mem::replace(self.worklist(), worklist);
-
-        Ok(())
+        self.with_worklist(worklist, |this| {
+            while let Some(old_n) = this.worklist().pop_front() {
+                this.modify_op(h, old_n, new_dfg)?;
+            }
+            Ok::<(), ModifierResolverErrors<N>>(())
+        })
     }
 
+    /// Modifies the I/O nodes of a dataflow graph.
+    /// These are handled separately from the other nodes since the place of control qubits
+    /// may differ depending on the type of the dataflow graph.
     fn modify_in_out_node(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -138,7 +140,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let offset = self.control_num();
 
                 // The wire for sum_rows always corresponds directly.
-                // This should not contain qubits, but it can be quantum type (e.g., unit type).
                 // Therefore, this wire is handled separately.
                 self.map_insert(
                     (old_out, IncomingPort::from(0)).into(),
@@ -168,6 +169,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
+    /// Initializes control qubits from the input wires of the dataflow graph.
     fn init_control_from_input(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -216,6 +218,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(controls)
     }
 
+    /// Wires the control qubits to the output node of the dataflow graph.
     fn wire_control_to_output(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -343,7 +346,9 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(new_function_node)
     }
 
-    // TODO: `power` not supported yet.
+    /// Generates a new function that does not essentially modify the function itself
+    /// but changes the signature to match the modified calls.
+    /// The generated function just calls the original function.
     pub(super) fn wrap_fn_with_controls(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
@@ -401,6 +406,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(dummy_fn_node)
     }
 
+    /// Inserts a sub DFG into the given parent DFG, updating the call map accordingly.
     pub(super) fn insert_sub_dfg(
         &mut self,
         parent_dfg: &mut impl Container,
@@ -607,6 +613,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 }
 
+/// composition of two call maps
 fn update_call_map<A, B, C, D>(f: &HashMap<A, (B, C)>, g: &HashMap<B, D>) -> HashMap<A, (D, C)>
 where
     A: Clone + Eq + std::hash::Hash,
@@ -799,8 +806,8 @@ mod test {
     // call(modified1);
     // call(modified2);
     // ```
-    // Such a case is not supported in the current implementation, and not supposed to happen
-    // in a Guppy compilation flow.
+    // Such a case is not supported in the current implementation so it fails,
+    // but this not supposed to happen in a Guppy compilation flow.
     #[ignore = "Modifier chain do not support branching."]
     #[rstest::rstest]
     #[case(1, 1, foo_dfg)]

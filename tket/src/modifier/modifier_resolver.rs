@@ -1,115 +1,131 @@
 //! Try to delete modifier by applying the modifier to each component.
 //!
-pub mod array_modify;
-pub mod call_modify;
-pub mod dfg_modify;
-use derive_more::Error;
-use hugr::{
-    builder::{BuildError, CFGBuilder, Container, Dataflow, SubContainer},
-    core::HugrNode,
-    extension::{prelude::qb_t, simple_op::MakeExtensionOp},
-    hugr::hugrmut::HugrMut,
-    ops::{Const, ExtensionOp, OpType, CFG},
-    std_extensions::collections::array::array_type,
-    type_row,
-    types::{EdgeKind, FuncTypeBase, Signature, Type},
-    HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
-};
+//! The entry point of this module is [`resolve_modifier_with_entrypoints`]
+//! which takes a hugraph and a list of entry points.
+//! Modifier resolver visits all the nodes reachable from the entry points.
+//!
+//! The main struct [`ModifierResolver`] holds the state during the process,
+//! and implements the core logic. `corresp_map` holds
+//! the main information during the process, which is a map from wires
+//! in the graph being modified to wires in the new graph being constructed.
+//!
+//! A modifier is assumed to be applied to a loaded function
+//! and called directly exactly once by another modifier or
+//! an `IndirectedCall` node.
+//! That is, the following structure is assumed:
+//! ```text
+//! LoadFunction -> Modifier* -> IndirectedCall
+//! ```
+//! Any other structure is not supported at this point, such as:
+//! ```text
+//! LoadFunction -> Modifier -> IndirectedCall
+//!                 |
+//!                 +-> Modifier -> IndirectedCall.
+//! ```
+//! The resolver finds the last modifier in a chain of modifiers,
+//! and starts resolving the function loaded by the `LoadFunction` node,
+//! which is done in
+//! `apply_modifier_chain_to_loaded_fn`.
+//!
+//! While resolving modifiers, we hold the original hugr `h` and the node to be modified `n`,
+//! and a builder `new_dfg` to construct the new graph.
+//! The correspondence map (`corresp_map`) keeps the correspondence
+//! from wires in `h` to wires in `new_dfg`.
+//! See `modify_op`, which is the main function that modifies each node.
+//!
+//! During the resolution, when a node with some data flow included (such as a function) is encountered,
+//! the function `modify_dfg_body`
+//! is called.
+//! This function modifies the I/O nodes and then calls
+//! `modify_dfg_children`
+//! to visit all other children nodes.
+//! When dagger is applied, the order of nodes to be processed is reversed,
+//! since the control qubits are passed in the reverse order.
+//! After visiting all children, `modify_dfg_body` calls
+//! [`connect_all`](ModifierResolver::connect_all) to connect all wires that are registered
+//! in the correspondence map.
+//!
+//! Importantly, when dagger is applied, not only the order of nodes is reversed,
+//! the direction of wires that includes any qubits is also reversed.
+//! Let us explain this with an example.
+//! Suppose we have a graph like below:
+//! ```text
+//! In(0) -------> [Rx] -------> [S] -------> Out(0)
+//!                 ^
+//!                 |
+//!   angle(π) ----+
+//! ```
+//! The resulting graph after applying dagger should be:
+//! ```text
+//! In(0) -------> [Sdg] -------> [Rx] -------> Out(0)
+//!                                ^
+//!                                |
+//! angle(π) ------- [fneg] ------+
+//! ```
+//! Looking at on the edge between `Rx` and `S` in `h`,
+//! one can see that the direction of the edge is reversed in the new graph.
+//! In other words, the incoming port of `S` is mapped to the outgoing port of `Sdg`,
+//! and the outgoing port of `Rx` is mapped to the incoming port of `Rx`.
+//! On the other hand, when looking at the edge between `angle(π)` and `Rx`,
+//! the outgoing port of `angle(π)` is not changed in the new graph,
+//! but the incoming port of `Rx` is mapped to the incoming port of `fneg` that reverses the angle.
+//! Therefore, the correspondence map should contain:
+//! ```text
+//! (S, In(0))          -> (Sdg, Out(0))
+//! (Rx, Out(0))        -> (Rx, In(0))
+//! (angle(π), Out(0)) -> (angle(π), Out(0))
+//! (Rx, In(1))         -> (fneg, In(1))
+//! ```
+//! From this correspondence map, we can see that the direction of wires in the new graph
+//! can be completely mixed up.
+//! The logic of registering such correspondence is implemented in a function such as
+//! `wire_node_inout`.
+//! Also, the correspondence of I/O wires should be changed accordingly, depending on whether
+//! it includes qubits or not.
+//! We also should not forget to connect `fneg` to `Rx` in the new graph, whose edge/wires has
+//! no correspondence in the original graph.
+//!
+//! ## Not supported/TODO cases
+//! - Power: Power modifier is not supported at this point.
+//! - Non-trivial CFGs: We cannot support dagger for complicated CFGs
+//!   since it is not clear at all whether we should reverse the control flow or not.
+//!   Currently, when any non-trivial cfg with more than one block is encountered during
+//!   the resolution, an error is returned.
+//! - Branching in modifier chain: As noted above, we assume that a modifier is
+//!   chained linearly.
+//! - StateOrder edge: Currently, the modified function does not contain StateOrder edges
+//!   in any case.
+//!   This won't be manageable if dagger is applied, but if not, it should be handled in the future.
+//! - User defined extension ops: There is no way to infer modified unknown extension ops.
+//!   We currently try to insert the original optype without any modification,
+//!   but this could result in an unexpected error.
 use itertools::{Either, Itertools};
 use std::{
     collections::{HashMap, VecDeque},
     iter, mem,
 };
 
+pub mod array_modify;
+pub mod call_modify;
+pub mod dfg_modify;
+
 use super::qubit_types_utils::contain_qubits;
+use super::{CombinedModifier, ModifierFlags};
 use crate::extension::modifier::Modifier;
+use derive_more::Error;
+use hugr::{
+    builder::{BuildError, CFGBuilder, Container, Dataflow, SubContainer},
+    core::HugrNode,
+    extension::{prelude::qb_t, simple_op::MakeExtensionOp},
+    hugr::hugrmut::HugrMut,
+    ops::{Const, OpType, CFG},
+    std_extensions::collections::array::array_type,
+    type_row,
+    types::{EdgeKind, FuncTypeBase, Signature, Type},
+    HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire,
+};
 
-/// An accumulated modifier that combines control, dagger, and power modifiers.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct CombinedModifier {
-    control: usize,
-    accum_ctrl: Vec<usize>,
-    dagger: bool,
-    #[allow(dead_code)]
-    power: bool,
-}
-
-impl CombinedModifier {
-    /// Add a modifier
-    pub fn push(&mut self, ext_op: &ExtensionOp) {
-        match Modifier::from_extension_op(ext_op) {
-            Ok(Modifier::ControlModifier) => {
-                let ctrl = ext_op.args()[0].as_nat().unwrap() as usize;
-                self.control += ctrl;
-                self.accum_ctrl.push(ctrl);
-            }
-            Ok(Modifier::DaggerModifier) => self.dagger = !self.dagger,
-            Ok(Modifier::PowerModifier) => self.power = !self.power,
-            Err(_) => {}
-        }
-    }
-}
-
-/// Flags for each modifier.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ModifierFlags {
-    control: bool,
-    dagger: bool,
-    power: bool,
-}
-
-impl ModifierFlags {
-    fn from_metadata<N: HugrNode>(h: &impl HugrView<Node = N>, n: N) -> Option<Self> {
-        h.get_metadata(n, "unitary")
-            .and_then(serde_json::Value::as_u64)
-            .map(|num| ModifierFlags {
-                dagger: (num & 1) != 0,
-                control: (num & 2) != 0,
-                power: (num & 4) != 0,
-            })
-    }
-
-    fn set_metadata<N: HugrNode>(&self, h: &mut impl HugrMut<Node = N>, n: N) {
-        let mut num = 0;
-        if self.dagger {
-            num |= 1;
-        }
-        if self.control {
-            num |= 2;
-        }
-        if self.power {
-            num |= 4;
-        }
-        *h.get_metadata_mut(n, "unitary") = serde_json::Value::from(num);
-    }
-
-    fn satisfies(&self, combined: &CombinedModifier) -> bool {
-        (combined.control == 0 || self.control)
-            && (!combined.dagger || self.dagger)
-            && (!combined.power || self.power)
-    }
-
-    fn from_combined(combined: &CombinedModifier) -> Self {
-        ModifierFlags {
-            control: combined.control > 0,
-            dagger: combined.dagger,
-            power: combined.power,
-        }
-    }
-
-    fn or(self, other: &Option<Self>) -> Self {
-        match other {
-            None => self,
-            Some(other) => ModifierFlags {
-                control: self.control || other.control,
-                dagger: self.dagger || other.dagger,
-                power: self.power || other.power,
-            },
-        }
-    }
-}
-
-/// A wire of both direction.
+/// A wire of eigher direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct DirWire<N = Node>(N, Port);
 
@@ -215,17 +231,29 @@ impl<N> PortExt for DirWire<N> {
 }
 
 /// A container for modifier resolving.
+/// This struct holds the state during the modifier resolution process.
 pub struct ModifierResolver<N = Node> {
+    /// Current accumulated modifiers.
     modifiers: CombinedModifier,
+    /// A map from old wire to new wires.
+    /// The keys are old wires, and the values are new wires.
+    /// As noted at the head of this module, especially when dagger is applied,
+    /// an incoming wire may correspond to an outgoing wire and vice versa.
     corresp_map: HashMap<DirWire<N>, Vec<DirWire>>,
+    /// The current control outgoing wires
     controls: Vec<Wire>,
+    /// The worklist of nodes to be processed.
+    /// This is needed to avoid modifying a node that is generated during the process.
     worklist: VecDeque<N>,
+    /// A map of static edges to be added after insertion of subgraph.
     call_map: HashMap<N, (Node, IncomingPort)>,
     // TODO:
     // Should keep track of the collection of modifiers that are applied to the same function.
     // This will prevent the duplicated generation of Controlled-functions.
     // Some HashMap should be held here so that we remember such information.
-    _modified_functions: HashMap<N, (CombinedModifier, Node)>,
+    // ```
+    // _modified_functions: HashMap<N, (CombinedModifier, Node)>,
+    // ```
 }
 
 impl<N> ModifierResolver<N> {
@@ -237,22 +265,10 @@ impl<N> ModifierResolver<N> {
             controls: Vec::default(),
             worklist: VecDeque::default(),
             call_map: HashMap::default(),
-            _modified_functions: HashMap::default(),
         }
     }
-
-    fn _with_ancilla<T>(
-        &mut self,
-        wire: &mut Wire<Node>,
-        ancilla: &mut Vec<Wire<Node>>,
-        f: impl FnOnce(&mut Self, &mut Vec<Wire<Node>>) -> T,
-    ) -> T {
-        ancilla.push(*wire);
-        let r = f(self, ancilla);
-        *wire = ancilla.pop().unwrap();
-        r
-    }
 }
+
 impl<N> Default for ModifierResolver<N> {
     fn default() -> Self {
         Self::new()
@@ -298,7 +314,7 @@ pub enum ModifierResolverErrors<N = Node> {
     ModifierError(ModifierError<N>),
     /// Error during the DFG build process.
     BuildError(BuildError),
-    /// Unreachable error variant.
+    /// Error that is caused by a bug in this resolver which should be unreachable.
     Unreachable(String),
     /// Modifier applied to a node that cannot be modified.
     #[display("Modifier {_0} applied to the node {_1} cannot be modified")]
@@ -345,29 +361,33 @@ impl<N: HugrNode> ModifierResolver<N> {
         &mut self.call_map
     }
 
-    fn _pop_control(&mut self) -> Option<Wire<Node>> {
-        if let Some(c) = self.controls().pop() {
-            self.modifiers.control -= 1;
-            Some(c)
-        } else {
-            None
-        }
+    fn with_worklist<T>(&mut self, worklist: VecDeque<N>, f: impl FnOnce(&mut Self) -> T) -> T {
+        let worklist = mem::replace(self.worklist(), worklist);
+        let r = f(self);
+        *self.worklist() = worklist;
+        r
     }
-
-    fn _push_control(&mut self, c: Wire<Node>) {
-        self.controls().push(c);
-        self.modifiers.control += 1;
+    fn with_modifiers<T>(
+        &mut self,
+        modifiers: CombinedModifier,
+        f: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let modifiers = mem::replace(self.modifiers_mut(), modifiers);
+        let r = f(self);
+        *self.modifiers_mut() = modifiers;
+        r
     }
 
     /// Register a correspondence from old to new wire.
     fn map_insert(
         &mut self,
         old: DirWire<N>,
-        new: DirWire, // new: impl Into<Either<IncomingPort, OutgoingPort>>,
+        new: DirWire,
     ) -> Result<(), ModifierResolverErrors<N>> {
         self.corresp_map()
             .insert(old, vec![new])
             .map_or(Ok(()), |former| {
+                // If the old wire is already registered, raise an error.
                 Err(ModifierResolverErrors::Unreachable(format!(
                     "Wire already registered for node {}. Former [{},...], Latter {}.",
                     old, former[0], new
@@ -376,6 +396,8 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Remember that old wire has no correspondence.
+    /// This adds an entry with empty vector if not already present.
+    /// Note that this does not overwrite existing entry.
     fn map_insert_none(&mut self, old: DirWire<N>) -> Result<(), ModifierResolverErrors<N>> {
         self.corresp_map().entry(old).or_default();
         Ok(())
@@ -395,6 +417,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &impl HugrView<Node = N>,
         n: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
+        // If a node has not registered correspondence, register None for all its ports.
         for port in h.all_node_ports(n) {
             let dw = DirWire(n, port);
             self.map_insert_none(dw)?;
@@ -434,7 +457,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 if let Some(EdgeKind::StateOrder) = h.get_optype(out_node).port_kind(out_port) {
-                    // TODO: Handle StateOrder properly.
+                    // TODO: Currently, we just ignore StateOrder edges.
+                    // This might be OK when the dagger is applied since StateOrder is not managable then.
+                    // However, if not, we should preserve the StateOrder edges.
+                    // This could be done in two ways:
+                    // 1. Register StateOrder edges to `corresp_map` as well as data edges.
+                    // 2. Use another `HashMap` to keep track of StateOrder edges.
                     continue;
                 }
                 for (in_node, in_port) in h.linked_inputs(out_node, out_port) {
@@ -475,6 +503,10 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
+    /// Apply the resolver the current node `n`.
+    /// It first checks if the node is a modifier and can be applied.
+    /// If not, it returns an [`ModifierError`].
+    /// If yes, it applies the modifier to the loaded function,
     fn try_rewrite(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
@@ -491,10 +523,10 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         // Modify the chain of modifiers.
         // Make sure that the modifiers are initially empty.
-        let mut modifiers = CombinedModifier::default();
-        mem::swap(self.modifiers_mut(), &mut modifiers);
-        let new_load = self.apply_modifier_chain_to_loaded_fn(h, n)?;
-        mem::swap(self.modifiers_mut(), &mut modifiers);
+        let modifiers = CombinedModifier::default();
+        let new_load = self.with_modifiers(modifiers, |this| {
+            this.apply_modifier_chain_to_loaded_fn(h, n)
+        })?;
 
         // Connect the modified function to the inputs
         for (out_port, inputs) in modified_fn_loader {
@@ -508,6 +540,9 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Takes a signature and modifies it according to the combined modifier.
+    /// flatten = true means that control qubits are represented as individual wires,
+    /// while false means that they are packed to some arrays.
+    /// This false mode is used for function definitions,
     pub fn modify_signature(&self, signature: &mut Signature, flatten: bool) {
         let FuncTypeBase { input, output } = signature;
 
@@ -730,28 +765,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(())
     }
 
-    // TODO: handle other ports (StateOrder)
-    fn _wire_others(
-        &mut self,
-        n: N,
-        n_optype: &OpType,
-        node: Node,
-        node_optype: &OpType,
-    ) -> Result<(), ModifierResolverErrors<N>> {
-        if let (Some(old), Some(new)) =
-            (n_optype.other_input_port(), node_optype.other_input_port())
-        {
-            self.map_insert((n, old).into(), (node, new).into())?;
-        }
-        if let (Some(old), Some(new)) = (
-            n_optype.other_output_port(),
-            node_optype.other_output_port(),
-        ) {
-            self.map_insert((n, old).into(), (node, new).into())?;
-        }
-        Ok(())
-    }
-
     fn modify_constant(
         &mut self,
         n: N,
@@ -807,8 +820,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
     }
 
-    /// Temporary implementation of CFG modification.
-    /// This function expects that the CFG contains only one block.
+    /// This modifier expects that the CFG contains only one block.
     /// If not, it returns an error.
     fn modify_cfg(
         &mut self,
@@ -883,23 +895,17 @@ pub fn resolve_modifier_with_entrypoints(
         worklist.extend(h.children(node).filter(|n| !visited.contains(n)));
         worklist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
         visited.push(node);
-        match resolver.try_rewrite(h, node) {
-            Ok(_) => (),
-            // If not resolvable, just skip.
-            Err(ModifierError(_)) => {
-                continue;
+        if let Err(e) = resolver.try_rewrite(h, node) {
+            // ModifierError means this node is skippable.
+            // Otherwise, return the error.
+            if !matches!(e, ModifierError(_)) {
+                return Err(e);
             }
-            // Others will be the actual error.
-            e => return e,
         }
     }
 
-    // TODO: Feature that will be added later.
-    // Global phase is no more needed after resolving modifiers.
-    // delete_phase(h, entry_points.clone().into_iter())?;
-    // delete_phase(h, vec![h.module_root()])?;
-
-    // TODO: ad hoc cleanup of remaining modifer nodes.
+    // TODO: Ad hoc implementation
+    // Remove all the remaining modifier nodes.
     let entry_points = vec![h.module_root()];
     for entry_point in entry_points.clone() {
         let descendants = h.descendants(entry_point).collect::<Vec<_>>();
@@ -930,7 +936,7 @@ mod tests {
     use cool_asserts::assert_matches;
     use hugr::{
         builder::{DataflowSubContainer, HugrBuilder, ModuleBuilder},
-        ops::{handle::FuncID, CallIndirect},
+        ops::{handle::FuncID, CallIndirect, ExtensionOp},
         std_extensions::collections::array::ArrayOpBuilder,
         types::Term,
         Hugr,
