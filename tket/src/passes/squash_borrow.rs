@@ -161,48 +161,18 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     intervals: BorrowIntervals,
 ) -> Vec<(Node, Node)> {
-    let nodes = intervals.actions();
-    // Find the original source of the array and target. (These may have changed
-    // since the analysis was run, e.g. if this is a nested array produced by an
-    // elided borrow.)
-    let mut current_array = {
-        let Some(first) = nodes.first() else {
-            return Vec::new();
-        };
-        to_wire(
-            hugr.single_linked_output(first.node, first.borrow_from.inc)
-                .expect("linear"),
-        )
-    };
-
-    let final_array_target = {
-        let last = nodes.last().unwrap();
-        hugr.single_linked_input(last.node, last.borrow_from.out)
-            .expect("linear")
-    };
-
-    if nodes.iter().any(|n| n.elem_index.is_right()) {
+    if intervals.actions().iter().any(|n| n.elem_index.is_right()) {
         // If any index is non-constant, for now don't elide anything.
         // (May be able to proceed very carefully...)
         return Vec::new();
     }
 
-    struct Borrow(Node, OutgoingPort);
-    struct Return(Node, IncomingPort);
+    struct Borrow(Node, OutgoingPort, BorrowFromPorts);
+    struct Return(Node, IncomingPort, BorrowFromPorts);
     // The map is from borrow index to (borrow node, optional return node)
-    let mut borrowed: HashMap<u64, (Borrow, Option<(Return, BorrowFromPorts)>)> = HashMap::new();
+    let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new();
     let mut elisions: Vec<(Return, Borrow)> = Vec::new();
-    let mut emit = |node, borrow_from: BorrowFromPorts| {
-        hugr.disconnect(current_array.node(), current_array.source());
-        hugr.disconnect(node, borrow_from.inc);
-        hugr.connect(
-            current_array.node(),
-            current_array.source(),
-            node,
-            borrow_from.inc,
-        );
-        current_array = Wire::new(node, borrow_from.out);
-    };
+
     for BorrowOrReturn {
         node,
         elem_index: index,
@@ -213,76 +183,77 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         // We bailed out if any indices were Right (i.e. non-Const) above.
         match (action, borrowed.entry(index.unwrap_left())) {
             (BRAction::Borrow(borrowed_out), Entry::Vacant(ve)) => {
-                // initial borrow - record and emit
-                ve.insert((Borrow(node, borrowed_out), None));
-                emit(node, borrow_from);
+                // initial borrow - record
+                ve.insert((Borrow(node, borrowed_out, borrow_from), None));
             }
 
             (BRAction::Return(inc), Entry::Occupied(mut oe)) => {
-                // return after borrow - record but do not emit (yet)
+                // return after borrow - record
                 // TODO elide borrow-return if this is returning the output of the borrow (!)
                 let (_, ret) = &mut oe.get_mut();
-                if ret.replace((Return(node, inc), borrow_from)).is_some() {
+                if ret.replace(Return(node, inc, borrow_from)).is_some() {
                     panic!("Double return");
                 }
             }
 
             (BRAction::Borrow(borrowed_out), Entry::Occupied(mut oe)) => {
-                // Borrow after return (can't be borrow after borrow as per analysis)
+                // Borrow after return - record both to be removed
                 let (_, prev_return) = oe.get_mut();
                 let Some(prev_return) = prev_return.take() else {
-                    panic!("Double borrow");
+                    panic!("Double borrow"); // ensured by analysis
                 };
-                elisions.push((prev_return.0, Borrow(node, borrowed_out)));
+                elisions.push((prev_return, Borrow(node, borrowed_out, borrow_from)));
             }
 
             (BRAction::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
         }
     }
-    // Wire up final (non-elided) returns
+    // Just sanity check that we have a return for each borrow.
     for (_, opt_return) in borrowed.into_values() {
-        let (Return(return_node, _), borrow_from) = opt_return.expect("ensured by analysis");
-        emit(return_node, borrow_from);
+        opt_return.unwrap();
     }
-    // Wire the last-emitted return to the same target as whichever return
-    // was originally last (they can be reordered by the `borrowed` map).
-    emit(
-        final_array_target.0,
-        BorrowFromPorts {
-            inc: final_array_target.1,
-            out: OutgoingPort::from(usize::MAX), // unused
-        },
-    );
     elisions
         .into_iter()
         .map(|(ret, bor)| {
-            let src = hugr.single_linked_output(ret.0, ret.1).expect("linear");
-            let tgt = hugr.single_linked_input(bor.0, bor.1).expect("linear");
-            hugr.connect(src.0, src.1, tgt.0, tgt.1);
-            hugr.remove_node(ret.0);
-            hugr.remove_node(bor.0);
+            // Pass Return-ed value directly through to users of Borrow-ed value
+            let src = hugr.single_linked_output(ret.0, ret.1).expect("input");
+            for tgt in hugr.linked_inputs(bor.0, bor.1).collect::<Vec<_>>() {
+                hugr.connect(src.0, src.1, tgt.0, tgt.1);
+            }
+            // Elide borrow and return nodes from the array chain
+            for (n, ports) in [(bor.0, bor.2), (ret.0, ret.2)] {
+                let in_array = hugr
+                    .single_linked_output(n, ports.inc)
+                    .expect("array is linear");
+                let out_array = hugr
+                    .single_linked_input(n, ports.out)
+                    .expect("array is linear");
+                hugr.connect(in_array.0, in_array.1, out_array.0, out_array.1);
+                hugr.remove_node(n);
+            }
             (ret.0, bor.0)
         })
         .collect()
-}
-
-fn to_wire((n, p): (Node, OutgoingPort)) -> Wire {
-    Wire::new(n, p)
 }
 
 #[cfg(test)]
 mod test {
     use std::io::BufReader;
 
-    use super::{analysis::find_const, to_wire, BorrowSquashPass};
+    use super::{analysis::find_const, BorrowSquashPass};
     use crate::{extension::REGISTRY, Circuit};
     use hugr::{
         algorithms::ComposablePass, extension::simple_op::MakeExtensionOp, hugr::hugrmut::HugrMut,
         std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr, HugrView, Node,
+        OutgoingPort, Wire,
     };
     use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
+
+    fn to_wire((n, p): (Node, OutgoingPort)) -> Wire {
+        Wire::new(n, p)
+    }
 
     #[fixture]
     pub(super) fn borrow_circuit() -> Circuit {
