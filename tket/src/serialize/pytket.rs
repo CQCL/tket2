@@ -115,7 +115,11 @@ impl TKETDecode for SerialCircuit {
 
     fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
-        let main_func = self.decode_inplace(&mut hugr, DecodeInsertionTarget::Function, options)?;
+        let main_func = self.decode_inplace(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name: None },
+            options,
+        )?;
         hugr.set_entrypoint(main_func);
         Ok(hugr.into())
     }
@@ -134,7 +138,6 @@ impl TKETDecode for SerialCircuit {
             self,
             hugr,
             target,
-            options.fn_name,
             options.signature,
             options.input_params,
             config,

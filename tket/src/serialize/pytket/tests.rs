@@ -672,7 +672,7 @@ fn test_inplace_decoding() {
     let func1 = serial
         .decode_inplace(
             builder.hugr_mut(),
-            DecodeInsertionTarget::Function,
+            DecodeInsertionTarget::Function { fn_name: None },
             DecodeOptions::new(),
         )
         .unwrap();

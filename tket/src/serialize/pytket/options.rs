@@ -22,11 +22,6 @@ pub struct DecodeOptions {
     ///
     /// When `None`, we will use [`default_decoder_config`][super::default_decoder_config].
     pub config: Option<Arc<PytketDecoderConfig>>,
-    /// The name of the function to create.
-    ///
-    /// If `None`, we will use the name of the circuit, or "main" if the circuit
-    /// has no name.
-    pub fn_name: Option<String>,
     /// The signature of the function to create.
     ///
     /// The number of qubits in the input types must be less than or equal to the
@@ -63,12 +58,6 @@ impl DecodeOptions {
         self
     }
 
-    /// Set the name of the function to create.
-    pub fn with_fn_name(mut self, fn_name: impl ToString) -> Self {
-        self.fn_name = Some(fn_name.to_string());
-        self
-    }
-
     /// Set the signature of the function to create.
     pub fn with_signature(mut self, signature: Signature) -> Self {
         self.signature = Some(signature);
@@ -84,17 +73,43 @@ impl DecodeOptions {
 
 /// Where to insert the decoded circuit when calling
 /// [`TKETDecode::decode_inplace`][super::TKETDecode::decode_inplace].
-#[derive(Debug, derive_more::Display, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, derive_more::Display, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DecodeInsertionTarget {
     /// Insert the decoded circuit as a new function in the HUGR.
-    #[default]
-    Function,
+    #[display("{}",
+        match fn_name {
+            Some(fn_name) => format!("Function({fn_name})"),
+            None => "Function".to_string(),
+        }
+    )]
+    Function {
+        /// The name of the function to create.
+        ///
+        /// If `None`, we will use the encoded circuit's name, or "main" if the circuit has no name.
+        fn_name: Option<String>,
+    },
     /// Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
+    #[display("Region({parent})")]
     Region {
         /// The parent node that will contain the circuit's decoded DFG.
         parent: Node,
     },
+}
+
+impl DecodeInsertionTarget {
+    /// Create a new [`DecodeInsertionTarget::Function`] with the default values.
+    pub fn function(fn_name: impl ToString) -> Self {
+        Self::Function {
+            fn_name: Some(fn_name.to_string()),
+        }
+    }
+}
+
+impl Default for DecodeInsertionTarget {
+    fn default() -> Self {
+        Self::Function { fn_name: None }
+    }
 }
 
 /// Options used when encoding a HUGR into a pytket

@@ -94,7 +94,6 @@ impl<'h> PytketDecoderContext<'h> {
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
         target: DecodeInsertionTarget,
-        fn_name: Option<String>,
         signature: Option<Signature>,
         input_params: impl IntoIterator<Item = String>,
         config: impl Into<Arc<PytketDecoderConfig>>,
@@ -108,11 +107,11 @@ impl<'h> PytketDecoderContext<'h> {
                 .into();
             Signature::new(types.clone(), types)
         });
-        let name = fn_name
-            .or_else(|| serialcirc.name.clone())
-            .unwrap_or_default();
         let mut dfg: DFGBuilder<&mut Hugr> = match target {
-            DecodeInsertionTarget::Function => {
+            DecodeInsertionTarget::Function { fn_name } => {
+                let name = fn_name
+                    .or_else(|| serialcirc.name.clone())
+                    .unwrap_or_default();
                 FunctionBuilder::with_hugr(hugr, name, signature.clone())
                     .unwrap()
                     .into_dfg_builder()
