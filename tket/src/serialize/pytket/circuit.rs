@@ -3,17 +3,22 @@
 use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 
+use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpTag, OpTrait};
-use hugr::{Hugr, HugrView};
+use hugr::{Hugr, HugrView, Node};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
+use crate::serialize::pytket::decoder::PytketDecoderContext;
 use crate::serialize::pytket::unsupported::{
     UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
     OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
 };
 use crate::serialize::pytket::{
-    default_encoder_config, EncodeOptions, PytketEncodeError, PytketEncoderContext,
+    default_decoder_config, default_encoder_config, DecodeInsertionTarget, DecodeOptions,
+    EncodeOptions, PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError,
+    PytketEncoderContext,
 };
 use crate::Circuit;
 
@@ -149,6 +154,96 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         Ok(())
     }
 
+    /// Reassemble the encoded circuits into a new [`Hugr`], containing a
+    /// function defining the [`Self::head_region`] and expanding any opaque
+    /// hugrs in pytket barrier operations back into Hugr subgraphs.
+    ///
+    /// Functions called by the internal hugrs may be added to the hugr module
+    /// as well.
+    ///
+    /// # Arguments
+    ///
+    /// - `fn_name`: The name of the function to create. If `None`, we will use
+    ///   the name of the circuit, or "main" if the circuit has no name.
+    /// - `options`: The options for the decoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
+    /// Returns an error if a circuit being decoded is invalid. See
+    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
+    /// more details.
+    pub fn reassemble(
+        self,
+        fn_name: Option<String>,
+        options: DecodeOptions,
+    ) -> Result<Hugr, PytketDecodeError> {
+        let mut hugr = Hugr::new();
+        let main_func = self.reassemble_inline(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name },
+            options,
+        )?;
+        hugr.set_entrypoint(main_func);
+        Ok(hugr)
+    }
+
+    /// Reassemble the encoded circuits inside an existing [`Hugr`], containing
+    /// the [`Self::head_region`] at the given insertion target.
+    ///
+    /// Functions called by the internal hugrs may be added to the hugr module
+    /// as well.
+    ///
+    /// # Arguments
+    ///
+    /// - `hugr`: The [`Hugr`] to reassemble the circuits in.
+    /// - `target`: The target to insert the function at.
+    /// - `options`: The options for the decoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
+    /// Returns an error if a circuit being decoded is invalid. See
+    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
+    /// more details.
+    pub fn reassemble_inline(
+        self,
+        hugr: &mut Hugr,
+        target: DecodeInsertionTarget,
+        options: DecodeOptions,
+    ) -> Result<Node, PytketDecodeError> {
+        if !self.check_dataflow_head_region() {
+            let head_op = self.hugr.get_optype(self.head_region).to_string();
+            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op }.wrap());
+        };
+        let serial_circuit = &self[self.head_region];
+
+        if self.len() > 1 {
+            unimplemented!(
+                "Reassembling an `EncodedCircuit` with nested subcircuits is not yet implemented."
+            );
+        };
+
+        let config = options
+            .config
+            .unwrap_or_else(|| default_decoder_config().into());
+
+        let mut decoder = PytketDecoderContext::new(
+            serial_circuit,
+            hugr,
+            target,
+            options.signature,
+            options.input_params,
+            config,
+        )?;
+        decoder.run_decoder(&serial_circuit.commands)?;
+        Ok(decoder.finish()?.node())
+    }
+
     /// Extract the top-level pytket circuit as a standalone definition
     /// containing the whole original HUGR.
     ///
@@ -161,17 +256,17 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     ///
     /// # Errors
     ///
-    /// Returns an error if [`Self::head_region`] is not a dataflow container in the hugr.
+    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
     /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
     //
     // TODO: We'll need to handle non-local edges and function definitions in this step.
     pub fn extract_standalone(mut self) -> Result<SerialCircuit, PytketEncodeError<H::Node>> {
-        let Some(mut serial_circuit) = self.circuits.remove(&self.head_region) else {
-            return Err(PytketEncodeError::custom(format!(
-                "Head region {} is not a dataflow container in the hugr",
-                self.head_region
-            )));
+        if !self.check_dataflow_head_region() {
+            let head_op = self.hugr.get_optype(self.head_region).to_string();
+            return Err(PytketEncodeError::InvalidStandaloneHeadRegion { head_op });
         };
+        let mut serial_circuit = self.circuits.remove(&self.head_region).unwrap();
 
         for command in serial_circuit.commands.iter_mut() {
             if command.op.op_type != tket_json_rs::OpType::Barrier
@@ -203,6 +298,12 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
             command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
         }
         Ok(serial_circuit)
+    }
+
+    /// Checks if [`Self::head_region`] was a dataflow container in the original hugr,
+    /// and therefore has an encoded circuit in this structure.
+    fn check_dataflow_head_region(&self) -> bool {
+        self.circuits.contains_key(&self.head_region)
     }
 
     /// Returns the HUGR from where the circuit was encoded.
