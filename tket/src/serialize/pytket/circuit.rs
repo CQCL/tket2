@@ -5,6 +5,7 @@ use std::ops::{Index, IndexMut};
 
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{Hugr, HugrView};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
 use tket_json_rs::circuit_json::SerialCircuit;
 
 use crate::serialize::pytket::unsupported::{
@@ -216,7 +217,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
 
     /// Returns an iterator over all the encoded pytket circuits.
     pub fn circuits(&self) -> impl Iterator<Item = (H::Node, &SerialCircuit)> {
-        self.circuits.iter().map(|(&n, circ)| (n, circ))
+        self.into_iter().map(|(&n, circ)| (n, circ))
     }
 
     /// Returns an iterator over all the encoded pytket circuits as mutable
@@ -227,7 +228,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// opaque barriers remain valid and topologically consistent with the
     /// original circuit.
     pub fn circuits_mut(&mut self) -> impl Iterator<Item = (H::Node, &mut SerialCircuit)> {
-        self.circuits.iter_mut().map(|(&n, circ)| (n, circ))
+        self.into_iter().map(|(&n, circ)| (n, circ))
     }
 
     /// Returns `true` if there is an encoded pytket circuit for the given region.
@@ -259,5 +260,49 @@ impl<'a, H: HugrView> IndexMut<H::Node> for EncodedCircuit<'a, H> {
         self.circuits
             .get_mut(&index)
             .unwrap_or_else(|| panic!("Indexing into a circuit that was not encoded: {index}"))
+    }
+}
+
+impl<'c, 'a, H: HugrView> IntoIterator for &'c EncodedCircuit<'a, H> {
+    type Item = (&'c H::Node, &'c SerialCircuit);
+    type IntoIter = <&'c HashMap<H::Node, SerialCircuit> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.circuits.iter()
+    }
+}
+
+impl<'c, 'a, H: HugrView> IntoIterator for &'c mut EncodedCircuit<'a, H> {
+    type Item = (&'c H::Node, &'c mut SerialCircuit);
+    type IntoIter = <&'c mut HashMap<H::Node, SerialCircuit> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.circuits.iter_mut()
+    }
+}
+
+impl<'c, 'a, H> IntoParallelIterator for &'c EncodedCircuit<'a, H>
+where
+    H: HugrView,
+    H::Node: Send + Sync,
+{
+    type Item = (&'c H::Node, &'c SerialCircuit);
+    type Iter = <&'c HashMap<H::Node, SerialCircuit> as IntoParallelIterator>::Iter;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.circuits.par_iter()
+    }
+}
+
+impl<'c, 'a, H> IntoParallelIterator for &'c mut EncodedCircuit<'a, H>
+where
+    H: HugrView,
+    H::Node: Send + Sync,
+{
+    type Item = (&'c H::Node, &'c mut SerialCircuit);
+    type Iter = <&'c mut HashMap<H::Node, SerialCircuit> as IntoParallelIterator>::Iter;
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.circuits.par_iter_mut()
     }
 }
