@@ -7,7 +7,7 @@ use hugr::algorithms::ComposablePass;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait, OpType};
 use hugr::{IncomingPort, Node, OutgoingPort, Port, Wire};
-use itertools::Either;
+use itertools::{Either, Itertools};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
@@ -169,8 +169,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
 
     struct Borrow(Node, OutgoingPort, BorrowFromPorts);
     struct Return(Node, IncomingPort, BorrowFromPorts);
-    // The map is from borrow index to (borrow node, optional return node)
-    let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new();
+    let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new(); // Key is elem index
     let mut elisions: Vec<(Return, Borrow)> = Vec::new();
 
     for BorrowOrReturn {
@@ -189,7 +188,6 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
 
             (BRAction::Return(inc), Entry::Occupied(mut oe)) => {
                 // return after borrow - record
-                // TODO elide borrow-return if this is returning the output of the borrow (!)
                 let (_, ret) = &mut oe.get_mut();
                 if ret.replace(Return(node, inc, borrow_from)).is_some() {
                     panic!("Double return");
@@ -208,11 +206,17 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             (BRAction::Return(_), Entry::Vacant(_)) => panic!("Return without borrow"),
         }
     }
-    // Just sanity check that we have a return for each borrow.
-    for (_, opt_return) in borrowed.into_values() {
-        opt_return.unwrap();
+    fn elide_node<H: HugrMut<Node = Node>>(hugr: &mut H, n: Node, ports: &BorrowFromPorts) {
+        let in_array = hugr
+            .single_linked_output(n, ports.inc)
+            .expect("array is linear");
+        let out_array = hugr
+            .single_linked_input(n, ports.out)
+            .expect("array is linear");
+        hugr.connect(in_array.0, in_array.1, out_array.0, out_array.1);
+        hugr.remove_node(n);
     }
-    elisions
+    let elided = elisions
         .into_iter()
         .map(|(ret, bor)| {
             // Pass Return-ed value directly through to users of Borrow-ed value
@@ -220,20 +224,22 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             for tgt in hugr.linked_inputs(bor.0, bor.1).collect::<Vec<_>>() {
                 hugr.connect(src.0, src.1, tgt.0, tgt.1);
             }
-            // Elide borrow and return nodes from the array chain
-            for (n, ports) in [(bor.0, bor.2), (ret.0, ret.2)] {
-                let in_array = hugr
-                    .single_linked_output(n, ports.inc)
-                    .expect("array is linear");
-                let out_array = hugr
-                    .single_linked_input(n, ports.out)
-                    .expect("array is linear");
-                hugr.connect(in_array.0, in_array.1, out_array.0, out_array.1);
-                hugr.remove_node(n);
-            }
+            elide_node(hugr, bor.0, &bor.2);
+            elide_node(hugr, ret.0, &ret.2);
             (ret.0, bor.0)
         })
-        .collect()
+        .collect();
+    // Now also elide Borrow-Returns if the returned value is exactly that from the borrow.
+    // TODO ALAN noooo, this removes potential panics. Need to check against array size.
+    for (bor, opt_return) in borrowed.into_values() {
+        let ret = opt_return.unwrap(); // ensured by analysis
+        if hugr.linked_inputs(bor.0, bor.1).exactly_one().ok() == Some((ret.0, ret.1)) {
+            elide_node(hugr, bor.0, &bor.2);
+            elide_node(hugr, ret.0, &ret.2);
+        }
+    }
+
+    elided
 }
 
 #[cfg(test)]
