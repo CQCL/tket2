@@ -3,18 +3,15 @@
 use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 
+use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{Hugr, HugrView, Node};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
-use tket_json_rs::circuit_json::SerialCircuit;
+use tket_json_rs::circuit_json::{Command as PytketCommand, SerialCircuit};
 
 use crate::serialize::pytket::decoder::PytketDecoderContext;
-use crate::serialize::pytket::unsupported::{
-    UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
-    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
-};
 use crate::serialize::pytket::{
     default_decoder_config, default_encoder_config, DecodeInsertionTarget, DecodeOptions,
     EncodeOptions, PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError,
@@ -268,35 +265,28 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         };
         let mut serial_circuit = self.circuits.remove(&self.head_region).unwrap();
 
-        for command in serial_circuit.commands.iter_mut() {
-            if command.op.op_type != tket_json_rs::OpType::Barrier
-                || command.opgroup.as_deref() != Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR)
-            {
-                continue;
-            }
+        fn make_commands_standalone<N: HugrNode>(
+            commands: &mut [PytketCommand],
+            subgraphs: &UnsupportedSubgraphs<N>,
+            hugr: &impl HugrView<Node = N>,
+        ) -> Result<(), PytketEncodeError<N>> {
+            for command in commands.iter_mut() {
+                subgraphs.replace_external_with_standalone(command, hugr)?;
 
-            let Some(payload) = command.op.data.take() else {
-                return Err(PytketEncodeError::custom(
-                    format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has no data payload.")
-                ));
-            };
-            let payload: UnsupportedSubgraphPayload = serde_json::from_str(&payload).map_err(|e|
-                PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has corrupt data payload: {e}"))
-            )?;
-            let UnsupportedSubgraphPayload::External { id: subgraph_id } = payload else {
-                return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has an invalid data payload variant: {payload:?}")));
-            };
-            if !self.opaque_subgraphs.contains(subgraph_id) {
-                return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} points to an unknown subgraph: {subgraph_id}")));
+                if let Some(tket_json_rs::opbox::OpBox::CircBox { circuit, .. }) =
+                    &mut command.op.op_box
+                {
+                    make_commands_standalone(&mut circuit.commands, subgraphs, hugr)?;
+                }
             }
-
-            let payload = UnsupportedSubgraphPayload::standalone(
-                self.opaque_subgraphs.get_unsupported_subgraph(subgraph_id),
-                self.hugr,
-            );
-            command.op.data = Some(serde_json::to_string(&payload).unwrap());
-            command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
+            Ok(())
         }
+        make_commands_standalone(
+            &mut serial_circuit.commands,
+            &self.opaque_subgraphs,
+            self.hugr,
+        )?;
+
         Ok(serial_circuit)
     }
 

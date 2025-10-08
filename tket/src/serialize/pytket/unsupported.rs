@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::serialize::pytket::PytketEncodeError;
 use hugr::core::HugrNode;
 use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
@@ -123,6 +124,48 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     /// Merge another [`UnsupportedSubgraphs`] into this one.
     pub fn merge(&mut self, other: Self) {
         self.opaque_subgraphs.extend(other.opaque_subgraphs);
+    }
+
+    /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`UnsupportedSubgraphPayload::External`] pointer
+    /// if present with a [`UnsupportedSubgraphPayload::Standalone`] payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
+    pub(super) fn replace_external_with_standalone(
+        &self,
+        command: &mut tket_json_rs::circuit_json::Command,
+        hugr: &impl HugrView<Node = N>,
+    ) -> Result<(), PytketEncodeError<N>> {
+        if command.op.op_type != tket_json_rs::OpType::Barrier
+            || command.opgroup.as_deref() != Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR)
+        {
+            return Ok(());
+        }
+
+        let Some(payload) = command.op.data.take() else {
+            return Err(PytketEncodeError::custom(
+                    format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has no data payload.")
+                ));
+        };
+        let payload: UnsupportedSubgraphPayload = serde_json::from_str(&payload).map_err(|e|
+                PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has corrupt data payload: {e}"))
+            )?;
+        let UnsupportedSubgraphPayload::External { id: subgraph_id } = payload else {
+            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has an invalid data payload variant: {payload:?}")));
+        };
+        if !self.contains(subgraph_id) {
+            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} points to an unknown subgraph: {subgraph_id}")));
+        }
+
+        let payload = UnsupportedSubgraphPayload::standalone(
+            self.get_unsupported_subgraph(subgraph_id),
+            hugr,
+        );
+        command.op.data = Some(serde_json::to_string(&payload).unwrap());
+        command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
+
+        Ok(())
     }
 }
 
