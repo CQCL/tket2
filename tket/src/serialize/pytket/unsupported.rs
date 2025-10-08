@@ -35,7 +35,7 @@ pub const OPGROUP_EXTERNAL_UNSUPPORTED_HUGR: &str = "EXTERNAL_UNSUPPORTED_HUGR";
 )]
 #[serde(transparent)]
 #[display("Subgraph#{id}", id = self.0)]
-pub(super) struct SubgraphId(usize);
+pub struct SubgraphId(usize);
 
 /// A set of subgraphs a HUGR that have been marked as _unsupported_ during a
 /// pytket encoding.
@@ -52,14 +52,18 @@ pub(super) struct UnsupportedSubgraphs<N> {
 /// an unsupported HUGR subgraph.
 ///
 /// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked by a [`UnsupportedSubgraphs`] registry.
+/// reference to a subgraph tracked inside a [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(super) enum UnsupportedSubgraphPayload {
+pub enum UnsupportedSubgraphPayload {
     /// A standalone payload, carrying the encoded HUGR subgraph.
-    Standalone { hugr_envelope: String },
-    /// A reference to a subgraph tracked by a [`UnsupportedSubgraphs`] registry.
+    Standalone {
+        /// A string envelope containing the encoded HUGR subgraph.
+        hugr_envelope: String,
+    },
+    /// A reference to a subgraph tracked by an `UnsupportedSubgraphs` registry
+    /// in an [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
     External {
-        /// The ID of the subgraph in the [`UnsupportedSubgraphs`] registry.
+        /// The ID of the subgraph in the `UnsupportedSubgraphs` registry.
         id: SubgraphId,
     },
 }
@@ -124,7 +128,8 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
 
 impl UnsupportedSubgraphPayload {
     /// Create a new external payload, referencing a subgraph tracked by a
-    /// [`UnsupportedSubgraphs`] registry.
+    /// `UnsupportedSubgraphs` registry in an
+    /// [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
     pub fn external(id: SubgraphId) -> Self {
         Self::External { id }
     }

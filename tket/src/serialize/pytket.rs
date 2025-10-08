@@ -7,7 +7,7 @@ pub mod encoder;
 mod error;
 pub mod extension;
 mod options;
-mod unsupported;
+pub mod unsupported;
 
 pub use circuit::EncodedCircuit;
 pub use config::{

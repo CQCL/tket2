@@ -215,20 +215,15 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     }
 
     /// Returns an iterator over all the encoded pytket circuits.
-    ///
-    /// The first element is [`Self::head_circuit`], and the rest are the
-    /// internal circuits encoded from descendants of unsupported operations in the HUGR.
     pub fn circuits(&self) -> impl Iterator<Item = (H::Node, &SerialCircuit)> {
         self.circuits.iter().map(|(&n, circ)| (n, circ))
     }
 
-    /// Returns an iterator over all the encoded pytket circuits as mutable references.
-    ///
-    /// The first element is [`Self::head_circuit_mut`], and the rest are the
-    /// internal circuits encoded from descendants of unsupported operations in the HUGR.
+    /// Returns an iterator over all the encoded pytket circuits as mutable
+    /// references.
     ///
     /// The circuits may be modified arbitrarily, as long as
-    /// [`UnsupportedSubgraphPayload::External`][super::unsupported::UnsupportedSubgraphPayload::External] pointers to HUGR subgraphs in
+    /// [`UnsupportedSubgraphPayload::External`] pointers to HUGR subgraphs in
     /// opaque barriers remain valid and topologically consistent with the
     /// original circuit.
     pub fn circuits_mut(&mut self) -> impl Iterator<Item = (H::Node, &mut SerialCircuit)> {
