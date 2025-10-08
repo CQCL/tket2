@@ -83,6 +83,8 @@ pub trait TKETDecode: Sized {
     /// # Returns
     ///
     /// The node id of the defined function.
+    //
+    // TODO: This should probably be renamed as `decode_into` (à la `clone_into`).
     fn decode_inplace(
         &self,
         // This cannot be a generic HugrMut since it is stored inside the `PytketDecoderContext` that we to be Send+Sync
@@ -120,7 +122,7 @@ impl TKETDecode for SerialCircuit {
     fn decode_inplace(
         &self,
         hugr: &mut Hugr,
-        _target: DecodeInsertionTarget,
+        target: DecodeInsertionTarget,
         options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError> {
         let config = options
@@ -130,6 +132,7 @@ impl TKETDecode for SerialCircuit {
         let mut decoder = PytketDecoderContext::new(
             self,
             hugr,
+            target,
             options.fn_name,
             options.signature,
             options.input_params,

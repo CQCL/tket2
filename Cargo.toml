@@ -10,6 +10,7 @@ members = [
     "badger-optimiser",
     "tket-qsystem",
     "tket1-passes",
+    "qis-compiler",
 ]
 default-members = ["tket", "tket-qsystem"]
 
@@ -38,25 +39,27 @@ large_enum_variant = "allow"
 [patch.crates-io]
 
 # Uncomment to use unreleased versions of hugr
-#hugr = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
-#hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
+# #hugr = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
+# #hugr-core = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
 #hugr-passes = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
-#hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
+## hugr-cli = { git = "https://github.com/CQCL/hugr", "rev" = "f7cedb4f39b67a77b4c6a55ec00b624b54668eaa" }
 # portgraph = { git = "https://github.com/CQCL/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.22.3"
-hugr-core = "0.22.3"
-hugr-cli = "0.22.3"
+hugr = "0.23.0"
+hugr-core = "0.23.0"
+hugr-cli = "0.23.0"
 portgraph = "0.15.2"
 pyo3 = ">= 0.23.4, < 0.27"
+pyo3-build-config = ">= 0.23.4, < 0.27"
+cbindgen = "0.29"
 itertools = "0.14.0"
 tket-json-rs = "0.7.6"
 tracing = "0.1.37"
 portmatching = "0.3.3"
-bytemuck = "1.23.2"
+bytemuck = "1.24.0"
 cgmath = "0.18.0"
 chrono = "0.4.42"
 clap = "4.5.48"
@@ -69,8 +72,8 @@ indexmap = "2.11.4"
 lazy_static = "1.5.0"
 num_cpus = "1.17.0"
 peak_alloc = "0.3.0"
-pest = "2.8.2"
-pest_derive = "2.8.2"
+pest = "2.8.3"
+pest_derive = "2.8.3"
 petgraph = { version = ">= 0.8.1, < 0.9", default-features = false }
 priority-queue = "2.7.0"
 rayon = "1.11"
@@ -78,12 +81,12 @@ rmp-serde = "1.1.2"
 rstest = "0.26.1"
 serde = "1.0"
 serde_json = "1.0"
-serde_with = "3.14.1"
+serde_with = "3.15.0"
 smol_str = "0.3.2"
 strum = "0.27"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.20"
-typetag = "0.2.20"
+typetag = "0.2.21"
 cool_asserts = "2.0.3"
 zstd = "0.13.3"
 anyhow = "1.0.100"

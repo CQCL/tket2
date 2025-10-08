@@ -18,7 +18,7 @@ env:
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
   # Pinned version for the uv package manager
-  UV_VERSION: "0.4.20"
+  UV_VERSION: "0.8.22"
   UV_FROZEN: 1
   # The highest and lowest supported Python versions, used for testing
   PYTHON_HIGHEST: "3.13"
@@ -43,7 +43,8 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
-      extensions: ${{ steps.filter.outputs.llvm }}
+      extensions: ${{ steps.filter.outputs.extensions }}
+      qis: ${{ steps.filter.outputs.qis }}
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/check-changes
@@ -84,7 +85,7 @@ jobs:
           RUSTDOCFLAGS: "-Dwarnings"
 
   check-py:
-    name: Check Python code 🐍
+    name: Check tket-py 🐍
     needs: changes
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
@@ -99,13 +100,13 @@ jobs:
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
         run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
-        run: uv sync --python ${{ env.PYTHON_HIGHEST }}
+        run: uv sync --python ${{ env.PYTHON_LOWEST }} --package tket --exact
       - name: Type check with mypy
-        run: uv run mypy .
+        run: uv run --no-project mypy .
       - name: Check formatting with ruff
-        run: uv run ruff format --check
+        run: uv run --no-project ruff format --check
       - name: Lint with ruff
-        run: uv run ruff check
+        run: uv run --no-project ruff check
 
   benches:
     name: Continuous benchmarking 🏋️
@@ -270,7 +271,9 @@ jobs:
     needs: changes
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
-    name: tests (Python, coverage)
+    name: tket-py tests (Python, coverage)
+    env:
+      PKGS: tket-py tket-eccs tket-exts
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -284,9 +287,10 @@ jobs:
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Setup dependencies
-        run: uv sync --python ${{ env.PYTHON_LOWEST }}
+        # avoid building qis-compiler
+        run: uv sync --package=tket --exact --python ${{ env.PYTHON_LOWEST }}
       - name: Run python tests with coverage instrumentation
-        run: uv run pytest --cov=./ --cov-report=xml
+        run: uv run --no-project pytest --cov=./ --cov-report=xml ${{ env.PKGS }}
       - name: Upload python coverage to codecov.io
         if: github.event_name != 'merge_group'
         uses: codecov/codecov-action@v5
@@ -296,6 +300,41 @@ jobs:
           disable_search: true
           name: python
           flags: python
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  tests-qis-compiler:
+    needs: changes
+    if: ${{ needs.changes.outputs.qis == 'true' }}
+    runs-on: ubuntu-latest
+    name: qis-compiler test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
+      - name: Install Python ${{ env.PYTHON_LOWEST }}
+        run: uv python install ${{ env.PYTHON_LOWEST }}
+      - name: Run qis-compiler tests
+        run: uv run --python ${{ env.PYTHON_LOWEST }} --exact --package selene_hugr_qis_compiler pytest --cov=./ --cov-report=xml qis-compiler
+      - name: Upload python coverage to codecov.io
+        if: github.event_name != 'merge_group'
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          # Ensures we only upload this file
+          disable_search: true
+          name: python
+          flags: qis-compiler
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -357,7 +396,7 @@ jobs:
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket-extensions, extension-versions]
+    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket-extensions, extension-versions, tests-qis-compiler]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:

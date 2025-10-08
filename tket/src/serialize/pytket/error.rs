@@ -334,16 +334,29 @@ pub enum PytketDecodeErrorInner {
         /// The bit registers expected in the wire.
         bit_args: Vec<String>,
     },
-    /// The number of pytket registers expected for an operation is not enough.
-    ///
-    /// This is usually caused by a mismatch between the input signature and the number of registers in the pytket circuit.
-    ///
-    /// The expected number of registers may be different depending on the [`PytketTypeTranslator`][super::extension::PytketTypeTranslator]s used in the decoder config.
+    /// The number of pytket registers passed to
+    /// `PytketDecodeContext::wire_up_node` or `add_node_with_wires` does not
+    /// match the number of registers required by the operation.
     #[display(
-        "Expected {expected_count} to map types ({expected_types}), but only got {actual_count}",
+        "The operation input requires {expected_count} registers to cover input wires types [{expected_types}], but only got {actual_count}",
         expected_types = expected_types.iter().join(", "),
     )]
-    NotEnoughPytketRegisters {
+    NotEnoughInputRegisters {
+        /// The types we tried to get wires for.
+        expected_types: Vec<String>,
+        /// The number of registers required by the types.
+        expected_count: RegisterCount,
+        /// The number of registers we actually got.
+        actual_count: RegisterCount,
+    },
+    /// The number of pytket registers passed to
+    /// `PytketDecodeContext::wire_up_node` or `add_node_with_wires` does not
+    /// match the number of registers required by the operation.
+    #[display(
+        "The operation output requires {expected_count} registers to cover output wires types [{expected_types}], but only got {actual_count}",
+           expected_types = expected_types.iter().join(", "),
+       )]
+    NotEnoughOutputRegisters {
         /// The types we tried to get wires for.
         expected_types: Vec<String>,
         /// The number of registers required by the types.

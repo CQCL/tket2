@@ -1,9 +1,8 @@
 [tool.uv.workspace]
-members = ["tket-py", "tket-eccs", "tket-exts"]
+members = ["tket-py", "tket-eccs", "tket-exts", "qis-compiler"]
 
-[tool.uv]
-
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "maturin >=1.7.0,<2",
     "pytest >=8.3.2,<9",
     "pytest-cov ~=7.0",
@@ -19,6 +18,7 @@ dev-dependencies = [
     "pyyaml >=6.0.2",
 ]
 
+[tool.uv]
 prerelease = "explicit"
 
 [build-system]
@@ -42,6 +42,7 @@ exclude = '''(?x)(
     | ^test_files/  # Test files
     | ^tket1-passes/tket-c-api/ # Do not check conan files
 )'''
+ignore_missing_imports = true
 
 # TODO: Fix the lint errors and enable this
 #strict = true
