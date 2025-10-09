@@ -7,7 +7,6 @@ pub mod extension;
 #[cfg(feature = "llvm")]
 pub mod llvm;
 mod lower_drops;
-mod modifier;
 pub mod pytket;
 pub mod replace_bools;
 pub mod replace_borrow_arrays;

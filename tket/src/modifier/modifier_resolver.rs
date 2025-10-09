@@ -99,7 +99,6 @@
 //! - User defined extension ops: There is no way to infer modified unknown extension ops.
 //!   We currently try to insert the original optype without any modification,
 //!   but this could result in an unexpected error.
-use derive_more::Error;
 use itertools::{Either, Itertools};
 use std::{
     collections::{HashMap, VecDeque},
@@ -114,13 +113,16 @@ pub mod tket_op_modify;
 
 use super::qubit_types_utils::contain_qubits;
 use super::{CombinedModifier, ModifierFlags};
-use crate::extension::modifier::Modifier;
+use crate::{
+    extension::{global_phase::GlobalPhase, modifier::Modifier},
+    TketOp,
+};
 use hugr::{
     builder::{BuildError, CFGBuilder, Container, Dataflow, SubContainer},
     core::HugrNode,
     extension::{prelude::qb_t, simple_op::MakeExtensionOp},
     hugr::hugrmut::HugrMut,
-    ops::{Const, ExtensionOp, OpType, CFG},
+    ops::{Const, OpType, CFG},
     std_extensions::collections::array::array_type,
     type_row,
     types::{EdgeKind, FuncTypeBase, Signature, Type},
@@ -259,7 +261,7 @@ pub struct PortVector<N = Node> {
     outgoing: Vec<DirWire<N>>,
 }
 impl<N: HugrNode> PortVector<N> {
-    fn port_vector(
+    fn from_single_node(
         n: N,
         inputs: impl Iterator<Item = usize>,
         outputs: impl Iterator<Item = usize>,
@@ -493,25 +495,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         self.modifiers.control += 1;
     }
 
-    fn pop_control(&mut self) -> Option<Wire<Node>> {
-        if let Some(c) = self.controls().pop() {
-            self.modifiers.control -= 1;
-            Some(c)
-        } else {
-            None
-        }
-    }
-    fn with_modifiers<T>(
-        &mut self,
-        modifiers: CombinedModifier,
-        f: impl FnOnce(&mut Self) -> T,
-    ) -> T {
-        let modifiers = mem::replace(self.modifiers_mut(), modifiers);
-        let r = f(self);
-        *self.modifiers_mut() = modifiers;
-        r
-    }
-
     /// Register a correspondence from old to new wire.
     fn map_insert(
         &mut self,
@@ -524,7 +507,9 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // If the old wire is already registered, raise an error.
                 Err(ModifierResolverErrors::unreachable(format!(
                     "Wire already registered for node {}. Former [{},...], Latter {}.",
-                )))})
+                    old.0, former[0], new
+                )))
+            })
     }
 
     /// Remember that old wire has no correspondence.
@@ -582,7 +567,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         if self.modifiers.dagger {
             PortVector::port_vector_rev(n, inputs, outputs, iter)
         } else {
-            PortVector::port_vector(n, inputs, outputs)
+            PortVector::from_single_node(n, inputs, outputs)
         }
     }
 
@@ -1008,9 +993,9 @@ impl<N: HugrNode> ModifierResolver<N> {
         } else if Modifier::from_optype(optype).is_some() {
             // TODO: check if this is ok.
             self.forget_node(h, n)
-        } else if self.modify_array_op(h, n, optype, new_dfg)? {
-            Ok(())
-        } else if self.try_array_convert(h, n, optype, new_dfg)? {
+        } else if self.modify_array_op(h, n, optype, new_dfg)?
+            || self.try_array_convert(h, n, optype, new_dfg)?
+        {
             Ok(())
         } else {
             // Some other Hugr extension operation.
@@ -1104,15 +1089,17 @@ pub fn resolve_modifier_with_entrypoints(
         }
     }
 
-    // TODO: Ad hoc implementation
-    // Remove all the remaining modifier nodes.
-    let entry_points = vec![h.module_root()];
-    for entry_point in entry_points.clone() {
-        let descendants = h.descendants(entry_point).collect::<Vec<_>>();
-        for node in descendants {
-            if !h.contains_node(node) {
-                continue;
-            }
+    // TODO:
+    // This might be insufficient as a cleanup since the resolution procedure might
+    // generate nodes that are not reachable from the entry points.
+    // If more thorough cleanup is needed, we should run dead code elimination.
+    let mut deletelist = entry_points;
+    let mut visited = vec![];
+    while let Some(node) = deletelist.pop_front() {
+        deletelist.extend(h.children(node).filter(|n| !visited.contains(n)));
+        deletelist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
+        visited.push(node);
+        if h.contains_node(node) {
             let optype = h.get_optype(node);
             if Modifier::from_optype(optype).is_some() {
                 let mut l = vec![node];
@@ -1278,7 +1265,7 @@ mod tests {
         assert_matches!(h.validate(), Ok(()));
 
         let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, vec![entrypoint]).unwrap();
+        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
 
         assert_matches!(h.validate(), Ok(()));
     }

@@ -931,7 +931,7 @@ mod test {
         assert_matches!(h.validate(), Ok(()));
 
         let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
+        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
 
         assert_matches!(h.validate(), Ok(()));
     }

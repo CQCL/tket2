@@ -73,7 +73,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // C^nRz(cs, c, θ)
                 let c_rz = self.modify_tket_op(n, TketOp::Rz, new_fn, ancilla)?;
                 connect(new_fn, &c_rz.incoming[0], &c.into())?;
-                c = c_rz.outgoing[0].clone().try_into().unwrap();
+                c = c_rz.outgoing[0].try_into().unwrap();
 
                 let mut result = vec![(halfturn, IncomingPort::from(0))];
 
@@ -89,7 +89,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                         .map(|out| out.out_wire(0))?;
                     connect(new_fn, &c_rz.incoming[1], &angle.into())?;
                 } else {
-                    let in_wire = c_rz.incoming[1].clone().try_into().unwrap();
+                    let in_wire = c_rz.incoming[1].try_into().unwrap();
                     result.push(in_wire)
                 }
 
@@ -165,12 +165,12 @@ mod tests {
         let t_num = 0;
         let c_num = 3;
         let num = (t_num + c_num).try_into().unwrap();
-        let targs = iter::repeat(qb_t()).take(t_num).collect::<Vec<_>>();
+        let targs = iter::repeat_n(qb_t(), t_num).collect::<Vec<_>>();
         let foo_sig = Signature::new_endo(targs);
         let call_sig = Signature::new_endo(array_type(num, qb_t()));
         let main_sig = Signature::new(vec![], array_type(num, qb_t()));
 
-        let term_list: Vec<Term> = iter::repeat(qb_t().into()).take(t_num).collect();
+        let term_list: Vec<Term> = iter::repeat_n(qb_t().into(), t_num).collect();
         let control_op = MODIFIER_EXTENSION
             .instantiate_extension_op(
                 &CONTROL_OP_ID,
@@ -265,8 +265,8 @@ mod tests {
         h.validate().unwrap();
         println!("Before modification:\n{}", h.mermaid_string());
 
-        let entrypoint = h.entrypoint().clone();
-        resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
+        let entrypoint = h.entrypoint();
+        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
         dead_code::DeadCodeElimPass::default()
             .with_entry_points(vec![_main.node()])
             .run(&mut h)
