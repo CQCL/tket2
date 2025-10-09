@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use hugr::types::Signature;
-use hugr::Hugr;
+use hugr::{Hugr, Node};
 
 use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
 
@@ -27,9 +27,22 @@ pub struct DecodeOptions {
     /// If `None`, we will use the name of the circuit, or "main" if the circuit
     /// has no name.
     pub fn_name: Option<String>,
-    /// The signature of the function to create. This should match the number of qubits and bits in the circuit.
+    /// The signature of the function to create.
     ///
-    /// If `None`, we will use qubits, bools, and [rotation_type][crate::extension::rotation::rotation_type] parameters.
+    /// The number of qubits in the input types must be less than or equal to the
+    /// number of qubits in the circuit. Qubits not present in the input will
+    /// will be allocated in the |0> state.
+    ///
+    /// If the signature input types contain fewer bits than those defined in the
+    /// circuit, the remaining ones will be initialized to false internally.
+    ///
+    /// Float and rotation inputs in the signature will be associated with
+    /// parameter names in `input_params`, or bound to variables in the
+    /// circuit as they are found. The final circuit may contain additional
+    /// parameter inputs, if required by the circuit arguments.
+    ///
+    /// If `None`, we will use qubits, bools, and
+    /// [rotation_type][crate::extension::rotation::rotation_type] parameters.
     pub signature: Option<Signature>,
     /// A list of parameter names to add to the function input.
     ///
@@ -77,12 +90,11 @@ pub enum DecodeInsertionTarget {
     /// Insert the decoded circuit as a new function in the HUGR.
     #[default]
     Function,
-    // TODO: To be added in a follow-up PR.
-    // Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
-    //Region {
-    //    /// The parent node that will contain the circuit's decoded DFG.
-    //    parent: Node,
-    //},
+    /// Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
+    Region {
+        /// The parent node that will contain the circuit's decoded DFG.
+        parent: Node,
+    },
 }
 
 /// Options used when encoding a HUGR into a pytket

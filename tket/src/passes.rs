@@ -12,3 +12,5 @@ pub use pytket::lower_to_pytket;
 
 pub mod tuple_unpack;
 pub use tuple_unpack::find_tuple_unpack_rewrites;
+
+pub mod unpack_container;

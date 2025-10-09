@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
-use hugr::builder::{Dataflow as _, FunctionBuilder};
+use hugr::builder::{DFGBuilder, Dataflow as _};
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
@@ -328,6 +328,10 @@ pub(crate) struct WireTracker {
     /// An ordered set of parameters found in operation arguments, and added as
     /// new region inputs.
     parameters: IndexMap<String, LoadedParameter>,
+    /// Parameter inputs to the region with no associated variable.
+    ///
+    /// These will be reused as needed if new parameter names are found in the command arguments.
+    unused_parameter_inputs: VecDeque<LoadedParameter>,
     /// A list of input variables added to the hugr.
     ///
     /// Ordered according to their order in the function input.
@@ -360,6 +364,7 @@ impl WireTracker {
             qubit_wires: IndexMap::with_capacity(qubit_count),
             bit_wires: IndexMap::with_capacity(bit_count),
             parameters: IndexMap::new(),
+            unused_parameter_inputs: VecDeque::new(),
             parameter_vars: IndexSet::new(),
             output_qubit_permutation: Vec::with_capacity(qubit_count),
         }
@@ -574,6 +579,13 @@ impl WireTracker {
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wires. See
     ///   [`WireTracker::load_parameter`] for more details.
+    ///
+    /// # Errors
+    ///
+    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubit_args` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bit_args` was marked as outdated.
+    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`]
+    /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub(super) fn find_typed_wires(
         &self,
         config: &PytketDecoderConfig,
@@ -668,8 +680,8 @@ impl WireTracker {
         })
     }
 
-    /// Loads the given parameter half-turns expression as a [`LoadedParameter`] in the
-    /// hugr.
+    /// Loads the given parameter half-turns expression as a [`LoadedParameter`]
+    /// in the hugr.
     ///
     /// - If the parameter is a known algebraic operation, adds the required op
     ///   and recurses on its inputs.
@@ -687,9 +699,14 @@ impl WireTracker {
     /// * `type_hint` - A hint for the type of the parameter we want to load.
     ///   This lets us decide between using [`ConstRotation`] and [`ConstF64`]
     ///   for constants. The actual returned type may be different.
+    ///
+    /// # Panics
+    ///
+    /// If the hugr builder does not support adding input wires.
+    /// (That is, we're not building a FuncDefn or a DFG).
     pub fn load_half_turns_parameter(
         &mut self,
-        hugr: &mut FunctionBuilder<&mut Hugr>,
+        hugr: &mut DFGBuilder<&mut Hugr>,
         param: &str,
         type_hint: Option<ParameterType>,
     ) -> LoadedParameter {
@@ -698,9 +715,10 @@ impl WireTracker {
         /// `type_hint` is a hint for the type of the parameter we want to load.
         /// The actual returned type may be different.
         fn process(
-            hugr: &mut FunctionBuilder<&mut Hugr>,
+            hugr: &mut DFGBuilder<&mut Hugr>,
             input_params: &mut IndexMap<String, LoadedParameter>,
             param_vars: &mut IndexSet<String>,
+            unused_param_inputs: &mut VecDeque<LoadedParameter>,
             parsed: PytketParam,
             param: &str,
             type_hint: Option<ParameterType>,
@@ -743,8 +761,15 @@ impl WireTracker {
                             // Look it up in the input parameters to the circuit, and add a new float input if needed.
                             *input_params.entry(name.to_string()).or_insert_with(|| {
                                 param_vars.insert(name.to_string());
-                                let wire = hugr.add_input(rotation_type());
-                                LoadedParameter::rotation(wire)
+                                match unused_param_inputs.pop_front() {
+                                    Some(loaded) => loaded,
+                                    None => {
+                                        let wire = hugr
+                                            .add_input(rotation_type())
+                                            .expect("Must be building a FuncDefn or a DFG");
+                                        LoadedParameter::rotation(wire)
+                                    }
+                                }
                             })
                         }
                     }
@@ -754,8 +779,15 @@ impl WireTracker {
                     let input_wires = args
                         .into_iter()
                         .map(|arg| {
-                            let param =
-                                process(hugr, input_params, param_vars, arg, param, Some(param_ty));
+                            let param = process(
+                                hugr,
+                                input_params,
+                                param_vars,
+                                unused_param_inputs,
+                                arg,
+                                param,
+                                Some(param_ty),
+                            );
                             param.with_type(param_ty, hugr).wire()
                         })
                         .collect_vec();
@@ -773,6 +805,7 @@ impl WireTracker {
             hugr,
             &mut self.parameters,
             &mut self.parameter_vars,
+            &mut self.unused_parameter_inputs,
             parse_pytket_param(param),
             param,
             type_hint,
@@ -820,20 +853,27 @@ impl WireTracker {
         Ok(())
     }
 
-    pub(crate) fn register_input_parameter(
+    /// Associate an input wire to the region with a parameter.
+    pub(super) fn register_input_parameter(
         &mut self,
-        wire: Wire,
+        loaded: LoadedParameter,
         param: String,
     ) -> Result<(), PytketDecodeError> {
-        let entry = self.parameters.entry(param);
+        let entry = self.parameters.entry(param.clone());
         if let indexmap::map::Entry::Occupied(_) = &entry {
             return Err(PytketDecodeErrorInner::DuplicatedParameter {
                 param: entry.key().clone(),
             }
             .into());
         }
-        entry.insert_entry(LoadedParameter::rotation(wire));
+        self.parameter_vars.insert(param);
+        entry.insert_entry(loaded);
         Ok(())
+    }
+
+    /// Track a parameter input to the region for which we don't have a variable name yet.
+    pub(super) fn register_unused_parameter_input(&mut self, loaded: LoadedParameter) {
+        self.unused_parameter_inputs.push_back(loaded);
     }
 }
 
