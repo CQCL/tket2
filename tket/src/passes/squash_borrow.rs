@@ -165,19 +165,25 @@ pub struct BorrowFromPorts {
 
 /// Whether a node is a borrow or return, along with the port for
 /// the borrowed value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BRAction {
     /// A borrow action, containing the port on which the borrowed value is output.
     Borrow(OutgoingPort),
     /// A return action, containing the port on which the value to return is input.
     Return(IncomingPort),
-    /// Some other action that
-    /// * requires borrowedness to be as it would be in the unoptimized Hugr,
-    /// * leaves borrowedness unknown
+    /// Some other action that requires borrowedness of some indices to be as it
+    /// would be in the unoptimized Hugr. Thus, we cannot optimize any boro-ret or
+    /// ret-boro pair across this op.
     ///
-    /// ....for either a single known index, or all indices.
-    /// (TODO: swap needs two indices; and requiring a [Wire] for index is a kludge.)
-    Clobber,
+    /// The indices are given by the combination of [BorrowReturnPorts::elem_index]
+    /// and any indices in the `Vec` herein.
+    ///
+    /// If the op clobbers even a single index which is definitely unknown (not from
+    /// an [IncomingPort]), then we must assume borrowedness of *all* indices must be
+    /// preserved, so no optimization of any pairs around this op is possible; in such
+    /// case, the outputs of the op can be considered to be fresh arrays so the
+    /// appropriate return value from [IsBorrowReturn::is_borrow_return] is `None`.
+    Clobber(Vec<IncomingPort>),
 }
 
 impl BRAction {
@@ -187,7 +193,7 @@ impl BRAction {
         match self {
             BRAction::Borrow(p) => (*p).into(),
             BRAction::Return(p) => (*p).into(),
-            BRAction::Clobber => panic!("Clobber has no borrowed port"),
+            BRAction::Clobber(_) => panic!("Clobber has no borrowed port"),
         }
     }
 }
@@ -344,7 +350,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             };
             if next.1 != is_br.borrow_from.inc {
                 match is_br.action {
-                    BRAction::Clobber => (), // Must be reachable along array inport
+                    BRAction::Clobber(_) => (), // Must be reachable along array inport
                     BRAction::Return(rv) => {
                         assert_eq!(rv, next.1);
                         // this array ends here (by being returned to outer array).
@@ -354,7 +360,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
                 }
                 break;
             }
-            if BRAction::Clobber == is_br.action {
+            if matches!(is_br.action, BRAction::Clobber(_)) {
                 // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
                 candidates
                     .extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
@@ -375,11 +381,26 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         array = Wire::new(node, borrow_from.out); // for next iteration
 
         match (action, borrowed.entry(index)) {
-            (BRAction::Clobber, Entry::Vacant(_)) => (),
-            (BRAction::Clobber, Entry::Occupied(oe)) => {
-                let (boro, opt_ret) = oe.remove();
-                if let Some(ret) = opt_ret {
-                    br_pairs.push((index, boro, ret));
+            (BRAction::Clobber(other_idxs), _) => {
+                let Some(mut clobbered_indices) = other_idxs
+                    .iter()
+                    .map(|inp| find_const(hugr, node, *inp))
+                    .collect::<Option<Vec<_>>>()
+                else {
+                    // At least one unknown index - must preserve all borrowedness
+                    // so no elision possible across this op.
+                    candidates.extend(all_outs(hugr, node));
+                    break;
+                };
+                clobbered_indices.push(index);
+
+                for idx in clobbered_indices {
+                    if let Entry::Occupied(oe) = borrowed.entry(idx) {
+                        let (boro, opt_ret) = oe.remove();
+                        if let Some(ret) = opt_ret {
+                            br_pairs.push((idx, boro, ret));
+                        }
+                    }
                 }
             }
             (BRAction::Borrow(borrowed_out), Entry::Vacant(ve)) => {
