@@ -210,7 +210,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // We know 1, n <= m.
                 let mut cs2 = self.controls().split_off(n);
 
-                println!("P1");
                 // 1. Cn+2X(cs1,x,y,a)
                 self.modifiers.control = n;
                 let cs2_last = cs2.last_mut().unwrap();
@@ -224,7 +223,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let mut y = pv1.outgoing[1];
                 a = pv1.outgoing[2];
 
-                println!("P2");
                 // 2. Cm+1X(cs2,a,t)
                 self.modifiers.control = m;
                 let cs1 = mem::replace(self.controls(), cs2);
@@ -236,7 +234,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let t_in = pv2.incoming[1];
                 let mut t = pv2.outgoing[1];
 
-                println!("P3");
                 // 3. Cn+2X(cs1,x,y,a)
                 self.modifiers.control = n;
                 let mut cs2 = mem::replace(self.controls(), cs1);
@@ -251,7 +248,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 y = pv3.outgoing[1];
                 a = pv3.outgoing[2];
 
-                println!("P4");
                 // 4. Cm+1X(cs2,a,t)
                 self.modifiers.control = m;
                 let cs1 = mem::replace(self.controls(), cs2);
@@ -431,7 +427,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // CVdg(c,t)
                 self.modifiers.control = 1;
                 let cs = mem::replace(self.controls(), vec![c]);
-                println!("Control of Vdg: {}", self.controls()[0]);
                 let pv_crx2 = self.modify_tket_op(n, Vdg, new_fn, ancilla)?;
                 connect(new_fn, &targ.into(), &pv_crx2.incoming[0])?;
                 targ = pv_crx2.outgoing[0].try_into().unwrap();
@@ -564,8 +559,9 @@ impl CombinedModifier {
 
 #[cfg(test)]
 mod test {
-    use std::{fs::File, io::Write, path::Path, sync::Arc};
+    use std::sync::Arc;
 
+    use cool_asserts::assert_matches;
     use hugr::{
         algorithms::{dead_code, ComposablePass},
         builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
@@ -832,10 +828,9 @@ mod test {
         };
 
         let mut h = module.finish_hugr().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
         let entrypoint = h.entrypoint();
         resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        println!("After modification\n{}", h.mermaid_string());
+        assert_matches!(h.validate(), Ok(()));
     }
 
     #[test]
@@ -956,11 +951,10 @@ mod test {
         };
 
         let mut h = module.finish_hugr().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
 
         let entrypoint = h.entrypoint();
         resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        println!("After modification\n{}", h.mermaid_string());
+        assert_matches!(h.validate(), Ok(()));
     }
 
     #[test]
@@ -1043,16 +1037,10 @@ mod test {
         };
 
         let mut h = module.finish_hugr().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
 
         let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, vec![entrypoint]).unwrap();
-        println!("After modification\n{}", h.mermaid_string());
-        {
-            let f = File::create(Path::new("test_cccx.mermaid")).unwrap();
-            let mut writer = std::io::BufWriter::new(f);
-            write!(writer, "{}", h.mermaid_string()).unwrap();
-        }
+        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
+        assert_matches!(h.validate(), Ok(()));
     }
 
     #[test]
@@ -1192,7 +1180,6 @@ mod test {
 
         let mut h = module.finish_hugr().unwrap();
         h.validate().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
 
         let entrypoint = h.entrypoint();
         resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
@@ -1200,27 +1187,6 @@ mod test {
             .with_entry_points(vec![_main.node()])
             .run(&mut h)
             .unwrap();
-        h.validate().unwrap();
-        println!("After modification\n{}", h.mermaid_string());
-        {
-            let f = File::create(Path::new("test_multi_control_ancilla.mermaid")).unwrap();
-            let mut writer = std::io::BufWriter::new(f);
-            write!(writer, "{}", h.mermaid_string()).unwrap();
-        }
-        let env_format = EnvelopeFormat::PackageJson;
-        let env_conf: EnvelopeConfig = EnvelopeConfig::new(env_format);
-        let iter: Vec<Arc<Extension>> = vec![
-            ROTATION_EXTENSION.to_owned(),
-            TKET_EXTENSION.to_owned(),
-            BOOL_EXTENSION.to_owned(),
-        ];
-        let regist: ExtensionRegistry = ExtensionRegistry::new(iter);
-        let f = File::create(Path::new("test_multi_control_ancilla.json")).unwrap();
-        let writer = std::io::BufWriter::new(f);
-        h.store_with_exts(writer, env_conf, &regist).unwrap();
-        // println!(
-        //     "hugr\n{}",
-        //     h.store_str_with_exts(env_conf, &regist).unwrap()
-        // );
+        assert_matches!(h.validate(), Ok(()));
     }
 }

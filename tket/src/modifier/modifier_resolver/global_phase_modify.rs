@@ -112,7 +112,6 @@ pub fn delete_phase<N: HugrNode>(
         for node in descendants {
             if GlobalPhase::from_optype(h.get_optype(node)).is_some() {
                 h.remove_subtree(node);
-                println!("found global phase: {}", node);
             }
         }
     }

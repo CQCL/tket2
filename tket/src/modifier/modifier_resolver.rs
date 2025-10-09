@@ -115,6 +115,7 @@ use super::qubit_types_utils::contain_qubits;
 use super::{CombinedModifier, ModifierFlags};
 use crate::{
     extension::{global_phase::GlobalPhase, modifier::Modifier},
+    modifier::modifier_resolver::global_phase_modify::delete_phase,
     TketOp,
 };
 use hugr::{
@@ -1093,7 +1094,7 @@ pub fn resolve_modifier_with_entrypoints(
     // This might be insufficient as a cleanup since the resolution procedure might
     // generate nodes that are not reachable from the entry points.
     // If more thorough cleanup is needed, we should run dead code elimination.
-    let mut deletelist = entry_points;
+    let mut deletelist = entry_points.clone();
     let mut visited = vec![];
     while let Some(node) = deletelist.pop_front() {
         deletelist.extend(h.children(node).filter(|n| !visited.contains(n)));
@@ -1128,6 +1129,10 @@ pub fn resolve_modifier_with_entrypoints(
     //         }
     //     }
     // }
+
+    // TODO: This as well.
+    // Ad hoc cleanup procedure.
+    delete_phase(h, [h.module_root()])?;
 
     h.validate()
         .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
