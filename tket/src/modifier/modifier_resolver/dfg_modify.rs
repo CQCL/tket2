@@ -279,12 +279,22 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(v)
     }
 
-    /// Modifies a function if modifier flags are satisfied or it has any quantum input/output.
-    // TODO: should change the logic.
+    /// Modifies a function if necessary.
+    /// When unitary flags satisfies the current modifier, the function needs to be modified.
+    /// If not, we don't know whether the function needs modification or not.
+    /// e.g. A polymorphic function that converts array kinds needs no modification if
+    /// it is instantiated with `array[int, n]`, but needs modification if instantiated with
+    /// `array[qubit, n]`.
+    ///
+    /// Since we want to avoid unnecessary modification,
+    /// we implement some logic to find an evident reason that modification is not needed.
+    // TODO: Add more logic so that we can recognize more cases where no modification is needed.
     // It's better to change the behavior depending on the modifier.
     // e.g. if only power, do nothing
     //      if only control, just wrap with controls (IO do not need to match)
     //      if only dagger, just check signature
+    //
+    // Also, it may be better to check with the usage (how it is instantiated).
     pub fn modify_fn_if_needed(
         &mut self,
         h: &mut impl HugrMut<Node = N>,

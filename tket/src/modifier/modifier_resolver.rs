@@ -447,13 +447,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Container,
         parent: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        for (a, bs) in self.corresp_map().iter() {
-            for b in bs {
-                println!("  Wire mapping: {} -> {}", a, b);
-            }
-        }
-        println!("before connect_all:\n{}", new_dfg.hugr().mermaid_string());
-
         for out_node in h.children(parent) {
             for out_port in h.node_outputs(out_node) {
                 if let Some(EdgeKind::StateOrder) = h.get_optype(out_node).port_kind(out_port) {
@@ -611,7 +604,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                     "Case cannot be directly modified.".to_string(),
                 ))
             }
-            // Q. `ExitBlock | DataflowBlock` perhaps should be here?
 
             // Not resolvable
             OpType::AliasDecl(_)
@@ -626,8 +618,10 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             _ => {
                 // Q. Maybe we should just ignore unknown operations?
-                return Err(ModifierResolverErrors::Unreachable(
-                    "Unknown operation type found in the modifier resolver.".to_string(),
+                return Err(ModifierResolverErrors::UnResolvable(
+                    n,
+                    "Unknown operation".to_string(),
+                    optype.clone(),
                 ));
             }
         }
@@ -883,10 +877,10 @@ pub fn resolve_modifier_with_entrypoints(
 ) -> Result<(), ModifierResolverErrors<Node>> {
     use ModifierResolverErrors::*;
 
-    let entry_points: Vec<_> = entry_points.into_iter().collect();
+    let entry_points: VecDeque<_> = entry_points.into_iter().collect();
 
     let mut resolver = ModifierResolver::new();
-    let mut worklist = entry_points.into_iter().collect::<VecDeque<_>>();
+    let mut worklist = entry_points.clone();
     let mut visited = vec![];
     while let Some(node) = worklist.pop_front() {
         if !h.contains_node(node) || visited.contains(&node) {
@@ -904,15 +898,17 @@ pub fn resolve_modifier_with_entrypoints(
         }
     }
 
-    // TODO: Ad hoc implementation
-    // Remove all the remaining modifier nodes.
-    let entry_points = vec![h.module_root()];
-    for entry_point in entry_points.clone() {
-        let descendants = h.descendants(entry_point).collect::<Vec<_>>();
-        for node in descendants {
-            if !h.contains_node(node) {
-                continue;
-            }
+    // TODO:
+    // This might be insufficient as a cleanup since the resolution procedure might
+    // generate nodes that are not reachable from the entry points.
+    // If more thorough cleanup is needed, we should run dead code elimination.
+    let mut deletelist = entry_points;
+    let mut visited = vec![];
+    while let Some(node) = deletelist.pop_front() {
+        deletelist.extend(h.children(node).filter(|n| !visited.contains(n)));
+        deletelist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
+        visited.push(node);
+        if h.contains_node(node) {
             let optype = h.get_optype(node);
             if Modifier::from_optype(optype).is_some() {
                 let mut l = vec![node];
@@ -923,6 +919,24 @@ pub fn resolve_modifier_with_entrypoints(
             }
         }
     }
+    // Alternatively, we can just remove all the modifiers in the graph.
+    // let entry_points = vec![h.module_root()];
+    // for entry_point in entry_points.clone() {
+    //     let descendants = h.descendants(entry_point).collect::<Vec<_>>();
+    //     for node in descendants {
+    //         if !h.contains_node(node) {
+    //             continue;
+    //         }
+    //         let optype = h.get_optype(node);
+    //         if Modifier::from_optype(optype).is_some() {
+    //             let mut l = vec![node];
+    //             while let Some(n) = l.pop() {
+    //                 l.extend(h.output_neighbours(n));
+    //                 h.remove_node(n);
+    //             }
+    //         }
+    //     }
+    // }
 
     h.validate()
         .map_err(|e| ModifierResolverErrors::BuildError(e.into()))?;
