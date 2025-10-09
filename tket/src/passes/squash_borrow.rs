@@ -143,13 +143,13 @@ pub enum NodeInfoError {
         borrowed_ty: Type,
         borrow_from_ty: Type,
     },
-    /// An operation does not borrow from the same type as the array had when created
-    #[display("Array was created as {source_ty} but borrowing from {borrow_from_ty}")]
+    /// An operation does not output the same array type as it inputs
+    #[display("Array was input as {input} but returned as {output}")]
     InconsistentArrayType {
-        /// The type as which the array was created
-        source_ty: Type,
-        /// The type from which the op claims to be borrowing
-        borrow_from_ty: Type,
+        /// The array type fed in on the [BorrowFromPorts::inc] port
+        input: Type,
+        /// The type returned on the [BorrowFromPorts::out] port
+        output: Type,
     },
 }
 
@@ -460,6 +460,16 @@ fn next_array_op(
         candidates.extend(all_outs(hugr, next.0));
         return Ok(None);
     };
+    {
+        let [input, output] = [
+            (array.node(), array.source()),
+            (next.0, is_br.borrow_from.out),
+        ]
+        .map(|(n, p)| hugr.out_value_types(n).find(|(p2, _)| p == *p2).unwrap().1);
+        if input != output {
+            return Err(NodeInfoError::InconsistentArrayType { input, output });
+        }
+    }
     if next.1 != is_br.borrow_from.inc {
         match is_br.action {
             BRAction::Clobber(_) => (), // Must be reachable along array inport
