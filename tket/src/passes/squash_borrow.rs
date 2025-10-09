@@ -359,8 +359,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
                 candidates
                     .extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
             }
-            let index_src = hugr.single_linked_output(next.0, is_br.elem_index).unwrap();
-            match find_const(hugr, Wire::new(index_src.0, index_src.1)) {
+            match find_const(hugr, next.0, is_br.elem_index) {
                 None => {
                     // Unknown index.
                     // Hence, we must preserve borrowedness of all indices for this op;
@@ -467,10 +466,8 @@ fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wir
     h.out_value_types(n).map(move |(p, _)| Wire::new(n, p))
 }
 
-fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
-    if wire.source().index() > 0 {
-        return None;
-    }
+fn find_const<H: HugrView>(hugr: &H, n: H::Node, inp: IncomingPort) -> Option<u64> {
+    let (mut curr_node, mut outp) = hugr.single_linked_output(n, inp).unwrap();
 
     fn is_const_conversion_op(op: &OpType) -> bool {
         matches!(op, OpType::LoadConstant(..))
@@ -479,29 +476,31 @@ fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
                 .is_some_and(|op| ConvertOpDef::from_extension_op(op) == Ok(ConvertOpDef::itousize))
     }
 
-    let mut curr_node = wire.node();
-    loop {
-        let op = hugr.get_optype(curr_node);
-        if is_const_conversion_op(op) {
-            (curr_node, _) = hugr
-                .single_linked_output(curr_node, IncomingPort::from(0))
-                .expect("invalid signature for conversion op");
-            continue;
-        }
-
-        let OpType::Const(const_op) = op else {
+    let op = loop {
+        if outp.index() > 0 {
             return None;
-        };
-        if let Value::Extension { e } = &const_op.value {
-            if let Some(c) = e.value().downcast_ref::<ConstUsize>() {
-                return Some(c.value());
-            }
-            if let Some(c) = e.value().downcast_ref::<ConstInt>() {
-                return Some(c.value_u());
-            }
         }
-        panic!("Unexpected index {:?}", const_op.value)
+        let op = hugr.get_optype(curr_node);
+        if !is_const_conversion_op(op) {
+            break op;
+        }
+        (curr_node, outp) = hugr
+            .single_linked_output(curr_node, IncomingPort::from(0))
+            .expect("invalid signature for conversion op");
+    };
+
+    let OpType::Const(const_op) = op else {
+        return None;
+    };
+    if let Value::Extension { e } = &const_op.value {
+        if let Some(c) = e.value().downcast_ref::<ConstUsize>() {
+            return Some(c.value());
+        }
+        if let Some(c) = e.value().downcast_ref::<ConstInt>() {
+            return Some(c.value_u());
+        }
     }
+    panic!("Unexpected index {:?}", const_op.value)
 }
 
 #[cfg(test)]
@@ -513,15 +512,10 @@ mod test {
     use hugr::{
         algorithms::ComposablePass, extension::simple_op::MakeExtensionOp, hugr::hugrmut::HugrMut,
         std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr, HugrView, Node,
-        OutgoingPort, Wire,
     };
     use itertools::Itertools;
     use portgraph::NodeIndex;
     use rstest::{fixture, rstest};
-
-    fn to_wire((n, p): (Node, OutgoingPort)) -> Wire {
-        Wire::new(n, p)
-    }
 
     #[fixture]
     pub(super) fn borrow_circuit() -> Circuit {
@@ -542,7 +536,7 @@ mod test {
         h.validate().unwrap();
         assert_eq!(res.len(), 9); // Just what's been seen
 
-        let get_index = |n| find_const(&h, to_wire(h.single_linked_output(n, 1).unwrap())).unwrap();
+        let get_index = |n| find_const(&h, n, 1.into()).unwrap();
         let all_indices = |b| {
             // NOTE ALAN: h.nodes() doesn't work, something is non-const...
             h.entry_descendants()
