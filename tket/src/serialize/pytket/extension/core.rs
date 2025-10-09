@@ -55,25 +55,19 @@ impl PytketDecoder for CoreDecoder {
             {
                 let payload: UnsupportedSubgraphPayload = match serde_json::from_str(payload) {
                     Ok(payload) => payload,
-                    Err(e) => {
-                        let msg = format!(
-                            "Invalid payload for opaque pytket barrier with opgroup {}. {e}",
-                            opgroup.unwrap()
-                        );
-                        return Err(PytketDecodeError::custom(msg));
+                    Err(_) => {
+                        // Payload is invalid. We don't error here to avoid
+                        // panicking on corrupted/old user submissions.
+                        return Ok(DecodeStatus::Unsupported);
                     }
                 };
-                match payload {
-                    UnsupportedSubgraphPayload::External { .. } => {
-                        unimplemented!("Extract external unsupported hugr subgraphs.");
-                    }
-                    UnsupportedSubgraphPayload::Standalone { .. } => {
-                        // TODO: Extract standalone unsupported hugr subgraphs.
-                        //
-                        // For now we keep the old behaviour of producing opaque TKET1.tk1op operations.
-                        Ok(DecodeStatus::Unsupported)
-                    }
+                if payload.is_external() {
+                    unimplemented!("Extract external unsupported hugr subgraphs.");
                 }
+                // TODO: Extract standalone unsupported hugr subgraphs.
+                //
+                // For now we keep the old behaviour of producing opaque TKET1.tk1op operations.
+                Ok(DecodeStatus::Unsupported)
             }
             PytketOperation {
                 op_type: PytketOptype::CircBox,
