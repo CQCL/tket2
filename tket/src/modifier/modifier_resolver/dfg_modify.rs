@@ -153,13 +153,13 @@ impl<N: HugrNode> ModifierResolver<N> {
                 )?;
             }
             OpType::Case(_) => {
-                return Err(ModifierResolverErrors::Unreachable(
+                return Err(ModifierResolverErrors::unreachable(
                     "IO of Case node has to be modified directly while modifying Conditional."
                         .to_string(),
                 ));
             }
             optype => {
-                return Err(ModifierResolverErrors::Unreachable(format!(
+                return Err(ModifierResolverErrors::unreachable(format!(
                     "Cannot modify the IO of the node with OpType: {}",
                     optype
                 )));
@@ -189,12 +189,12 @@ impl<N: HugrNode> ModifierResolver<N> {
                     .take(self.control_num())
                     .collect()
             }
-            OpType::Case(_) => return Err(ModifierResolverErrors::Unreachable(
+            OpType::Case(_) => return Err(ModifierResolverErrors::unreachable(
                 "Control qubits of Case node have to be initialized directly while modifying Conditional."
                     .to_string(),
             )),
             optype => {
-                return Err(ModifierResolverErrors::Unreachable(format!(
+                return Err(ModifierResolverErrors::unreachable(format!(
                     "Cannot set control qubit of the node with OpType: {}",
                     optype
                 )));
@@ -253,7 +253,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 }
             }
             optype => {
-                return Err(ModifierResolverErrors::Unreachable(format!(
+                return Err(ModifierResolverErrors::unreachable(format!(
                     "Cannot wire outputs of control qubit in the node of OpType: {}",
                     optype
                 )))
@@ -323,7 +323,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         // Old function definition
         let OpType::FuncDefn(old_fn_defn) = h.get_optype(func) else {
-            return Err(ModifierResolverErrors::Unreachable(format!(
+            return Err(ModifierResolverErrors::unreachable(format!(
                 "Cannot modify a non-function node. {}",
                 h.get_optype(func)
             )));
@@ -370,7 +370,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
         let optype = h.get_optype(func);
         let Some(fn_defn) = optype.as_func_defn() else {
-            return Err(ModifierResolverErrors::Unreachable(format!(
+            return Err(ModifierResolverErrors::unreachable(format!(
                 "Cannot modify a non-function node. {}",
                 optype
             )));
@@ -477,7 +477,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         // Every TailLoop that is generated from Power cannot have `just_outputs`.
         if self.modifiers.dagger && !tail_loop.just_outputs.is_empty() {
             let optype = h.get_optype(n);
-            return Err(ModifierResolverErrors::UnResolvable(
+            return Err(ModifierResolverErrors::unresolvable(
                 n,
                 "tail loop with outputs cannot be daggered.".to_string(),
                 optype.clone(),

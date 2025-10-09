@@ -14,12 +14,15 @@ use hugr::{
     ops::ExtensionOp, HugrView,
 };
 
+mod pass;
 use crate::extension::modifier::Modifier;
 pub mod control;
 pub mod dagger;
 pub mod modifier_resolver;
 pub mod power;
 pub mod qubit_types_utils;
+
+pub use pass::ModifierResolverPass;
 
 /// An accumulated modifier that combines control, dagger, and power modifiers.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]

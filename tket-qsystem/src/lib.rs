@@ -7,7 +7,6 @@ pub mod extension;
 #[cfg(feature = "llvm")]
 pub mod llvm;
 mod lower_drops;
-mod modifier;
 pub mod pytket;
 pub mod replace_bools;
 pub mod replace_borrow_arrays;
@@ -25,9 +24,10 @@ use hugr::{
     Hugr, HugrView, Node,
 };
 use lower_drops::LowerDropsPass;
-use modifier::ModifierResolverPass;
 use replace_bools::{ReplaceBoolPass, ReplaceBoolPassError};
 use replace_borrow_arrays::{ReplaceBorrowArrayPass, ReplaceBorrowArrayPassError};
+use tket::modifier::modifier_resolver::ModifierResolverErrors;
+use tket::modifier::ModifierResolverPass;
 use tket::TketOp;
 
 use extension::{
@@ -48,6 +48,10 @@ pub struct QSystemPass {
     monomorphize: bool,
     force_order: bool,
     lazify: bool,
+    /// Resolve function modifiers.
+    //
+    // TODO: This should be in a default Hugr pass rather than here.
+    // We should move it and deprecate once that's defined.
     modifier: bool,
     lower_borrow_arrays: bool,
 }
@@ -95,6 +99,8 @@ pub enum QSystemPassError<N = Node> {
     /// [Module]: hugr::ops::Module
     #[display("No function named 'main' in module.")]
     NoMain,
+    /// An error from the component [ModifierResolverPass].
+    ModifierResolverError(ModifierResolverErrors<N>),
 }
 
 impl QSystemPass {
@@ -275,6 +281,17 @@ impl QSystemPass {
     /// from `tket.qsystem`.
     pub fn with_lazify(mut self, lazify: bool) -> Self {
         self.lazify = lazify;
+        self
+    }
+
+    /// Returns a new `QSystemPass` with modifier resolution enabled according to
+    /// `modifier`.
+    ///
+    /// On by default.
+    ///
+    /// See [`ModifierResolverPass`] for more details.
+    pub fn with_modifier_resolution(mut self, modifier_resolution: bool) -> Self {
+        self.modifier = modifier_resolution;
         self
     }
 }

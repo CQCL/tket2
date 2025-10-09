@@ -112,7 +112,6 @@ pub mod dfg_modify;
 use super::qubit_types_utils::contain_qubits;
 use super::{CombinedModifier, ModifierFlags};
 use crate::extension::modifier::Modifier;
-use derive_more::Error;
 use hugr::{
     builder::{BuildError, CFGBuilder, Container, Dataflow, SubContainer},
     core::HugrNode,
@@ -196,7 +195,7 @@ fn connect<N>(
         (Either::Right(p_o), Either::Left(p_i)) => (w1.0, p_o, w2.0, p_i),
         (Either::Left(p_i), Either::Right(p_o)) => (w2.0, p_o, w1.0, p_i),
         _ => {
-            return Err(ModifierResolverErrors::Unreachable(format!(
+            return Err(ModifierResolverErrors::unreachable(format!(
                 "Cannot connect the wires with the same direction: {} -> {}",
                 w1, w2
             )))
@@ -276,16 +275,18 @@ impl<N> Default for ModifierResolver<N> {
 }
 
 /// Error that can occur when resolving modifiers.
-#[derive(Debug, Error, derive_more::Display)]
+#[derive(Debug, derive_more::Error, derive_more::Display)]
 pub enum ModifierError<N = Node> {
     /// The node is not a modifier
     #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
     NotModifier(N, OpType),
     /// No caller of this modified function exists.
     #[display("No caller of the modified function exists for node {_0}")]
+    #[error(ignore)]
     NoCaller(N),
     /// No target of this modifer exists.
     #[display("No caller of the modified function exists for node {_0}")]
+    #[error(ignore)]
     NoTarget(N),
     /// Not the first modifier in a chain.
     #[display("Node {_0} is not the first modifier in a chain. It is called by {_0}")]
@@ -308,29 +309,50 @@ impl<N> ModifierError<N> {
 }
 
 /// Possible errors that can occur during the modifier resolution process.
-#[derive(Debug, derive_more::Display)]
+#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
 pub enum ModifierResolverErrors<N = Node> {
     /// Cannot modify the node.
+    #[display("{_0}")]
+    #[from]
     ModifierError(ModifierError<N>),
     /// Error during the DFG build process.
+    #[display("{_0}")]
+    #[from]
     BuildError(BuildError),
     /// Error that is caused by a bug in this resolver which should be unreachable.
-    Unreachable(String),
+    #[display("Unreachable error: {msg}")]
+    Unreachable {
+        /// The message of the unreachable error.
+        msg: String,
+    },
     /// Modifier applied to a node that cannot be modified.
-    #[display("Modifier {_0} applied to the node {_1} cannot be modified")]
-    UnResolvable(N, String, OpType),
+    #[display("Modifier {node} applied to the node {msg} cannot be modified")]
+    UnResolvable {
+        /// The node that cannot be modified.
+        node: N,
+        /// The message of the unresolvable error.
+        msg: String,
+        /// The operation type that cannot be modified.
+        optype: OpType,
+    },
     /// The node cannot be modified.
     #[display("Modification by {_0:?} is not defined for the node {_1}")]
     Unimplemented(Modifier, OpType),
 }
-impl<N> From<ModifierError<N>> for ModifierResolverErrors<N> {
-    fn from(err: ModifierError<N>) -> Self {
-        ModifierResolverErrors::ModifierError(err)
+
+impl<N> ModifierResolverErrors<N> {
+    /// Create an unreachable error.
+    pub fn unreachable(msg: impl Into<String>) -> Self {
+        Self::Unreachable { msg: msg.into() }
     }
-}
-impl<N> From<BuildError> for ModifierResolverErrors<N> {
-    fn from(err: BuildError) -> Self {
-        ModifierResolverErrors::BuildError(err)
+
+    /// Create an unresolvable error.
+    pub fn unresolvable(node: N, msg: impl Into<String>, optype: OpType) -> Self {
+        Self::UnResolvable {
+            node,
+            msg: msg.into(),
+            optype,
+        }
     }
 }
 
@@ -388,7 +410,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             .insert(old, vec![new])
             .map_or(Ok(()), |former| {
                 // If the old wire is already registered, raise an error.
-                Err(ModifierResolverErrors::Unreachable(format!(
+                Err(ModifierResolverErrors::unreachable(format!(
                     "Wire already registered for node {}. Former [{},...], Latter {}.",
                     old, former[0], new
                 )))
@@ -406,7 +428,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     fn map_get(&self, key: &DirWire<N>) -> Result<&Vec<DirWire>, ModifierResolverErrors<N>> {
         self.corresp_map
             .get(key)
-            .ok_or(ModifierResolverErrors::Unreachable(format!(
+            .ok_or(ModifierResolverErrors::unreachable(format!(
                 "No correspondence for the wire: {}",
                 key
             )))
@@ -594,13 +616,13 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
 
             OpType::FuncDefn(_) | OpType::FuncDecl(_) | OpType::Module(_) => {
-                return Err(ModifierResolverErrors::Unreachable(format!(
+                return Err(ModifierResolverErrors::unreachable(format!(
                     "Invalid node found inside modified function (OpType = {})",
                     optype.clone()
                 )))
             }
             OpType::Case(_) => {
-                return Err(ModifierResolverErrors::Unreachable(
+                return Err(ModifierResolverErrors::unreachable(
                     "Case cannot be directly modified.".to_string(),
                 ))
             }
@@ -610,7 +632,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             | OpType::AliasDefn(_)
             | OpType::ExitBlock(_)
             | OpType::DataflowBlock(_) => {
-                return Err(ModifierResolverErrors::UnResolvable(
+                return Err(ModifierResolverErrors::unresolvable(
                     n,
                     "Unmodifiable node found".to_string(),
                     optype.clone(),
@@ -618,7 +640,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
             _ => {
                 // Q. Maybe we should just ignore unknown operations?
-                return Err(ModifierResolverErrors::UnResolvable(
+                return Err(ModifierResolverErrors::unresolvable(
                     n,
                     "Unknown operation".to_string(),
                     optype.clone(),
@@ -794,7 +816,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         if self.controls().len() != self.control_num() {
-            return Err(ModifierResolverErrors::Unreachable(
+            return Err(ModifierResolverErrors::unreachable(
                 "Control qubits are not set correctly.".to_string(),
             ));
         }
@@ -829,7 +851,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             .filter(|child| h.get_optype(*child).is_dataflow_block())
             .collect();
         if children.len() != 1 {
-            return Err(ModifierResolverErrors::UnResolvable(
+            return Err(ModifierResolverErrors::unresolvable(
                 n,
                 "CFG with more than one node found.".to_string(),
                 cfg.clone().into(),

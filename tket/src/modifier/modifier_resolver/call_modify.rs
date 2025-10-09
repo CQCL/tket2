@@ -21,7 +21,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let OpType::Call(call) = optype else {
-            return Err(ModifierResolverErrors::Unreachable(
+            return Err(ModifierResolverErrors::unreachable(
                 "Not a Call".to_string(),
             ));
         };
@@ -173,7 +173,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         // This is because, even if we find an error in the process immediately,
         // we cannot stop processing here.
         let wrap_err = |e: ModifierError<N>| {
-            ModifierResolverErrors::UnResolvable(
+            ModifierResolverErrors::unresolvable(
                 e.node(),
                 "Cannot modify indirect call.".to_string(),
                 indir_call.clone().into(),
