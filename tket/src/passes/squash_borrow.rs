@@ -99,19 +99,19 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
         let mut results = Vec::new();
         let mut seen = HashSet::new();
         for region in regions {
+            // Start with all nodes not reachable along dataflow edges from other nodes. (INcludes Input.)
             let mut queue = VecDeque::from_iter(
                 hugr.children(*region)
-                    .flat_map(|c| hugr.out_value_types(c).map(move |(p, _)| Wire::new(c, p))),
+                    .filter(|n| hugr.in_value_types(*n).next().is_none())
+                    .flat_map(|n| all_outs(hugr, n)),
             );
-            // Topsort order would be more efficient, but not required. (Or use a set?)
+
             while let Some(start) = queue.pop_front() {
                 if !seen.insert(start) {
                     continue;
                 }
-                let (processed, elided) = borrow_squash_array(hugr, &self.is_br, start, true)?;
-                // Note we could process a node multiple times if we start from it,
-                // and then start from a predecessor. Safe, but inefficient.
-                seen.extend(processed);
+                let (starts, elided) = borrow_squash_array(hugr, &self.is_br, start, true)?;
+                queue.extend(starts);
                 results.extend(elided);
             }
         }
@@ -298,21 +298,28 @@ impl IsBorrowReturn for DefaultBorrowArray {
 ///
 /// # Returns
 ///
-/// Pairs of (Return node, Borrow node) that were elided.
+/// A tuple of:
+/// * New nodes that were discovered that may create arrays and thus should be analysed separately/later
+/// * Pairs of (Return node, Borrow node) that were elided.
 pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     is_br: &impl IsBorrowReturn,
     start: Wire,
     recurse: bool,
 ) -> Result<(Vec<Wire>, Vec<(Node, Node)>), NodeInfoError> {
-    let mut processed = Vec::from([start]);
+    let mut candidates = Vec::new();
     let array_ty = hugr
         .out_value_types(start.node())
         .find(|(p, _)| *p == start.source())
         .unwrap()
         .1;
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
-        return Ok((processed, vec![]));
+        return Ok((
+            hugr.linked_inputs(start.node(), start.source())
+                .flat_map(|(n, _)| all_outs(hugr, n))
+                .collect(),
+            vec![],
+        ));
     };
 
     struct Borrow(Node, OutgoingPort, BorrowFromPorts);
@@ -324,39 +331,49 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
 
     let mut array = start;
     loop {
-        let (node, elem_index, action, borrow_from) = {
+        let (node, index, action, borrow_from) = {
             let next = hugr
                 .single_linked_input(array.node(), array.source())
                 .expect("array is linear");
 
             let Some(is_br) = is_br.is_borrow_return(next.0, hugr)? else {
-                break; // end of array
+                // Not a borrow/return - stop processing this array;
+                // any outports of the node are considered fresh arrays.
+                candidates.extend(all_outs(hugr, next.0));
+                break;
             };
-            assert_eq!(next.1, is_br.borrow_from.inc);
+            if next.1 != is_br.borrow_from.inc {
+                match is_br.action {
+                    BRAction::Clobber => (), // Must be reachable along array inport
+                    BRAction::Return(rv) => {
+                        assert_eq!(rv, next.1);
+                        // this array ends here (by being returned to outer array).
+                        // Processing of outer array will continue after the return.
+                    }
+                    BRAction::Borrow(_) => panic!("Array fed into unexpected port of borrow"),
+                }
+                break;
+            }
+            if BRAction::Clobber == is_br.action {
+                // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
+                candidates
+                    .extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
+            }
             let index_src = hugr.single_linked_output(next.0, is_br.elem_index).unwrap();
-            (
-                next.0,
-                Wire::new(index_src.0, index_src.1),
-                is_br.action,
-                is_br.borrow_from,
-            )
+            match find_const(hugr, Wire::new(index_src.0, index_src.1)) {
+                None => {
+                    // Unknown index.
+                    // Hence, we must preserve borrowedness of all indices for this op;
+                    // so we can't elide anything before this op with anything after.
+                    // Hence, op can be considered as beginning of fresh array(s) on each outport.
+                    candidates.extend(all_outs(hugr, next.0));
+                    break;
+                }
+                Some(idx) => (next.0, idx, is_br.action, is_br.borrow_from),
+            }
         };
 
         array = Wire::new(node, borrow_from.out); // for next iteration
-        processed.push(array);
-
-        let index = match find_const(hugr, elem_index) {
-            Some(i) => i,
-            None => {
-                // op clobbers everything.
-                br_pairs.extend(
-                    borrowed
-                        .drain()
-                        .filter_map(|(idx, (b, r))| r.map(|r| (idx, b, r))),
-                );
-                continue;
-            }
-        };
 
         match (action, borrowed.entry(index)) {
             (BRAction::Clobber, Entry::Vacant(_)) => (),
@@ -430,7 +447,8 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             // Recurse to elide any intervening borrows/returns on the same array
             let (new_nodes, new_elided) =
                 borrow_squash_array(hugr, is_br, Wire::new(bor.0, bor.1), true)?;
-            processed.extend(new_nodes);
+            // TODO can we avoid duplicates? (e.g. if we've seen them in this array - second traversal will do nothing)
+            candidates.extend(new_nodes);
             elided.extend(new_elided);
         }
         // Don't elide unless we know the borrowed index is within bounds and would not panic.
@@ -442,7 +460,11 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
             elided.push((bor.0, ret.0));
         }
     }
-    Ok((processed, elided))
+    Ok((candidates, elided))
+}
+
+fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wire> + '_ {
+    h.out_value_types(n).map(move |(p, _)| Wire::new(n, p))
 }
 
 fn find_const<H: HugrView>(hugr: &H, wire: Wire<H::Node>) -> Option<u64> {
