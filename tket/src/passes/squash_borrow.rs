@@ -336,48 +336,9 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     let mut br_pairs: Vec<(u64, Borrow, Return)> = Vec::new();
 
     let mut array = start;
-    loop {
-        let (node, index, action, borrow_from) = {
-            let next = hugr
-                .single_linked_input(array.node(), array.source())
-                .expect("array is linear");
-
-            let Some(is_br) = is_br.is_borrow_return(next.0, hugr)? else {
-                // Not a borrow/return - stop processing this array;
-                // any outports of the node are considered fresh arrays.
-                candidates.extend(all_outs(hugr, next.0));
-                break;
-            };
-            if next.1 != is_br.borrow_from.inc {
-                match is_br.action {
-                    BRAction::Clobber(_) => (), // Must be reachable along array inport
-                    BRAction::Return(rv) => {
-                        assert_eq!(rv, next.1);
-                        // this array ends here (by being returned to outer array).
-                        // Processing of outer array will continue after the return.
-                    }
-                    BRAction::Borrow(_) => panic!("Array fed into unexpected port of borrow"),
-                }
-                break;
-            }
-            if matches!(is_br.action, BRAction::Clobber(_)) {
-                // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
-                candidates
-                    .extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
-            }
-            match find_const(hugr, next.0, is_br.elem_index) {
-                None => {
-                    // Unknown index.
-                    // Hence, we must preserve borrowedness of all indices for this op;
-                    // so we can't elide anything before this op with anything after.
-                    // Hence, op can be considered as beginning of fresh array(s) on each outport.
-                    candidates.extend(all_outs(hugr, next.0));
-                    break;
-                }
-                Some(idx) => (next.0, idx, is_br.action, is_br.borrow_from),
-            }
-        };
-
+    while let Some((node, index, action, borrow_from)) =
+        next_array_op(hugr, is_br, &mut candidates, array)?
+    {
         array = Wire::new(node, borrow_from.out); // for next iteration
 
         match (action, borrowed.entry(index)) {
@@ -481,6 +442,49 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         }
     }
     Ok((candidates, elided))
+}
+
+fn next_array_op(
+    hugr: &impl HugrView<Node = Node>,
+    is_br: &impl IsBorrowReturn,
+    candidates: &mut Vec<Wire>,
+    array: Wire,
+) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, NodeInfoError> {
+    let next = hugr
+        .single_linked_input(array.node(), array.source())
+        .expect("array is linear");
+
+    let Some(is_br) = is_br.is_borrow_return(next.0, hugr)? else {
+        // Not a borrow/return - stop processing this array;
+        // any outports of the node are considered fresh arrays.
+        candidates.extend(all_outs(hugr, next.0));
+        return Ok(None);
+    };
+    if next.1 != is_br.borrow_from.inc {
+        match is_br.action {
+            BRAction::Clobber(_) => (), // Must be reachable along array inport
+            BRAction::Return(rv) => {
+                assert_eq!(rv, next.1);
+                // this array ends here (by being returned to outer array).
+                // Processing of outer array will continue after the Return.
+            }
+            BRAction::Borrow(_) => panic!("Array fed into unexpected port of borrow"),
+        }
+        return Ok(None);
+    }
+    let Some(idx) = find_const(hugr, next.0, is_br.elem_index) else {
+        // Unknown index.
+        // Hence, we must preserve borrowedness of all indices for this op;
+        // so we can't elide anything before this op with anything after.
+        // Hence, op can be considered as beginning of fresh array(s) on each outport.
+        candidates.extend(all_outs(hugr, next.0));
+        return Ok(None);
+    };
+    if matches!(is_br.action, BRAction::Clobber(_)) {
+        // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
+        candidates.extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
+    }
+    Ok(Some((next.0, idx, is_br.action, is_br.borrow_from)))
 }
 
 fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wire> + '_ {
