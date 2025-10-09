@@ -128,21 +128,9 @@ pub enum NodeInfoError {
         /// The operation that is not a dataflow op.
         op: OpType,
     },
-    /// Index was not a const....ALAN need to handle gracefully inside rather than fail analysis
-    NonConstIndex,
     /// Borrow op has incorrect signature.
     #[display("borrow_node has incorrect signature")]
     BorrowNodeIncorrectSignature,
-    /// Borrow index is not copyable.
-    #[display("non-copyable borrow index")]
-    NonCopyableBorrowIndex,
-    /// Borrowed resource (array or element) is not linear.
-    #[display("non-linear borrow of element {borrowed_ty} from array {borrow_from_ty}")]
-    #[allow(missing_docs)]
-    NonLinearBorrowedResource {
-        borrowed_ty: Type,
-        borrow_from_ty: Type,
-    },
     /// An operation does not output the same array type as it inputs
     #[display("Array was input as {input} but returned as {output}")]
     InconsistentArrayType {
