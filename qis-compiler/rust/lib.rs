@@ -53,6 +53,8 @@ use tket_qsystem::llvm::{
 use tracing::{Level, event, instrument};
 use utils::read_hugr_envelope;
 
+mod gpu;
+mod selene_specific;
 mod utils;
 
 const LLVM_MAIN: &str = "qmain";
@@ -169,6 +171,7 @@ fn codegen_extensions() -> CodegenExtsMap<'static, Hugr> {
         .add_extension(RotationCodegenExtension::new(pcg))
         .add_extension(UtilsCodegenExtension)
         .add_extension(DebugCodegenExtension::new(SeleneHeapArrayCodegen::LOWERING))
+        .add_extension(gpu::GpuCodegen)
         .finish()
 }
 
