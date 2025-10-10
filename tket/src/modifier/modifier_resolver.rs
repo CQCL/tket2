@@ -1171,7 +1171,7 @@ mod tests {
     pub(crate) fn test_modifier_resolver(
         t_num: usize,
         c_num: u64,
-        foo: fn(&mut ModuleBuilder<Hugr>, usize) -> FuncID<true>,
+        foo: impl FnOnce(&mut ModuleBuilder<Hugr>, usize) -> FuncID<true>,
         dagger: bool,
     ) {
         let mut module = ModuleBuilder::new();

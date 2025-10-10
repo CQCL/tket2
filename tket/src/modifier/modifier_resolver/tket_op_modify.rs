@@ -156,11 +156,11 @@ impl<N: HugrNode> ModifierResolver<N> {
                 let sdg = new_fn.add_child_node(Sdg);
                 let mut pv = self.modify_tket_op(n, gate, new_fn, ancilla)?;
                 if !dagger {
-                    pv.incoming[0] = connect_by_num(new_fn, &pv.incoming[targ], sdg, 0);
-                    pv.outgoing[0] = connect_by_num(new_fn, &pv.outgoing[targ], s, 0);
+                    pv.incoming[targ] = connect_by_num(new_fn, &pv.incoming[targ], sdg, 0);
+                    pv.outgoing[targ] = connect_by_num(new_fn, &pv.outgoing[targ], s, 0);
                 } else {
-                    pv.outgoing[0] = connect_by_num(new_fn, &pv.outgoing[targ], sdg, 0);
-                    pv.incoming[0] = connect_by_num(new_fn, &pv.incoming[targ], s, 0);
+                    pv.outgoing[targ] = connect_by_num(new_fn, &pv.outgoing[targ], sdg, 0);
+                    pv.incoming[targ] = connect_by_num(new_fn, &pv.incoming[targ], s, 0);
                 }
                 Ok(pv)
             }
@@ -559,282 +559,75 @@ impl CombinedModifier {
 
 #[cfg(test)]
 mod test {
-    use std::sync::Arc;
-
     use cool_asserts::assert_matches;
     use hugr::{
-        algorithms::{dead_code, ComposablePass},
-        builder::{Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
-        envelope::{EnvelopeConfig, EnvelopeFormat},
-        extension::{prelude::qb_t, ExtensionRegistry},
-        ops::{handle::NodeHandle, CallIndirect, ExtensionOp},
-        std_extensions::collections::array::{array_type, ArrayOpBuilder},
+        builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
+        extension::prelude::qb_t,
+        ops::CallIndirect,
+        std_extensions::collections::array::array_type,
         types::{Signature, Term},
-        Extension,
+        Hugr,
     };
+    use strum::IntoEnumIterator;
 
     use crate::{
+        extension::rotation::ConstRotation,
+        modifier::modifier_resolver::tests::{test_modifier_resolver, SetUnitary},
+        modifier::modifier_resolver::*,
+    };
+    use crate::{
         extension::{
-            bool::BOOL_EXTENSION,
             modifier::{CONTROL_OP_ID, DAGGER_OP_ID, MODIFIER_EXTENSION},
-            rotation::{rotation_type, ROTATION_EXTENSION},
-            TKET_EXTENSION,
+            rotation::rotation_type,
         },
         modifier::*,
     };
-    use crate::{
-        extension::{debug::StateResult, rotation::ConstRotation},
-        modifier::modifier_resolver::*,
-    };
 
-    trait SetUnitary {
-        fn set_unitary(&mut self);
+    fn size(op: TketOp) -> Option<(usize, bool)> {
+        use TketOp::*;
+        let p = match op {
+            X | Y | Z | S | Sdg | T | Tdg | V | Vdg | H => (1, false),
+            Rz | Rx | Ry => (1, true),
+            CX | CY | CZ => (2, false),
+            CRz => (2, true),
+            Toffoli => (3, false),
+            Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => return None,
+        };
+        Some(p)
     }
-    impl<T: Container> SetUnitary for T {
-        fn set_unitary(&mut self) {
-            self.set_metadata("unitary", 7);
+
+    #[rstest::rstest]
+    #[case(0, true)]
+    #[case(1, false)]
+    #[case(3, false)]
+    #[case(3, true)]
+    #[case(7, false)]
+    pub fn test_single_tket_op(#[case] c_num: u64, #[case] dagger: bool) {
+        for op in TketOp::iter() {
+            let Some((size, has_angle)) = size(op) else {
+                continue;
+            };
+            let foo = |module: &mut ModuleBuilder<Hugr>, t_num: usize| {
+                let foo_sig =
+                    Signature::new_endo(iter::repeat_n(qb_t(), t_num).collect::<Vec<_>>());
+                let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
+                func.set_unitary();
+                let mut inputs: Vec<_> = func.input_wires().collect();
+                let mut args = inputs[0..size].to_vec();
+                if has_angle {
+                    let angle = func.add_load_value(ConstRotation::new(0.5).unwrap());
+                    args.push(angle);
+                }
+                let v = func.add_dataflow_op(op, args).unwrap().outputs();
+                inputs.splice(0..size, v);
+                *func.finish_with_outputs(inputs).unwrap().handle()
+            };
+            test_modifier_resolver(3, c_num, foo, dagger);
         }
     }
 
     #[test]
-    fn test_control_simple() {
-        let mut module = ModuleBuilder::new();
-        let foo_sig = Signature::new(vec![qb_t(), qb_t()], vec![qb_t(), qb_t()]);
-        let main_sig = Signature::new(vec![qb_t(), qb_t(), qb_t()], vec![qb_t(), qb_t(), qb_t()]);
-        let call_sig = Signature::new(
-            vec![array_type(1, qb_t()), qb_t(), qb_t()],
-            vec![array_type(1, qb_t()), qb_t(), qb_t()],
-        );
-
-        let control_op = MODIFIER_EXTENSION
-            .instantiate_extension_op(
-                &CONTROL_OP_ID,
-                [
-                    Term::BoundedNat(1),
-                    Term::new_list([qb_t().into(), qb_t().into()]),
-                    Term::new_list([]),
-                ],
-            )
-            .unwrap_or_else(|e| panic!("Failed to instantiate control op: {}", e));
-
-        // fn foo {
-        //     -- • -- Y ---
-        //        |
-        //     -- X -- Z --
-        // }
-        let foo = {
-            let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            func.set_unitary();
-            let [mut in1, mut in2] = func.input_wires_arr();
-            [in1, in2] = func
-                .add_dataflow_op(TketOp::CX, vec![in1, in2])
-                .unwrap()
-                .outputs_arr();
-            in1 = func
-                .add_dataflow_op(TketOp::Y, vec![in1])
-                .unwrap()
-                .out_wire(0);
-            in2 = func
-                .add_dataflow_op(TketOp::Z, vec![in2])
-                .unwrap()
-                .out_wire(0);
-            func.finish_with_outputs(vec![in1, in2]).unwrap()
-        };
-
-        let _main = {
-            let mut func = module.define_function("main", main_sig.clone()).unwrap();
-            let [in1, in2, in3] = func.input_wires_arr();
-            let loaded = func.load_func(foo.handle(), &[]).unwrap();
-            let in1 = func.add_new_array(qb_t(), vec![in1]).unwrap();
-            let controlled = func
-                .add_dataflow_op(control_op, vec![loaded])
-                .unwrap()
-                .out_wire(0);
-            let [out1, out2, out3] = func
-                .add_dataflow_op(
-                    CallIndirect {
-                        signature: call_sig,
-                    },
-                    vec![controlled, in1, in2, in3],
-                )
-                .unwrap()
-                .outputs_arr();
-            let out1 = func.add_array_unpack(qb_t(), 1, out1).unwrap()[0];
-            func.finish_with_outputs(vec![out1, out2, out3]).unwrap()
-        };
-
-        println!("Before modification:\n{}", module.hugr().mermaid_string());
-        let mut h = module.finish_hugr().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
-
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        println!("After modification\n{}", h.mermaid_string());
-    }
-
-    #[test]
-    fn test_control_ry_s() {
-        let mut module = ModuleBuilder::new();
-        let foo_sig = Signature::new(vec![qb_t(), qb_t()], vec![qb_t(), qb_t()]);
-        let main_sig = Signature::new(vec![qb_t(), qb_t(), qb_t()], vec![qb_t(), qb_t(), qb_t()]);
-        let call_sig = Signature::new(
-            vec![array_type(1, qb_t()), qb_t(), qb_t()],
-            vec![array_type(1, qb_t()), qb_t(), qb_t()],
-        );
-
-        let control_op = MODIFIER_EXTENSION
-            .instantiate_extension_op(
-                &CONTROL_OP_ID,
-                [
-                    Term::BoundedNat(1),
-                    Term::new_list([qb_t().into(), qb_t().into()]),
-                    Term::new_list([]),
-                ],
-            )
-            .unwrap();
-
-        // fn foo {
-        //     -- • -- S ---
-        //        |
-        //     -- X -- Ry --
-        //             ||
-        //      0.5 ====
-        // }
-        let foo = {
-            let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            func.set_unitary();
-            let [mut i1, mut i2] = func.input_wires_arr();
-            [i1, i2] = func
-                .add_dataflow_op(TketOp::CX, vec![i1, i2])
-                .unwrap()
-                .outputs_arr();
-            i1 = func
-                .add_dataflow_op(TketOp::S, vec![i1])
-                .unwrap()
-                .out_wire(0);
-            let theta = {
-                let angle = ConstRotation::new(0.5).unwrap();
-                func.add_load_value(angle)
-            };
-            i2 = func
-                .add_dataflow_op(TketOp::Rz, vec![i2, theta])
-                .unwrap()
-                .out_wire(0);
-            func.finish_with_outputs(vec![i1, i2]).unwrap()
-        };
-
-        let _main = {
-            let mut func = module.define_function("main", main_sig.clone()).unwrap();
-            let loaded = func.load_func(foo.handle(), &[]).unwrap();
-            let controlled = func
-                .add_dataflow_op(control_op, vec![loaded])
-                .unwrap()
-                .out_wire(0);
-            // let theta = func.add_load_value(ConstRotation::new(0.75).unwrap());
-            let mut fn_inputs = vec![controlled];
-            let mut inputs = func.input_wires().collect::<Vec<_>>();
-            inputs[0] = func.add_new_array(qb_t(), vec![inputs[0]]).unwrap();
-            fn_inputs.extend(inputs);
-            // inputs.push(theta);
-            let mut outs = func
-                .add_dataflow_op(
-                    CallIndirect {
-                        signature: call_sig,
-                    },
-                    fn_inputs,
-                )
-                .unwrap()
-                .outputs()
-                .collect::<Vec<_>>();
-            outs[0] = func.add_array_unpack(qb_t(), 1, outs[0]).unwrap()[0];
-            func.finish_with_outputs(outs).unwrap()
-        };
-
-        let mut h = module.finish_hugr().unwrap();
-        println!("Before modification:\n{}", h.mermaid_string());
-
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        println!("After modification\n{}", h.mermaid_string());
-        let env_format = EnvelopeFormat::PackageJson;
-        let env_conf: EnvelopeConfig = EnvelopeConfig::new(env_format);
-        let iter: Vec<Arc<Extension>> = vec![
-            ROTATION_EXTENSION.to_owned(),
-            TKET_EXTENSION.to_owned(),
-            BOOL_EXTENSION.to_owned(),
-        ];
-        let regist: ExtensionRegistry = ExtensionRegistry::new(iter);
-        println!(
-            "hugr\n{}",
-            h.store_str_with_exts(env_conf, &regist).unwrap()
-        );
-    }
-
-    #[test]
-    fn test_simple_dagger() {
-        // Reversed Rz(θ) gate
-
-        let mut module = ModuleBuilder::new();
-        let foo_sig = Signature::new(vec![qb_t(), rotation_type()], vec![qb_t()]);
-        let fn_sig = Signature::new(vec![qb_t()], vec![qb_t()]);
-
-        let dagger_op = MODIFIER_EXTENSION
-            .instantiate_extension_op(
-                &DAGGER_OP_ID,
-                [
-                    Term::new_list([qb_t().into()]),
-                    Term::new_list([rotation_type().into()]),
-                ],
-            )
-            .unwrap();
-
-        // fn foo {
-        //     -- Rz -- S --
-        //        ||
-        //     ====
-        // }
-        let foo = {
-            let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            func.set_unitary();
-            let [in1, in2] = func.input_wires_arr();
-            let rxgate = func
-                .add_dataflow_op(TketOp::Rz, vec![in1, in2])
-                .unwrap()
-                .out_wire(0);
-            let sgate = func.add_dataflow_op(TketOp::S, vec![rxgate]).unwrap();
-            func.finish_with_outputs(sgate.outputs()).unwrap()
-        };
-
-        let _main = {
-            let mut func = module.define_function("main", fn_sig.clone()).unwrap();
-            let [in1] = func.input_wires_arr();
-            let loaded = func.load_func(foo.handle(), &[]).unwrap();
-            let theta = {
-                let angle = ConstRotation::new(0.25).unwrap();
-                func.add_load_value(angle)
-            };
-            let daggered = func
-                .add_dataflow_op(dagger_op, vec![loaded])
-                .unwrap()
-                .out_wire(0);
-            let [out1] = func
-                .add_dataflow_op(
-                    CallIndirect { signature: foo_sig },
-                    vec![daggered, in1, theta],
-                )
-                .unwrap()
-                .outputs_arr();
-            func.finish_with_outputs(vec![out1]).unwrap()
-        };
-
-        let mut h = module.finish_hugr().unwrap();
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        assert_matches!(h.validate(), Ok(()));
-    }
-
-    #[test]
-    fn test_combined() {
+    fn test_modify_complex() {
         let mut module = ModuleBuilder::new();
         let foo_sig = Signature::new(
             vec![qb_t(), qb_t(), qb_t(), rotation_type()],
@@ -880,17 +673,6 @@ mod test {
             )
             .unwrap();
 
-        // fn foo {
-        //     -------- Ry -- V --
-        //              ||
-        //        0.5 ===
-        //
-        //     --- H --- S -------
-        //
-        //     --- Z ---- Rx -----
-        //                ||
-        //     ============
-        // }
         let foo = {
             let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
             func.set_unitary();
@@ -954,239 +736,6 @@ mod test {
 
         let entrypoint = h.entrypoint();
         resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        assert_matches!(h.validate(), Ok(()));
-    }
-
-    #[test]
-    fn test_cccx() {
-        let mut module = ModuleBuilder::new();
-        let t_num = 4;
-        let c_num = 1;
-        let targs = iter::repeat_n(qb_t(), t_num).collect::<Vec<_>>();
-        let foo_sig = Signature::new_endo(targs.clone());
-        let qubits = iter::repeat_n(qb_t(), c_num + t_num).collect::<Vec<_>>();
-        let mut call_arg_ty = vec![array_type(c_num as u64, qb_t())];
-        call_arg_ty.extend(iter::repeat_n(qb_t(), t_num));
-        let call_sig = Signature::new_endo(call_arg_ty);
-        let main_sig = Signature::new_endo(qubits);
-
-        let control_op: ExtensionOp = {
-            let term_list: Vec<Term> = targs.into_iter().map_into().collect();
-            MODIFIER_EXTENSION
-                .instantiate_extension_op(
-                    &CONTROL_OP_ID,
-                    [
-                        Term::BoundedNat(c_num as u64),
-                        Term::new_list(term_list),
-                        Term::new_list([]),
-                    ],
-                )
-                .unwrap()
-        };
-
-        // fn foo {
-        //     ----•--------
-        //         |
-        //     ----•--------
-        //         |
-        //     ----X--------
-        // }
-        let foo = {
-            let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            func.set_unitary();
-            let mut inputs: Vec<Wire> = func.input_wires().collect();
-            let (i1, i2, i3) = inputs.iter_mut().take(3).collect_tuple().unwrap();
-            // let theta = func.add_load_value(ConstRotation::new(0.46).unwrap());
-            [*i1, *i2, *i3] = func
-                .add_dataflow_op(TketOp::Toffoli, vec![*i1, *i2, *i3])
-                .unwrap()
-                .outputs_arr();
-            // [*i1] = func.add_dataflow_op(TketOp::V, input_wires)
-            func.finish_with_outputs(inputs).unwrap()
-        };
-
-        let _main = {
-            let mut func = module.define_function("main", main_sig).unwrap();
-            let mut call = func.load_func(foo.handle(), &[]).unwrap();
-            call = func
-                .add_dataflow_op(control_op, vec![call])
-                .unwrap()
-                .out_wire(0);
-            let mut inputs: Vec<_> = func.input_wires().collect();
-            let targets = inputs.split_off(c_num);
-            let control_arr = func.add_new_array(qb_t(), inputs).unwrap();
-            let mut fn_inputs = vec![call, control_arr];
-            fn_inputs.extend(targets);
-
-            let mut outs = func
-                .add_dataflow_op(
-                    CallIndirect {
-                        signature: call_sig,
-                    },
-                    fn_inputs,
-                )
-                .unwrap()
-                .outputs();
-            let control_arr = outs.next().unwrap();
-            let mut controls = func
-                .add_array_unpack(qb_t(), c_num as u64, control_arr)
-                .unwrap();
-            controls.extend(outs);
-
-            func.finish_with_outputs(controls).unwrap()
-        };
-
-        let mut h = module.finish_hugr().unwrap();
-
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        assert_matches!(h.validate(), Ok(()));
-    }
-
-    #[test]
-    fn test_multi_control_ancilla() {
-        let mut module = ModuleBuilder::new();
-        let t_num = 1;
-        let c_num = 7;
-        let num = (t_num + c_num).try_into().unwrap();
-
-        let targs = iter::repeat_n(qb_t(), t_num).collect::<Vec<_>>();
-        let foo_sig = Signature::new_endo(targs.clone());
-        // let qubits = iter::repeat(qb_t()).take(c_num + t_num).collect::<Vec<_>>();
-        let mut call_arg_ty = vec![array_type(c_num as u64, qb_t())];
-        call_arg_ty.extend(iter::repeat_n(qb_t(), t_num));
-        let call_sig = Signature::new_endo(call_arg_ty);
-        let main_sig = Signature::new(type_row![], array_type(num, qb_t()));
-
-        let control_op: ExtensionOp = {
-            let term_list: Vec<Term> = targs.into_iter().map_into().collect();
-            MODIFIER_EXTENSION
-                .instantiate_extension_op(
-                    &CONTROL_OP_ID,
-                    [
-                        Term::BoundedNat(c_num as u64),
-                        Term::new_list(term_list),
-                        Term::new_list([]),
-                    ],
-                )
-                .unwrap()
-        };
-
-        let foo = {
-            let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-            func.set_unitary();
-            let mut inputs: Vec<Wire> = func.input_wires().collect();
-            // let (i1, i2, i3) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
-            let (i1,) = inputs.iter_mut().take(t_num).collect_tuple().unwrap();
-            // let theta = func.add_load_value(ConstRotation::new(1.0).unwrap());
-            // [*i1, *i2, *i3] = func
-            //     .add_dataflow_op(TketOp::Toffoli, vec![*i1, *i2, *i3])
-            //     .unwrap()
-            //     .outputs_arr();
-            [*i1] = func
-                .add_dataflow_op(TketOp::X, vec![*i1])
-                .unwrap()
-                .outputs_arr();
-            func.finish_with_outputs(inputs).unwrap()
-        };
-
-        let _main = {
-            let mut func = module.define_function("main", main_sig).unwrap();
-            let mut call = func.load_func(foo.handle(), &[]).unwrap();
-            call = func
-                .add_dataflow_op(control_op, vec![call])
-                .unwrap()
-                .out_wire(0);
-
-            let mut controls = Vec::new();
-            for _ in 0..c_num {
-                controls.push({
-                    let mut q = func
-                        .add_dataflow_op(TketOp::QAlloc, vec![])
-                        .unwrap()
-                        .out_wire(0);
-                    q = func
-                        .add_dataflow_op(TketOp::H, vec![q])
-                        .unwrap()
-                        .out_wire(0);
-                    q = func
-                        .add_dataflow_op(TketOp::X, vec![q])
-                        .unwrap()
-                        .out_wire(0);
-                    q
-                });
-            }
-
-            let mut targets = Vec::new();
-            for _ in 0..t_num {
-                targets.push({
-                    let mut q = func
-                        .add_dataflow_op(TketOp::QAlloc, vec![])
-                        .unwrap()
-                        .out_wire(0);
-                    let theta = func.add_load_value(ConstRotation::new(0.29).unwrap());
-                    q = func
-                        .add_dataflow_op(TketOp::Ry, vec![q, theta])
-                        .unwrap()
-                        .out_wire(0);
-                    q
-                })
-            }
-            for c in controls.iter_mut() {
-                [*c, targets[t_num - 1]] = func
-                    .add_dataflow_op(TketOp::CX, vec![*c, targets[t_num - 1]])
-                    .unwrap()
-                    .outputs_arr();
-            }
-
-            let mut init_state = controls;
-            init_state.extend(targets);
-            let init_state_arr = func.add_new_array(qb_t(), init_state).unwrap();
-            let state_result = StateResult::new("input_state".to_string(), num);
-            let init_state_arr = func
-                .add_dataflow_op(state_result, vec![init_state_arr])
-                .unwrap()
-                .out_wire(0);
-            let mut controls = func.add_array_unpack(qb_t(), num, init_state_arr).unwrap();
-            let mut fn_inputs = controls.split_off(c_num);
-            let control_arr = func.add_new_array(qb_t(), controls).unwrap();
-            fn_inputs.insert(0, control_arr);
-            fn_inputs.insert(0, call);
-
-            let mut fn_outs = func
-                .add_dataflow_op(
-                    CallIndirect {
-                        signature: call_sig,
-                    },
-                    fn_inputs,
-                )
-                .unwrap()
-                .outputs();
-
-            let control_arr = fn_outs.next().unwrap();
-            let mut outputs = func
-                .add_array_unpack(qb_t(), c_num as u64, control_arr)
-                .unwrap();
-            outputs.extend(fn_outs);
-            let out_array = func.add_new_array(qb_t(), outputs).unwrap();
-            let state_result = StateResult::new("output_state".to_string(), num);
-            let out_array = func
-                .add_dataflow_op(state_result, vec![out_array])
-                .unwrap()
-                .outputs();
-
-            func.finish_with_outputs(out_array).unwrap()
-        };
-
-        let mut h = module.finish_hugr().unwrap();
-        h.validate().unwrap();
-
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        dead_code::DeadCodeElimPass::default()
-            .with_entry_points(vec![_main.node()])
-            .run(&mut h)
-            .unwrap();
         assert_matches!(h.validate(), Ok(()));
     }
 }
