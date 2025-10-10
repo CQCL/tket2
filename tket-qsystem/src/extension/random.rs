@@ -104,12 +104,12 @@ pub enum RandomOp {
     RandomFloat,
     /// `fn random_int_bounded(RNGContext, bound: u32) -> (u32, RNGContext)`
     RandomIntBounded,
-    /// `fn random_advance(RNGContext, delta: u64) -> RNGContext`
-    RandomAdvance,
     /// `fn new_rng_context(seed: u64) -> Option<RNGContext>` // return None on second call
     NewRNGContext,
     /// `fn delete_rng_context(RNGContext) -> ()`
     DeleteRNGContext,
+    /// `fn random_advance(RNGContext, delta: u64) -> RNGContext`
+    RandomAdvance,
 }
 
 impl MakeOpDef for RandomOp {
