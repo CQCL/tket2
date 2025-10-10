@@ -30,7 +30,7 @@ See [DEVELOPMENT.md][] for instructions on setting up the development environmen
 
 ## License
 
-This project is licensed under Apache License, Version 2.0 ([LICENSE][] or http://www.apache.org/licenses/LICENSE-2.0).
+This project is licensed under Apache License, Version 2.0 ([LICENSE][] or <http://www.apache.org/licenses/LICENSE-2.0>).
 
   [build_status]: https://github.com/CQCL/tket2/actions/workflows/ci.yml/badge.svg
   [codecov]: https://img.shields.io/codecov/c/gh/CQCL/tket2?logo=codecov

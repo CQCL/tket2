@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.2.1",
   "name": "tket.qsystem.random",
   "types": {
     "context": {
@@ -72,6 +72,47 @@
                   }
                 ]
               ]
+            }
+          ]
+        }
+      },
+      "binary": false
+    },
+    "RandomAdvance": {
+      "extension": "tket.qsystem.random",
+      "name": "RandomAdvance",
+      "description": "Advance or backtrack the RNG state by `delta` steps",
+      "signature": {
+        "params": [],
+        "body": {
+          "input": [
+            {
+              "t": "Opaque",
+              "extension": "tket.qsystem.random",
+              "id": "context",
+              "args": [],
+              "bound": "A"
+            },
+            {
+              "t": "Opaque",
+              "extension": "arithmetic.int.types",
+              "id": "int",
+              "args": [
+                {
+                  "tya": "BoundedNat",
+                  "n": 6
+                }
+              ],
+              "bound": "C"
+            }
+          ],
+          "output": [
+            {
+              "t": "Opaque",
+              "extension": "tket.qsystem.random",
+              "id": "context",
+              "args": [],
+              "bound": "A"
             }
           ]
         }

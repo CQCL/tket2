@@ -102,6 +102,7 @@ def ext_qsystem_random() -> Tuple[TketExtension, List[ExtType], List[ExtOp]]:
             ext.random_float,
             ext.random_int,
             ext.random_int_bounded,
+            ext.random_advance,
         ],
     )
 
