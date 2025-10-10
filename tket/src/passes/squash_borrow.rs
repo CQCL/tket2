@@ -147,9 +147,9 @@ pub enum NodeInfoError {
 #[derive(Clone, Debug)]
 pub struct BorrowFromPorts {
     /// The port receiving the array before the borrow/return.
-    inc: IncomingPort,
+    pub inc: IncomingPort,
     /// The port returning the array after the borrow/return.
-    out: OutgoingPort,
+    pub out: OutgoingPort,
 }
 
 /// Whether a node is a borrow or return, along with the port for
@@ -201,19 +201,6 @@ pub struct BorrowReturnPorts {
 /// An element index to a borrow/return.
 /// If right, i.e. non-constant, then no elision may be possible.
 pub type BorrowIndex = Either<u64, Wire>;
-
-/// Information about a node that is either a borrow from or return to a resource.
-#[derive(Clone, Debug)]
-pub struct BorrowOrReturn {
-    /// The node in the Hugr that this instance describes
-    pub node: Node,
-    /// Whether this is a borrow or return, and the port for the borrowed value.
-    pub action: BRAction,
-    /// The (hopefully-)constant index of the element being borrowed/returned
-    pub elem_index: BorrowIndex,
-    /// The ports by which the container array reaches and leaves this node.
-    pub borrow_from: BorrowFromPorts,
-}
 
 /// Implements [IsBorrowReturn] for `BorrowArray`s.
 #[derive(Debug, Default, Display, Clone)]
