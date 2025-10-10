@@ -131,13 +131,13 @@ pub enum NodeInfoError {
     /// Borrow op has incorrect signature.
     #[display("borrow_node has incorrect signature")]
     BorrowNodeIncorrectSignature,
-    /// An operation does not output the same array type as it inputs
-    #[display("Array was input as {input} but returned as {output}")]
+    /// An operation does not return the array with the same type as the array had when created
+    #[display("Array was created as {array_ty} but returned as {out_ty}")]
     InconsistentArrayType {
-        /// The array type fed in on the [BorrowFromPorts::inc] port
-        input: Type,
-        /// The type returned on the [BorrowFromPorts::out] port
-        output: Type,
+        /// The type as which the array was created
+        array_ty: Type,
+        /// The type which the op returns after borrowing from it
+        out_ty: Type,
     },
 }
 
@@ -301,11 +301,7 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     start: Wire,
     recurse: bool,
 ) -> Result<Vec<(Node, Node)>, NodeInfoError> {
-    let array_ty = hugr
-        .out_value_types(start.node())
-        .find(|(p, _)| *p == start.source())
-        .unwrap()
-        .1;
+    let array_ty = wire_type(hugr, start);
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
         candidates.extend(
             hugr.linked_inputs(start.node(), start.source())
@@ -323,7 +319,7 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
 
     let mut array = start;
     while let Some((node, index, action, borrow_from)) =
-        next_array_op(hugr, is_br, candidates, array)?
+        next_array_op(hugr, is_br, candidates, array, &array_ty)?
     {
         array = Wire::new(node, borrow_from.out); // for next iteration
 
@@ -434,6 +430,7 @@ fn next_array_op(
     is_br: &impl IsBorrowReturn,
     candidates: &mut impl Extend<Wire>,
     array: Wire,
+    array_ty: &Type,
 ) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, NodeInfoError> {
     let next = hugr
         .single_linked_input(array.node(), array.source())
@@ -446,13 +443,10 @@ fn next_array_op(
         return Ok(None);
     };
     {
-        let [input, output] = [
-            (array.node(), array.source()),
-            (next.0, is_br.borrow_from.out),
-        ]
-        .map(|(n, p)| hugr.out_value_types(n).find(|(p2, _)| p == *p2).unwrap().1);
-        if input != output {
-            return Err(NodeInfoError::InconsistentArrayType { input, output });
+        let out_ty = wire_type(hugr, Wire::new(next.0, is_br.borrow_from.out));
+        if *array_ty != out_ty {
+            let array_ty = array_ty.clone();
+            return Err(NodeInfoError::InconsistentArrayType { array_ty, out_ty });
         }
     }
     if next.1 != is_br.borrow_from.inc {
@@ -480,6 +474,13 @@ fn next_array_op(
         candidates.extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
     }
     Ok(Some((next.0, idx, is_br.action, is_br.borrow_from)))
+}
+
+fn wire_type(h: &impl HugrView<Node = Node>, w: Wire) -> Type {
+    h.out_value_types(w.node())
+        .find(|(p, _)| *p == w.source())
+        .unwrap()
+        .1
 }
 
 fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wire> + '_ {
