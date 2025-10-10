@@ -517,10 +517,9 @@ mod test {
     };
     use itertools::Itertools;
     use portgraph::NodeIndex;
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
-    #[fixture]
-    pub(super) fn borrow_circuit() -> Hugr {
+    fn borrow_circuit() -> Hugr {
         let reader =
             BufReader::new(include_bytes!("../../../test_files/squashing_inline.hugr").as_slice());
         let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
@@ -528,32 +527,45 @@ mod test {
         hugr
     }
 
+    fn big_array() -> Hugr {
+        let reader =
+            BufReader::new(include_bytes!("../../../test_files/big_array.hugr").as_slice());
+        Hugr::load(reader, Some(&REGISTRY)).unwrap()
+    }
+
     #[rstest]
-    fn test_borrow_squash(borrow_circuit: Hugr) {
-        let mut h = borrow_circuit;
+    #[case(borrow_circuit(), 9, Some(Vec::from_iter(0..=7)))]
+    #[case(big_array(), 759, None)]
+    fn test_borrow_squash(
+        #[case] mut h: Hugr,
+        #[case] expected_elisions: usize,
+        #[case] expected_indices: Option<Vec<u64>>,
+    ) {
+        let orig_num_nodes = h.num_nodes();
         let res = BorrowSquashPass::<DefaultBorrowArray>::default()
-            .with_regions([h.entrypoint()])
             .run(&mut h)
             .unwrap();
         h.validate().unwrap();
-        assert_eq!(res.len(), 9); // Just what's been seen
+        assert_eq!(res.len(), expected_elisions);
+        assert_eq!(h.num_nodes(), orig_num_nodes - 2 * expected_elisions);
 
-        let get_index = |n| find_const(&h, n, 1.into()).unwrap();
-        let all_indices = |b| {
-            // NOTE ALAN: h.nodes() doesn't work, something is non-const...
-            h.entry_descendants()
-                .filter(|n| {
-                    h.get_optype(*n)
-                        .as_extension_op()
-                        .is_some_and(|eop| BArrayUnsafeOpDef::from_extension_op(eop) == Ok(b))
-                })
-                .map(get_index)
-                .sorted()
-                .collect_vec()
-        };
+        if let Some(exp_indices) = expected_indices {
+            let get_index = |n| find_const(&h, n, 1.into()).unwrap();
+            let all_indices = |b| {
+                // NOTE ALAN: h.nodes() doesn't work, something is non-const...
+                h.entry_descendants()
+                    .filter(|n| {
+                        h.get_optype(*n)
+                            .as_extension_op()
+                            .is_some_and(|eop| BArrayUnsafeOpDef::from_extension_op(eop) == Ok(b))
+                    })
+                    .map(get_index)
+                    .sorted()
+                    .collect_vec()
+            };
 
-        let indices = Vec::from_iter(0..=7);
-        assert_eq!(all_indices(BArrayUnsafeOpDef::borrow), indices);
-        assert_eq!(all_indices(BArrayUnsafeOpDef::r#return), indices);
+            assert_eq!(all_indices(BArrayUnsafeOpDef::borrow), exp_indices);
+            assert_eq!(all_indices(BArrayUnsafeOpDef::r#return), exp_indices);
+        }
     }
 }
