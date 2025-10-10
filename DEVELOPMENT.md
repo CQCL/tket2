@@ -90,8 +90,8 @@ To quickly fix common issues, run:
 ```bash
 just fix
 # or, to fix only the rust code or the python code
-just fix rust
-just fix python
+just fix-rust
+just fix-python
 ```
 
 ## 📈 Code Coverage
