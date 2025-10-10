@@ -1,12 +1,12 @@
 //! PyO3 wrapper for rewriters.
 
 use derive_more::From;
-use hugr::HugrView;
+use hugr::{hugr::views::SiblingSubgraph, HugrView, Node};
 use itertools::Itertools;
 use pyo3::prelude::*;
 use std::path::PathBuf;
 use tket::{
-    rewrite::{CircuitRewrite, ECCRewriter, Rewriter, Subcircuit},
+    rewrite::{CircuitRewrite, ECCRewriter, Rewriter},
     Circuit,
 };
 
@@ -59,7 +59,7 @@ impl PyCircuitRewrite {
         Ok(Self {
             rewrite: CircuitRewrite::try_new(
                 &source_position.0,
-                &source_circ.circ,
+                source_circ.circ.hugr(),
                 replacement.circ,
             )
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
@@ -79,11 +79,8 @@ pub enum PyRewriter {
     Vec(Vec<PyRewriter>),
 }
 
-impl Rewriter for PyRewriter {
-    fn get_rewrites(
-        &self,
-        circ: &Circuit<impl HugrView<Node = hugr::Node>>,
-    ) -> Vec<CircuitRewrite> {
+impl<H: HugrView<Node = Node>> Rewriter<Circuit<H>> for PyRewriter {
+    fn get_rewrites(&self, circ: &Circuit<H>) -> Vec<CircuitRewrite> {
         match self {
             Self::ECC(ecc) => ecc.0.get_rewrites(circ),
             Self::Vec(rewriters) => rewriters
@@ -103,7 +100,7 @@ impl Rewriter for PyRewriter {
 #[pyo3(name = "Subcircuit")]
 #[derive(Debug, Clone, From)]
 #[repr(transparent)]
-pub struct PySubcircuit(Subcircuit);
+pub struct PySubcircuit(SiblingSubgraph);
 
 #[pymethods]
 impl PySubcircuit {
@@ -111,7 +108,7 @@ impl PySubcircuit {
     fn from_nodes(nodes: Vec<PyNode>, circ: &Tk2Circuit) -> PyResult<Self> {
         let nodes: Vec<_> = nodes.into_iter().map_into().collect();
         Ok(Self(
-            Subcircuit::try_from_nodes(nodes, &circ.circ)
+            SiblingSubgraph::try_from_nodes(nodes, circ.circ.hugr())
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
         ))
     }
