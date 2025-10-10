@@ -418,28 +418,21 @@ fn next_array_op(
     array: Wire,
     array_ty: &Type,
 ) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, NodeInfoError> {
-    let next = hugr
+    let (node, inport) = hugr
         .single_linked_input(array.node(), array.source())
         .expect("array is linear");
-
-    let Some(is_br) = is_br.is_borrow_return(next.0, hugr)? else {
+    let Some(is_br) = is_br.is_borrow_return(node, hugr)? else {
         // Not a borrow/return - stop processing this array;
         // any outports of the node are considered fresh arrays.
-        candidates.extend(all_outs(hugr, next.0));
+        candidates.extend(all_outs(hugr, node));
         return Ok(None);
     };
-    {
-        let out_ty = wire_type(hugr, Wire::new(next.0, is_br.borrow_from.out));
-        if *array_ty != out_ty {
-            let array_ty = array_ty.clone();
-            return Err(NodeInfoError::InconsistentArrayType { array_ty, out_ty });
-        }
-    }
-    if next.1 != is_br.borrow_from.inc {
+
+    if inport != is_br.borrow_from.inc {
         match is_br.action {
             BRAction::Clobber(_) => (), // Must be reachable along array inport
             BRAction::Return(rv) => {
-                assert_eq!(rv, next.1);
+                assert_eq!(rv, inport);
                 // this array ends here (by being returned to outer array).
                 // Processing of outer array will continue after the Return.
             }
@@ -447,19 +440,27 @@ fn next_array_op(
         }
         return Ok(None);
     }
-    let Some(idx) = find_const(hugr, next.0, is_br.elem_index) else {
+
+    {
+        let out_ty = wire_type(hugr, Wire::new(node, is_br.borrow_from.out));
+        if *array_ty != out_ty {
+            let array_ty = array_ty.clone();
+            return Err(NodeInfoError::InconsistentArrayType { array_ty, out_ty });
+        }
+    }
+    let Some(idx) = find_const(hugr, node, is_br.elem_index) else {
         // Unknown index.
         // Hence, we must preserve borrowedness of all indices for this op;
         // so we can't elide anything before this op with anything after.
         // Hence, op can be considered as beginning of fresh array(s) on each outport.
-        candidates.extend(all_outs(hugr, next.0));
+        candidates.extend(all_outs(hugr, node));
         return Ok(None);
     };
     if matches!(is_br.action, BRAction::Clobber(_)) {
         // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
-        candidates.extend(all_outs(hugr, next.0).filter(|w| w.source() != is_br.borrow_from.out));
+        candidates.extend(all_outs(hugr, node).filter(|w| w.source() != is_br.borrow_from.out));
     }
-    Ok(Some((next.0, idx, is_br.action, is_br.borrow_from)))
+    Ok(Some((node, idx, is_br.action, is_br.borrow_from)))
 }
 
 fn wire_type(h: &impl HugrView<Node = Node>, w: Wire) -> Type {
