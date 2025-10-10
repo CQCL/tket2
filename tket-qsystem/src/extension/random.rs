@@ -23,7 +23,7 @@ use strum::{EnumIter, EnumString, IntoStaticStr};
 /// The extension ID for the RNG extension.
 pub const EXTENSION_ID: ExtensionId = ExtensionId::new_unchecked("tket.qsystem.random");
 /// The version of the "tket.qsystem.random" extension.
-pub const EXTENSION_VERSION: Version = Version::new(0, 2, 0);
+pub const EXTENSION_VERSION: Version = Version::new(0, 2, 1);
 
 lazy_static! {
     /// The "tket.qsystem.random" extension.
@@ -104,6 +104,8 @@ pub enum RandomOp {
     RandomFloat,
     /// `fn random_int_bounded(RNGContext, bound: u32) -> (u32, RNGContext)`
     RandomIntBounded,
+    /// `fn random_advance(RNGContext, delta: u64) -> RNGContext`
+    RandomAdvance,
     /// `fn new_rng_context(seed: u64) -> Option<RNGContext>` // return None on second call
     NewRNGContext,
     /// `fn delete_rng_context(RNGContext) -> ()`
@@ -131,6 +133,10 @@ impl MakeOpDef for RandomOp {
             RandomOp::RandomIntBounded => Signature::new(
                 vec![RandomType::RNGContext.get_type(extension_ref), int_type(5)],
                 vec![int_type(5), RandomType::RNGContext.get_type(extension_ref)],
+            ),
+            RandomOp::RandomAdvance => Signature::new(
+                vec![RandomType::RNGContext.get_type(extension_ref), int_type(6)],
+                vec![RandomType::RNGContext.get_type(extension_ref)],
             ),
             RandomOp::NewRNGContext => Signature::new(
                 vec![int_type(6)],
@@ -160,6 +166,7 @@ impl MakeOpDef for RandomOp {
             RandomOp::RandomInt => "Generate a random 32-bit unsigned integer.",
             RandomOp::RandomFloat => "Generate a random floating point value in the range [0,1).",
             RandomOp::RandomIntBounded => "Generate a random 32-bit unsigned integer less than `bound`.",
+            RandomOp::RandomAdvance => "Advance or backtrack the RNG state by `delta` steps",
             RandomOp::NewRNGContext => {
                 "Seed the RNG and return a new RNG context. Required before using other RNG ops, can be called only once."
             }
@@ -201,6 +208,13 @@ pub trait RandomOpBuilder: Dataflow + UnwrapBuilder {
         Ok(self
             .add_dataflow_op(RandomOp::RandomIntBounded, [ctx, bound])?
             .outputs_arr())
+    }
+
+    /// Add a "tket.qsystem.random.random_advance" op.
+    fn add_random_advance(&mut self, ctx: Wire, delta: Wire) -> Result<Wire, BuildError> {
+        Ok(self
+            .add_dataflow_op(RandomOp::RandomAdvance, [ctx, delta])?
+            .out_wire(0))
     }
 
     /// Add a "tket.qsystem.random.new_rng_context" op.
@@ -263,8 +277,10 @@ mod test {
                 )
                 .unwrap();
             let bound = func_builder.add_load_const(Value::from(ConstInt::new_u(5, 100).unwrap()));
+            let delta = func_builder.add_load_const(Value::from(ConstInt::new_s(6, -1).unwrap()));
             let [_, ctx] = func_builder.add_random_int_bounded(ctx, bound).unwrap();
             let [_, ctx] = func_builder.add_random_float(ctx).unwrap();
+            let ctx = func_builder.add_random_advance(ctx, delta).unwrap();
             let [rnd, ctx] = func_builder.add_random_int(ctx).unwrap();
             func_builder.add_delete_rng_context(ctx).unwrap();
             func_builder.finish_hugr_with_outputs([rnd]).unwrap()
