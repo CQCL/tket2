@@ -45,25 +45,11 @@ pub trait IsBorrowReturn: Clone {
 /// along with the preceding return.
 #[derive(Clone, Debug, Default)]
 pub struct BorrowSquashPass<BR> {
-    allow_errors_same_dfg: bool,
     regions: Vec<Node>,
     is_br: BR,
 }
 
 impl<BR> BorrowSquashPass<BR> {
-    /// Controls whether analysis failures affect optimization.
-    ///
-    /// If `true`, then even when analysis fails (with a [BorrowAnalysisError])
-    /// for some arrays in a Dataflow Sibling Graph, return-borrow pairs
-    /// may still be elided for other arrays (as long as analysis succeeded on the latter).
-    /// If `false`, then analysis failure for any array in a DSG prevents any elision
-    /// in that DSG.
-    ///
-    /// Default is `false`.
-    pub fn allow_errors_same_dfg(&mut self, allow: bool) {
-        self.allow_errors_same_dfg = allow;
-    }
-
     /// Add regions (subgraphs) in which to perform the pass.
     ///
     /// If no regions are specified, the pass is performed on all dataflow regions
