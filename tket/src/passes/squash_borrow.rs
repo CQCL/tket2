@@ -512,13 +512,20 @@ fn find_const<H: HugrView>(hugr: &H, n: H::Node, inp: IncomingPort) -> Option<u6
 
 #[cfg(test)]
 mod test {
-    use std::io::BufReader;
+    use std::{collections::BTreeSet, io::BufReader};
 
     use super::{find_const, BorrowSquashPass};
     use crate::{extension::REGISTRY, passes::squash_borrow::DefaultBorrowArray};
     use hugr::{
-        algorithms::ComposablePass, extension::simple_op::MakeExtensionOp, hugr::hugrmut::HugrMut,
-        std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr, HugrView, Node,
+        algorithms::ComposablePass,
+        extension::{prelude::qb_t, simple_op::MakeExtensionOp},
+        hugr::hugrmut::HugrMut,
+        ops::OpTrait,
+        std_extensions::collections::{
+            array::ArrayKind,
+            borrow_array::{BArrayUnsafeOpDef, BorrowArray},
+        },
+        Hugr, HugrView, Node, PortIndex,
     };
     use itertools::Itertools;
     use portgraph::NodeIndex;
@@ -555,22 +562,150 @@ mod test {
         assert_eq!(h.num_nodes(), orig_num_nodes - 2 * expected_elisions);
 
         if let Some(exp_indices) = expected_indices {
-            let get_index = |n| find_const(&h, n, 1.into()).unwrap();
-            let all_indices = |b| {
-                // NOTE ALAN: h.nodes() doesn't work, something is non-const...
-                h.entry_descendants()
-                    .filter(|n| {
-                        h.get_optype(*n)
-                            .as_extension_op()
-                            .is_some_and(|eop| BArrayUnsafeOpDef::from_extension_op(eop) == Ok(b))
-                    })
-                    .map(get_index)
-                    .sorted()
-                    .collect_vec()
-            };
-
-            assert_eq!(all_indices(BArrayUnsafeOpDef::borrow), exp_indices);
-            assert_eq!(all_indices(BArrayUnsafeOpDef::r#return), exp_indices);
+            assert_eq!(
+                find_borrows(&h)
+                    .into_iter()
+                    .map(|n| get_index(&h, n))
+                    .collect_vec(),
+                exp_indices
+            );
+            assert_eq!(
+                find_returns(&h)
+                    .into_iter()
+                    .map(|n| get_index(&h, n))
+                    .collect_vec(),
+                exp_indices
+            );
         }
+    }
+
+    fn find_borrows<H: HugrView>(h: &H) -> Vec<H::Node> {
+        h.entry_descendants()
+            .filter(|n| {
+                h.get_optype(*n).as_extension_op().is_some_and(|eop| {
+                    BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::borrow)
+                })
+            })
+            .collect()
+    }
+
+    fn find_returns<H: HugrView>(h: &H) -> Vec<H::Node> {
+        h.entry_descendants()
+            .filter(|n| {
+                h.get_optype(*n).as_extension_op().is_some_and(|eop| {
+                    BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::r#return)
+                })
+            })
+            .collect()
+    }
+
+    fn get_index<H: HugrView>(h: &H, n: H::Node) -> u64 {
+        find_const(h, n, 1.into()).unwrap()
+    }
+
+    #[rstest]
+    fn test_nested_array() {
+        let inner_array_type = BorrowArray::ty(5, qb_t());
+        let outer_array_type = BorrowArray::ty(10, inner_array_type.clone());
+        let reader =
+            BufReader::new(include_bytes!("../../../test_files/nested_array.hugr").as_slice());
+        let mut h = Hugr::load(reader, Some(&REGISTRY)).unwrap();
+        let array_func = h
+            .children(h.module_root())
+            .find(|n| {
+                h.get_optype(*n)
+                    .as_func_defn()
+                    .is_some_and(|fd| fd.func_name() == "nested_array")
+            })
+            .unwrap();
+        h.set_entrypoint(array_func);
+
+        for nodes in [find_borrows(&h), find_returns(&h)] {
+            let mut outer_count = 0;
+            for node in nodes {
+                let expected_array_type = match get_index(&h, node) {
+                    0 => {
+                        outer_count += 1;
+                        &outer_array_type
+                    }
+                    1 | 2 => &inner_array_type,
+                    idx => panic!("Unexpected index {idx}"),
+                };
+                assert_eq!(
+                    h.get_optype(node)
+                        .dataflow_signature()
+                        .unwrap()
+                        .input_types()[0],
+                    *expected_array_type
+                );
+            }
+            // For each CX, two borrows or two returns of the outer array before the op, and two after
+            assert_eq!(outer_count, 8);
+        }
+        let [cx1, cx2] = h
+            .nodes()
+            .filter(|n| {
+                h.get_optype(*n)
+                    .as_extension_op()
+                    .is_some_and(|eop| eop.qualified_id() == "tket.quantum.CX")
+            })
+            .collect_array()
+            .unwrap();
+        assert!(
+            BTreeSet::from_iter(find_returns(&h)).is_superset(&h.output_neighbours(cx1).collect())
+        );
+        assert!(
+            BTreeSet::from_iter(find_borrows(&h)).is_superset(&h.input_neighbours(cx2).collect())
+        );
+
+        let res = BorrowSquashPass::<DefaultBorrowArray>::default()
+            .run(&mut h)
+            .unwrap();
+        h.validate().unwrap();
+        assert_eq!(res.len(), 9);
+        // Now, one borrow and one return from the outer array
+        assert_eq!(
+            find_borrows(&h)
+                .into_iter()
+                .filter(|n| get_index(&h, *n) == 0)
+                .count(),
+            1
+        );
+        assert_eq!(
+            find_returns(&h)
+                .into_iter()
+                .filter(|n| get_index(&h, *n) == 0)
+                .count(),
+            1
+        );
+        // CX's should still be there (in same place):
+        for cx in [cx1, cx2] {
+            assert!(h
+                .get_optype(cx)
+                .as_extension_op()
+                .is_some_and(|eop| eop.qualified_id() == "tket.quantum.CX"));
+        }
+        assert!(h.output_neighbours(cx1).all(|n| n == cx2));
+
+        // Now elide the repeated CX's
+        for p in h
+            .in_value_types(cx1)
+            .filter_map(|(p, ty)| (!ty.copyable()).then_some(p))
+            .collect_vec()
+        {
+            let src = h.single_linked_output(cx1, p).unwrap();
+            let tgt = h.single_linked_input(cx2, p.index()).unwrap();
+            h.connect(src.0, src.1, tgt.0, tgt.1);
+        }
+        h.remove_node(cx1);
+        h.remove_node(cx2);
+        h.validate().unwrap();
+
+        // Rerun transform. Now, all borrows should be removed.
+        BorrowSquashPass::<DefaultBorrowArray>::default()
+            .run(&mut h)
+            .unwrap();
+        assert_eq!(find_borrows(&h).len(), 0);
+        assert_eq!(find_returns(&h).len(), 0);
     }
 }
