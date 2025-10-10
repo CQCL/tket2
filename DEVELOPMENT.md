@@ -63,8 +63,8 @@ To compile and test the code, run:
 ```bash
 just test
 # or, to test only the rust code or the python code
-just test rust
-just test python
+just test-rust
+just test-python
 ```
 
 Run `just` to see all available commands.
@@ -126,7 +126,7 @@ your PR mark it with a 'run-ci-checks' label and push new commits to it.
 
 The general format of a contribution title should be:
 
-```
+```text
 <type>(<scope>)!: <description>
 ```
 
