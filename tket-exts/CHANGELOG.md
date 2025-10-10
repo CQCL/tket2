@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/CQCL/tket2/compare/tket-exts-v0.11.0...tket-exts-v0.11.1) (2025-10-10)
+
+
+### Features
+
+* Definition of extension ops for modifiers and global phases ([#1137](https://github.com/CQCL/tket2/issues/1137)) ([ffc507b](https://github.com/CQCL/tket2/commit/ffc507b22c462aab3d5ddf837b86e5ac3325e731))
+
 ## [0.11.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.1...tket-exts-v0.11.0) (2025-09-12)
 
 
