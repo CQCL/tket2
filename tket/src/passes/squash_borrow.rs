@@ -111,8 +111,7 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
                 if !seen.insert(start) {
                     continue;
                 }
-                let (starts, elided) = borrow_squash_traversal(hugr, &self.is_br, start, true)?;
-                queue.extend(starts);
+                let elided = borrow_squash_traversal(hugr, &self.is_br, &mut queue, start, true)?;
                 results.extend(elided);
             }
         }
@@ -290,36 +289,29 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     start: Wire,
     recurse: bool,
 ) -> Result<Vec<(Node, Node)>, NodeInfoError> {
-    Ok(borrow_squash_traversal(hugr, is_br, start, recurse)?.1)
+    borrow_squash_traversal(hugr, is_br, &mut Vec::new(), start, recurse)
 }
 
 /// Internal method to keep traversal private.
-///
-/// # Returns
-///
-/// A tuple of:
-/// * New nodes that were discovered that may create arrays and thus should be analysed separately/later
-/// * Elided (Return node, Borrow node) pairs
-#[allow(clippy::type_complexity)] // internal helper method
+/// Like [borrow_squash_array] but also pushes new Wires that may create arrays onto `candidates`.
 fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     is_br: &impl IsBorrowReturn,
+    candidates: &mut impl Extend<Wire>,
     start: Wire,
     recurse: bool,
-) -> Result<(Vec<Wire>, Vec<(Node, Node)>), NodeInfoError> {
-    let mut candidates = Vec::new();
+) -> Result<Vec<(Node, Node)>, NodeInfoError> {
     let array_ty = hugr
         .out_value_types(start.node())
         .find(|(p, _)| *p == start.source())
         .unwrap()
         .1;
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
-        return Ok((
+        candidates.extend(
             hugr.linked_inputs(start.node(), start.source())
-                .flat_map(|(n, _)| all_outs(hugr, n))
-                .collect(),
-            vec![],
-        ));
+                .flat_map(|(n, _)| all_outs(hugr, n)),
+        );
+        return Ok(vec![]);
     };
 
     struct Borrow(Node, OutgoingPort, BorrowFromPorts);
@@ -331,7 +323,7 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
 
     let mut array = start;
     while let Some((node, index, action, borrow_from)) =
-        next_array_op(hugr, is_br, &mut candidates, array)?
+        next_array_op(hugr, is_br, candidates, array)?
     {
         array = Wire::new(node, borrow_from.out); // for next iteration
 
@@ -420,10 +412,9 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     for (idx, bor, ret) in br_pairs {
         if recurse {
             // Recurse to elide any intervening borrows/returns on the same array
-            let (new_nodes, new_elided) =
-                borrow_squash_traversal(hugr, is_br, Wire::new(bor.0, bor.1), true)?;
+            let new_elided =
+                borrow_squash_traversal(hugr, is_br, candidates, Wire::new(bor.0, bor.1), true)?;
             // TODO can we avoid duplicates? (e.g. if we've seen them in this array - second traversal will do nothing)
-            candidates.extend(new_nodes);
             elided.extend(new_elided);
         }
         // Don't elide unless we know the borrowed index is within bounds and would not panic.
@@ -435,13 +426,13 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
             elided.push((bor.0, ret.0));
         }
     }
-    Ok((candidates, elided))
+    Ok(elided)
 }
 
 fn next_array_op(
     hugr: &impl HugrView<Node = Node>,
     is_br: &impl IsBorrowReturn,
-    candidates: &mut Vec<Wire>,
+    candidates: &mut impl Extend<Wire>,
     array: Wire,
 ) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, NodeInfoError> {
     let next = hugr
