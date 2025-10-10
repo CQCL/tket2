@@ -2213,6 +2213,7 @@ dependencies = [
  "rstest 0.26.1",
  "serde",
  "serde_json",
+ "strum",
  "tket",
  "tket-qsystem",
  "tracing",
