@@ -96,6 +96,7 @@ impl RandomType {
     EnumString,
     Display,
 )]
+#[non_exhaustive]
 /// The operations provided by the random extension.
 pub enum RandomOp {
     /// `fn random_int(RNGContext) -> (u32, RNGContext)`
