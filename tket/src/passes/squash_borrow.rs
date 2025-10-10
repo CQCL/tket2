@@ -110,7 +110,7 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
                 if !seen.insert(start) {
                     continue;
                 }
-                let (starts, elided) = borrow_squash_array(hugr, &self.is_br, start, true)?;
+                let (starts, elided) = borrow_squash_traversal(hugr, &self.is_br, start, true)?;
                 queue.extend(starts);
                 results.extend(elided);
             }
@@ -286,16 +286,33 @@ impl IsBorrowReturn for DefaultBorrowArray {
 
 /// Elide return-borrow pairs for a single array.
 ///
+/// If `recurse` is true, then also elide return-borrow pairs for sub-arrays
+/// (i.e. if this is a nested array).
+///
 /// # Panics
 ///
 /// if `start` does not exist in the Hugr
 ///
 /// # Returns
 ///
-/// A tuple of:
-/// * New nodes that were discovered that may create arrays and thus should be analysed separately/later
 /// * Pairs of (Return node, Borrow node) that were elided.
 pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
+    hugr: &mut H,
+    is_br: &impl IsBorrowReturn,
+    start: Wire,
+    recurse: bool,
+) -> Result<Vec<(Node, Node)>, NodeInfoError> {
+    Ok(borrow_squash_traversal(hugr, is_br, start, recurse)?.1)
+}
+
+/// Internal method to keep traversal private.
+///
+/// # Returns
+///
+/// A tuple of:
+/// * New nodes that were discovered that may create arrays and thus should be analysed separately/later
+/// * Elided (Return node, Borrow node) pairs
+fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     is_br: &impl IsBorrowReturn,
     start: Wire,
@@ -415,7 +432,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
         if recurse {
             // Recurse to elide any intervening borrows/returns on the same array
             let (new_nodes, new_elided) =
-                borrow_squash_array(hugr, is_br, Wire::new(bor.0, bor.1), true)?;
+                borrow_squash_traversal(hugr, is_br, Wire::new(bor.0, bor.1), true)?;
             // TODO can we avoid duplicates? (e.g. if we've seen them in this array - second traversal will do nothing)
             candidates.extend(new_nodes);
             elided.extend(new_elided);
