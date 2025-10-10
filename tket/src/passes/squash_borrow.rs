@@ -36,6 +36,7 @@ pub trait IsBorrowReturn: Clone {
     /// return `Some` of:
     ///   * `Some(size)` if the array's size is statically known.
     ///   * `None` if the array's size is not statically known.
+    ///
     /// Otherwise (if the type is not such an array), return `None`.
     fn get_array_size(&self, ty: &Type) -> Option<Option<u64>>;
 }
@@ -312,6 +313,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
 /// A tuple of:
 /// * New nodes that were discovered that may create arrays and thus should be analysed separately/later
 /// * Elided (Return node, Borrow node) pairs
+#[allow(clippy::type_complexity)] // internal helper method
 fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     hugr: &mut H,
     is_br: &impl IsBorrowReturn,
