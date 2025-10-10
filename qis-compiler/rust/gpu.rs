@@ -3,7 +3,10 @@
 //! This module lowers the "tket.gpu" extension to the following external
 //! calls:
 //!
-//! - gpu_validate_api(major: u64, minor: u64, patch: u64) -> bool
+//! - Validation
+//!   ```rust
+//!   gpu_validate_api(major: u64, minor: u64, patch: u64) -> bool
+//!   ```
 //!
 //!   Validates that this API is compatible with the GPU library linked
 //!   with the final binary.
@@ -13,50 +16,69 @@
 //!   We opt to allow the linked library to perform validation, as it
 //!   may support multiple API versions.
 //!
-//! - gpu_init(_reserved: u64, handle_out: *mut u64) -> bool
+//! - Construction
+//!   ```rust
+//!   gpu_init(_reserved: u64, gpu_ref_out: *mut u64) -> bool
+//!   ```
 //!
 //!   The reserved argument must be 0 for now.
 //!   On success, writes to handle_out a handle to pass to GPU calls.
 //!   On failure, returns false.
 //!
-//! - gpu_discard(gpu_ref: u64) -> bool
+//! - Destruction
+//!   ```rust
+//!   gpu_discard(gpu_ref: u64) -> bool
+//!   ```
 //!
 //!   Attempts to clean up the GPU context referenced by gpu_ref.
 //!   This can fail - for example, if gpu_ref is invalid, or if
 //!   cleanup validation fails. Returns true on success, false on failure.
 //!
-//! - gpu_get_error() -> *const i8
+//! - Error Retrieval
+//!   ```rust
+//!   gpu_get_error() -> *const i8
+//!   ```
 //!
 //!   Returns a pointer to a null-terminated error string, or nullptr
 //!   if no error has been recorded.
 //!
-//! - gpu_get_function_id(name: *const i8, id_out: *mut u64) -> bool
+//! - Function extraction
+//!   ```rust
+//!   gpu_get_function_id(name: *const i8, id_out: *mut u64) -> bool
+//!   ```
 //!
 //!   Provides a function id for the given function name through id_out on success,
 //!   returning true. If the function name is not found, or gpu_ref is invalid,
 //!   returns false.
 //!
-//! - gpu_call(
+//! - Function invocation
+//!   ```rust
+//!   gpu_call(
 //!     handle: u64,
 //!     function_id: u64,
 //!     blob_size: u64,
 //!     blob: *const i8,
 //!     signature: *const i8
-//!   ) -> i8
+//!   ) -> bool
+//!   ```
 //!
 //!   The GPU api is specified by the user, and arguments are passed
 //!   in as a binary blob. To provide validation on the library side,
 //!   we provide the blob size and a string representing the function
 //!   signature that the user expects. The latter is in the form of
 //!   e.g.:
-//!      'iifb:v' for (i64, u64, f64, bool) -> void
-//!      'if:i' for (i64, f64) -> i64
-//!   where types are encoded as:
-//!      i - i64 or u64
-//!      f - f64
-//!      b - bool
+//!   - 'iifb:v' for (i64, u64, f64, bool) -> void
+//!   - 'if:i' for (i64, f64) -> i64
 //!
-//!  - gpu_get_result_64bits(gpu_ref: u64, out_result: *mut i64) -> i8
+//!   where types are encoded as:
+//!   - i <=> i64 or u64
+//!   - f <=> f64
+//!   - b <=> bool
+//!
+//!  - Result retrieval
+//!    ```rust
+//!    gpu_get_result_64bits(gpu_ref: u64, out_result: *mut i64) -> bool
+//!    ```
 //!
 //!    Writes the next result in the result queue to out_result,
 //!    returning true on success or false on failure. The result
@@ -260,7 +282,7 @@ impl GpuCodegen {
                 .build_load(stored.as_pointer_value(), "function_id")?
                 .into_int_value(),
         };
-        return op.outputs.finish(ctx.builder(), [func_id.into()]);
+        op.outputs.finish(ctx.builder(), [func_id.into()])
     }
 
     fn emit_lookup_by_id<'c, H: HugrView<Node = Node>>(
@@ -459,7 +481,7 @@ impl GpuCodegen {
         ctx: &EmitFuncContext<'c, '_, H>,
         op: EmitOpArgs<'c, '_, ExtensionOp, H>,
     ) -> Result<()> {
-        match ComputeOp::<GpuExtension>::from_extension_op(&op.node())?.into() {
+        match ComputeOp::<GpuExtension>::from_extension_op(&op.node())? {
             ComputeOp::<GpuExtension>::GetContext => self.emit_get_context(ctx, op),
             ComputeOp::<GpuExtension>::DisposeContext => self.emit_dispose_context(ctx, op),
             ComputeOp::<GpuExtension>::LookupById { id, .. } => self.emit_lookup_by_id(ctx, op, id),
