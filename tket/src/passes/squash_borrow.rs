@@ -67,17 +67,11 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
 
     /// Perform the pass on the given hugr.
     fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, NodeInfoError> {
-        fn valid_circuit_parent(op: &OpType) -> bool {
-            match op {
-                OpType::FuncDefn(fd) => fd.signature().params().is_empty(),
-                _ => OpTag::DataflowParent.is_superset(op.tag()),
-            }
-        }
         let temp: Vec<Node>; // to keep alive
         let regions = if self.regions.is_empty() {
             temp = hugr
                 .entry_descendants()
-                .filter(|n| valid_circuit_parent(hugr.get_optype(*n)))
+                .filter(|n| OpTag::DataflowParent.is_superset(hugr.get_optype(*n).tag()))
                 .collect();
             &temp
         } else {
@@ -516,7 +510,7 @@ mod test {
     use std::io::BufReader;
 
     use super::{find_const, BorrowSquashPass};
-    use crate::{extension::REGISTRY, passes::squash_borrow::DefaultBorrowArray, Circuit};
+    use crate::{extension::REGISTRY, passes::squash_borrow::DefaultBorrowArray};
     use hugr::{
         algorithms::ComposablePass, extension::simple_op::MakeExtensionOp, hugr::hugrmut::HugrMut,
         std_extensions::collections::borrow_array::BArrayUnsafeOpDef, Hugr, HugrView, Node,
@@ -526,17 +520,17 @@ mod test {
     use rstest::{fixture, rstest};
 
     #[fixture]
-    pub(super) fn borrow_circuit() -> Circuit {
+    pub(super) fn borrow_circuit() -> Hugr {
         let reader =
             BufReader::new(include_bytes!("../../../test_files/squashing_inline.hugr").as_slice());
         let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
         hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
-        Circuit::new(hugr)
+        hugr
     }
 
     #[rstest]
-    fn test_borrow_squash(borrow_circuit: Circuit) {
-        let mut h = borrow_circuit.into_hugr();
+    fn test_borrow_squash(borrow_circuit: Hugr) {
+        let mut h = borrow_circuit;
         let res = BorrowSquashPass::<DefaultBorrowArray>::default()
             .with_regions([h.entrypoint()])
             .run(&mut h)
