@@ -799,7 +799,7 @@ mod test {
     #[case::conditional_dagger(1, 1, foo_conditional, true)]
     #[case::cfg(1, 1, foo_cfg, false)]
     #[case::cfg_dagger(1, 1, foo_cfg, true)]
-    pub(super) fn test_dfg_modify(
+    pub fn test_dfg_modify(
         #[case] t_num: usize,
         #[case] c_num: u64,
         #[case] foo: fn(&mut ModuleBuilder<Hugr>, usize) -> FuncID<true>,
@@ -931,7 +931,7 @@ mod test {
         assert_matches!(h.validate(), Ok(()));
 
         let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, vec![entrypoint].into_iter()).unwrap();
+        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
 
         assert_matches!(h.validate(), Ok(()));
     }
