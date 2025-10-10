@@ -283,10 +283,15 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
 ) -> Result<Vec<(Node, Node)>, NodeInfoError> {
     let array_ty = wire_type(hugr, start);
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
-        candidates.extend(
-            hugr.linked_inputs(start.node(), start.source())
-                .flat_map(|(n, _)| all_outs(hugr, n)),
-        );
+        for n in hugr
+            .linked_inputs(start.node(), start.source())
+            .map(|(n, _)| n)
+            .dedup()
+        {
+            if is_br.is_borrow_return(n, hugr)?.is_none() {
+                candidates.extend(all_outs(hugr, n));
+            }
+        }
         return Ok(vec![]);
     };
 
