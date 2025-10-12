@@ -4,6 +4,7 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of circuit units associated with ports.
 
+use std::collections::BTreeSet;
 use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
@@ -548,16 +549,19 @@ fn toposort_subgraph<'h, H: HugrView>(
     subgraph: &'h SiblingSubgraph<H::Node>,
     sources: impl IntoIterator<Item = H::Node>,
 ) -> Vec<H::Node> {
-    fn contains_node<H: HugrView>(
-        node: portgraph::NodeIndex,
-        (subgraph, pg_map): &(&SiblingSubgraph<H::Node>, &H::RegionPortgraphNodes),
-    ) -> bool {
-        subgraph.nodes().contains(&pg_map.from_portgraph(node))
+    fn contains_node(node: portgraph::NodeIndex, nodes: &&BTreeSet<portgraph::NodeIndex>) -> bool {
+        nodes.contains(&node)
     }
 
     let (pg, pg_map) = hugr.region_portgraph(subgraph.get_parent(hugr));
+    let subgraph_nodes: BTreeSet<_> = subgraph
+        .nodes()
+        .iter()
+        .map(|&n| pg_map.to_portgraph(n))
+        .collect();
+
     let pg: NodeFiltered<_, NodeFilter<_>, _> =
-        FilteredGraph::new(&pg, contains_node::<H>, |_, _| true, (subgraph, &pg_map));
+        FilteredGraph::new(&pg, contains_node, |_, _| true, &subgraph_nodes);
     let topo: TopoSort<_> = toposort(
         pg,
         sources.into_iter().map(|n| pg_map.to_portgraph(n)),
