@@ -549,10 +549,7 @@ fn toposort_subgraph<'h, H: HugrView>(
     subgraph: &'h SiblingSubgraph<H::Node>,
     sources: impl IntoIterator<Item = H::Node>,
 ) -> Vec<H::Node> {
-    fn contains_node<H: HugrView>(
-        node: portgraph::NodeIndex,
-        nodes: &&BTreeSet<portgraph::NodeIndex>,
-    ) -> bool {
+    fn contains_node(node: portgraph::NodeIndex, nodes: &&BTreeSet<portgraph::NodeIndex>) -> bool {
         nodes.contains(&node)
     }
 
@@ -564,7 +561,7 @@ fn toposort_subgraph<'h, H: HugrView>(
         .collect();
 
     let pg: NodeFiltered<_, NodeFilter<_>, _> =
-        FilteredGraph::new(&pg, contains_node::<H>, |_, _| true, &subgraph_nodes);
+        FilteredGraph::new(&pg, contains_node, |_, _| true, &subgraph_nodes);
     let topo: TopoSort<_> = toposort(
         pg,
         sources.into_iter().map(|n| pg_map.to_portgraph(n)),
