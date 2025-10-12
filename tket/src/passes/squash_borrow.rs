@@ -585,40 +585,30 @@ mod test {
 
         if let Some(exp_indices) = expected_indices {
             assert_eq!(
-                find_borrows(&h)
-                    .into_iter()
-                    .map(|n| get_index(&h, n))
-                    .collect_vec(),
+                find_borrows(&h).map(|n| get_index(&h, n)).collect_vec(),
                 exp_indices
             );
             assert_eq!(
-                find_returns(&h)
-                    .into_iter()
-                    .map(|n| get_index(&h, n))
-                    .collect_vec(),
+                find_returns(&h).map(|n| get_index(&h, n)).collect_vec(),
                 exp_indices
             );
         }
     }
 
-    fn find_borrows<H: HugrView>(h: &H) -> Vec<H::Node> {
-        h.entry_descendants()
-            .filter(|n| {
-                h.get_optype(*n).as_extension_op().is_some_and(|eop| {
-                    BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::borrow)
-                })
+    fn find_borrows<H: HugrView>(h: &H) -> impl Iterator<Item = H::Node> + '_ {
+        h.entry_descendants().filter(|n| {
+            h.get_optype(*n).as_extension_op().is_some_and(|eop| {
+                BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::borrow)
             })
-            .collect()
+        })
     }
 
-    fn find_returns<H: HugrView>(h: &H) -> Vec<H::Node> {
-        h.entry_descendants()
-            .filter(|n| {
-                h.get_optype(*n).as_extension_op().is_some_and(|eop| {
-                    BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::r#return)
-                })
+    fn find_returns<H: HugrView>(h: &H) -> impl Iterator<Item = H::Node> + '_ {
+        h.entry_descendants().filter(|n| {
+            h.get_optype(*n).as_extension_op().is_some_and(|eop| {
+                BArrayUnsafeOpDef::from_extension_op(eop) == Ok(BArrayUnsafeOpDef::r#return)
             })
-            .collect()
+        })
     }
 
     fn get_index<H: HugrView>(h: &H, n: H::Node) -> u64 {
@@ -644,7 +634,7 @@ mod test {
             .unwrap();
         h.set_entrypoint(array_func);
 
-        for nodes in [find_borrows(&h), find_returns(&h)] {
+        for nodes in [find_borrows(&h).collect_vec(), find_returns(&h).collect()] {
             let mut outer_count = 0;
             for node in nodes {
                 let expected_array_type = match get_index(&h, node) {
@@ -688,17 +678,11 @@ mod test {
         assert_eq!(res.len(), 9);
         // Now, one borrow and one return from the outer array
         assert_eq!(
-            find_borrows(&h)
-                .into_iter()
-                .filter(|n| get_index(&h, *n) == 0)
-                .count(),
+            find_borrows(&h).filter(|n| get_index(&h, *n) == 0).count(),
             1
         );
         assert_eq!(
-            find_returns(&h)
-                .into_iter()
-                .filter(|n| get_index(&h, *n) == 0)
-                .count(),
+            find_returns(&h).filter(|n| get_index(&h, *n) == 0).count(),
             1
         );
         // CX's should still be there (in same place):
@@ -726,7 +710,7 @@ mod test {
 
         // Rerun transform. In the `assume_all_present` case, all borrows should be removed.
         pass.run(&mut h).unwrap();
-        assert_eq!(find_borrows(&h).len(), expected_final_borrows);
-        assert_eq!(find_returns(&h).len(), expected_final_borrows);
+        assert_eq!(find_borrows(&h).count(), expected_final_borrows);
+        assert_eq!(find_returns(&h).count(), expected_final_borrows);
     }
 }
