@@ -47,6 +47,13 @@ pub trait IsBorrowReturn: Clone {
 pub struct BorrowSquashPass<BR> {
     regions: Vec<Node>,
     is_br: BR,
+    /// If true, assume that at the point at which a new value of array type
+    /// is created (i.e. at the output of any op that produces such an array type
+    /// that is not a borrow/return; and including Input nodes), that
+    /// all elements are present (not borrowed).
+    ///
+    /// This is private because it is unsound in the presence of "unsafe" put/get.
+    assume_all_present: bool,
 }
 
 impl<BR> BorrowSquashPass<BR> {
@@ -91,7 +98,14 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
                 if !seen.insert(start) {
                     continue;
                 }
-                let elided = borrow_squash_traversal(hugr, &self.is_br, &mut queue, start, true)?;
+                let elided = borrow_squash_traversal(
+                    hugr,
+                    &self.is_br,
+                    &mut queue,
+                    start,
+                    true,
+                    self.assume_all_present,
+                )?;
                 results.extend(elided);
             }
         }
@@ -269,7 +283,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     start: Wire,
     recurse: bool,
 ) -> Result<Vec<(Node, Node)>, NodeInfoError> {
-    borrow_squash_traversal(hugr, is_br, &mut Vec::new(), start, recurse)
+    borrow_squash_traversal(hugr, is_br, &mut Vec::new(), start, recurse, false)
 }
 
 /// Internal method to keep traversal private.
@@ -280,6 +294,7 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     candidates: &mut impl Extend<Wire>,
     start: Wire,
     recurse: bool,
+    assume_all_present: bool,
 ) -> Result<Vec<(Node, Node)>, NodeInfoError> {
     let array_ty = wire_type(hugr, start);
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
@@ -384,7 +399,6 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
             (ret.0, bor.0)
         })
         .collect();
-    // Now also elide Borrow-Returns if the returned value is exactly that from the borrow.
     br_pairs.extend(
         borrowed
             .into_iter()
@@ -393,19 +407,27 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     for (idx, bor, ret) in br_pairs {
         if recurse {
             // Recurse to elide any intervening borrows/returns on the same array
-            let new_elided =
-                borrow_squash_traversal(hugr, is_br, candidates, Wire::new(bor.0, bor.1), true)?;
+            let new_elided = borrow_squash_traversal(
+                hugr,
+                is_br,
+                candidates,
+                Wire::new(bor.0, bor.1),
+                true,
+                assume_all_present,
+            )?;
             // TODO can we avoid duplicates? (e.g. if we've seen them in this array - second traversal will do nothing)
             elided.extend(new_elided);
         }
-        // Don't elide unless we know the borrowed index is within bounds and would not panic.
-        if array_sz.is_some_and(|sz| idx < sz)
-            && hugr.linked_inputs(bor.0, bor.1).exactly_one().ok() == Some((ret.0, ret.1))
-        {
-            elide_node(hugr, bor.0, &bor.2);
-            elide_node(hugr, ret.0, &ret.2);
-            elided.push((bor.0, ret.0));
-        }
+        if assume_all_present {
+            // Don't elide unless we know the borrowed index is within bounds and would not panic.
+            if array_sz.is_some_and(|sz| idx < sz)
+                && hugr.linked_inputs(bor.0, bor.1).exactly_one().ok() == Some((ret.0, ret.1))
+            {
+                elide_node(hugr, bor.0, &bor.2);
+                elide_node(hugr, ret.0, &ret.2);
+                elided.push((bor.0, ret.0));
+            }
+        } // else, TODO: track initial return, followed by elidable borrow-return
     }
     Ok(elided)
 }
@@ -604,7 +626,9 @@ mod test {
     }
 
     #[rstest]
-    fn test_nested_array() {
+    #[case(true, 0)]
+    #[case(false, 3)]
+    fn test_nested_array(#[case] assume_all_present: bool, #[case] expected_final_borrows: usize) {
         let inner_array_type = BorrowArray::ty(5, qb_t());
         let outer_array_type = BorrowArray::ty(10, inner_array_type.clone());
         let reader =
@@ -657,10 +681,9 @@ mod test {
         assert!(
             BTreeSet::from_iter(find_borrows(&h)).is_superset(&h.input_neighbours(cx2).collect())
         );
-
-        let res = BorrowSquashPass::<DefaultBorrowArray>::default()
-            .run(&mut h)
-            .unwrap();
+        let mut pass = BorrowSquashPass::<DefaultBorrowArray>::default();
+        pass.assume_all_present = assume_all_present;
+        let res = pass.run(&mut h).unwrap();
         h.validate().unwrap();
         assert_eq!(res.len(), 9);
         // Now, one borrow and one return from the outer array
@@ -701,11 +724,9 @@ mod test {
         h.remove_node(cx2);
         h.validate().unwrap();
 
-        // Rerun transform. Now, all borrows should be removed.
-        BorrowSquashPass::<DefaultBorrowArray>::default()
-            .run(&mut h)
-            .unwrap();
-        assert_eq!(find_borrows(&h).len(), 0);
-        assert_eq!(find_returns(&h).len(), 0);
+        // Rerun transform. In the `assume_all_present` case, all borrows should be removed.
+        pass.run(&mut h).unwrap();
+        assert_eq!(find_borrows(&h).len(), expected_final_borrows);
+        assert_eq!(find_returns(&h).len(), expected_final_borrows);
     }
 }
