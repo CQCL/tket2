@@ -8,7 +8,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait, OpType, Value};
 use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
-use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
+use hugr::std_extensions::collections::borrow_array::{BArrayUnsafeOpDef, BorrowArray};
 use hugr::types::{Term, Type};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::{Either, Itertools};
@@ -188,14 +188,7 @@ pub struct BorrowReturnPorts {
 /// If right, i.e. non-constant, then no elision may be possible.
 pub type BorrowIndex = Either<u64, Wire>;
 
-/// Implements [IsBorrowReturn] for [BorrowArray]s.
-///
-/// [BorrowArray]: hugr_core::std_extensions::collections::borrow_array::BorrowArray
-#[derive(Debug, Default, Display, Clone)]
-#[allow(rustdoc::private_intra_doc_links)]
-pub struct DefaultBorrowArray;
-
-impl IsBorrowReturn for DefaultBorrowArray {
+impl IsBorrowReturn for BorrowArray {
     fn is_borrow_return<H: HugrView>(
         &self,
         node: H::Node,
@@ -531,7 +524,7 @@ mod test {
     use std::{collections::BTreeSet, io::BufReader};
 
     use super::{find_const, BorrowSquashPass};
-    use crate::{extension::REGISTRY, passes::squash_borrow::DefaultBorrowArray};
+    use crate::extension::REGISTRY;
     use hugr::{
         algorithms::ComposablePass,
         extension::{prelude::qb_t, simple_op::MakeExtensionOp},
@@ -570,7 +563,7 @@ mod test {
         #[case] expected_indices: Option<Vec<u64>>,
     ) {
         let orig_num_nodes = h.num_nodes();
-        let res = BorrowSquashPass::<DefaultBorrowArray>::default()
+        let res = BorrowSquashPass::<BorrowArray>::default()
             .run(&mut h)
             .unwrap();
         h.validate().unwrap();
@@ -666,7 +659,7 @@ mod test {
             assert!(BTreeSet::from_iter(find_borrows(&h))
                 .is_superset(&h.input_neighbours(cx).collect()));
         }
-        let pass: BorrowSquashPass<DefaultBorrowArray> = BorrowSquashPass {
+        let pass: BorrowSquashPass<BorrowArray> = BorrowSquashPass {
             assume_all_present,
             ..Default::default()
         };
