@@ -627,7 +627,7 @@ mod test {
             })
             .unwrap();
         h.set_entrypoint(array_func);
-
+        // Sanity checks: all borrows are qs[0][1 or 2]
         for nodes in [find_borrows(&h).collect_vec(), find_returns(&h).collect()] {
             let mut outer_count = 0;
             for node in nodes {
@@ -650,6 +650,7 @@ mod test {
             // For each CX, two borrows or two returns of the outer array before the op, and two after
             assert_eq!(outer_count, 8);
         }
+        // Two CXs, both borrowing their inputs and returning their outputs:
         let [cx1, cx2] = h
             .nodes()
             .filter(|n| {
@@ -659,14 +660,16 @@ mod test {
             })
             .collect_array()
             .unwrap();
-        assert!(
-            BTreeSet::from_iter(find_returns(&h)).is_superset(&h.output_neighbours(cx1).collect())
-        );
-        assert!(
-            BTreeSet::from_iter(find_borrows(&h)).is_superset(&h.input_neighbours(cx2).collect())
-        );
-        let mut pass = BorrowSquashPass::<DefaultBorrowArray>::default();
-        pass.assume_all_present = assume_all_present;
+        for cx in [cx1, cx2] {
+            assert!(BTreeSet::from_iter(find_returns(&h))
+                .is_superset(&h.output_neighbours(cx).collect()));
+            assert!(BTreeSet::from_iter(find_borrows(&h))
+                .is_superset(&h.input_neighbours(cx).collect()));
+        }
+        let pass: BorrowSquashPass<DefaultBorrowArray> = BorrowSquashPass {
+            assume_all_present,
+            ..Default::default()
+        };
         let res = pass.run(&mut h).unwrap();
         h.validate().unwrap();
         assert_eq!(res.len(), 9);
@@ -679,7 +682,7 @@ mod test {
             find_returns(&h).filter(|n| get_index(&h, *n) == 0).count(),
             1
         );
-        // CX's should still be there (in same place):
+        // CX's should still be there (in same place), but now directly connected:
         for cx in [cx1, cx2] {
             assert!(h
                 .get_optype(cx)
@@ -703,7 +706,9 @@ mod test {
         h.validate().unwrap();
 
         // Rerun transform. In the `assume_all_present` case, all borrows should be removed.
+        let h2 = h.clone();
         pass.run(&mut h).unwrap();
+        assert!(assume_all_present || h == h2);
         assert_eq!(find_borrows(&h).count(), expected_final_borrows);
         assert_eq!(find_returns(&h).count(), expected_final_borrows);
     }
