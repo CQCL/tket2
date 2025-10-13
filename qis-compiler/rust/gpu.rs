@@ -234,14 +234,43 @@ impl GpuCodegen {
         name: String,
     ) -> Result<()> {
         let iwc = ctx.iw_context();
-        let global_name = format!("gpu_function_id_{}", name);
-        let func_id = match ctx.get_current_module().get_global(&global_name) {
+        let module = ctx.get_current_module();
+        let constant_name = format!("gpu_function_id_{}", name);
+        let function_name = format!("gpu_get_function_id_{}", name);
+        let func = match module.get_function(&function_name) {
             None => {
                 let stored =
                     ctx.get_current_module()
-                        .add_global(iwc.i64_type(), None, &global_name);
-                stored.set_initializer(&iwc.i64_type().const_zero());
+                        .add_global(iwc.i64_type(), None, &constant_name);
+                stored.set_initializer(&iwc.i64_type().const_all_ones());
 
+                let current_block = ctx.builder().get_insert_block().unwrap();
+                let fn_type = iwc.i64_type().fn_type(&[], false);
+                let function = ctx
+                    .get_current_module()
+                    .add_function(&function_name, fn_type, None);
+                let noinline_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
+                let noinline = iwc.create_enum_attribute(noinline_id, 0);
+                function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
+                let entry = iwc.append_basic_block(function, "entry");
+                ctx.builder().position_at_end(entry);
+                // if the function id is all ones, we need to look it up
+                let func_id = ctx
+                    .builder()
+                    .build_load(stored.as_pointer_value(), "function_id")?
+                    .into_int_value();
+                let needs_lookup = ctx.builder().build_int_compare(
+                    inkwell::IntPredicate::EQ,
+                    func_id,
+                    iwc.i64_type().const_all_ones(),
+                    "needs_lookup",
+                )?;
+                let lookup_block = iwc.append_basic_block(function, "lookup");
+                let done_block = iwc.append_basic_block(function, "done");
+                ctx.builder()
+                    .build_conditional_branch(needs_lookup, lookup_block, done_block)?;
+                // if required, perform the lookup
+                ctx.builder().position_at_end(lookup_block);
                 let gpu_get_function_id = ctx.get_extern_func(
                     "gpu_get_function_id",
                     iwc.i8_type().fn_type(
@@ -275,13 +304,25 @@ impl GpuCodegen {
                     .into_int_value();
                 ctx.builder()
                     .build_store(stored.as_pointer_value(), func_id)?;
-                func_id
+                // return the function id
+                ctx.builder().build_unconditional_branch(done_block)?;
+                ctx.builder().position_at_end(done_block);
+                let func_id = ctx
+                    .builder()
+                    .build_load(stored.as_pointer_value(), "function_id")?
+                    .into_int_value();
+                ctx.builder().build_return(Some(&func_id))?;
+                ctx.builder().position_at_end(current_block);
+                function
             }
-            Some(stored) => ctx
-                .builder()
-                .build_load(stored.as_pointer_value(), "function_id")?
-                .into_int_value(),
+            Some(f) => f,
         };
+        let func_id = ctx
+            .builder()
+            .build_call(func, &[], "function_id_call")?
+            .try_as_basic_value()
+            .unwrap_left()
+            .into_int_value();
         op.outputs.finish(ctx.builder(), [func_id.into()])
     }
 
