@@ -16,6 +16,7 @@ use crate::serialize::TKETDecode;
 use hugr::builder::Container;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::types::{Signature, Type};
+use hugr::HugrView;
 use itertools::Itertools;
 use tket_json_rs::circuit_json::Operation as PytketOperation;
 use tket_json_rs::opbox::OpBox;
@@ -25,7 +26,7 @@ use tket_json_rs::optype::OpType as PytketOptype;
 #[derive(Debug, Clone, Default)]
 pub struct CoreDecoder;
 
-impl PytketDecoder for CoreDecoder {
+impl<H: HugrView> PytketDecoder<H> for CoreDecoder {
     fn op_types(&self) -> Vec<PytketOptype> {
         vec![PytketOptype::Barrier, PytketOptype::CircBox]
     }
@@ -37,7 +38,7 @@ impl PytketDecoder for CoreDecoder {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h>,
+        decoder: &mut PytketDecoderContext<'h, H>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         match &op {
             PytketOperation {

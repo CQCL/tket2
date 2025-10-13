@@ -21,7 +21,7 @@ pub use options::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
-use hugr::{Hugr, Node};
+use hugr::{Hugr, HugrView, Node};
 #[cfg(test)]
 mod tests;
 
@@ -70,7 +70,7 @@ pub trait TKETDecode: Sized {
     /// # Returns
     ///
     /// The encoded circuit.
-    fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError>;
+    fn decode(&self, options: DecodeOptions<impl HugrView>) -> Result<Circuit, Self::DecodeError>;
     /// Convert the serialized circuit into a function definition in an existing HUGR.
     ///
     /// Does **not** modify the HUGR's entrypoint.
@@ -92,7 +92,7 @@ pub trait TKETDecode: Sized {
         // (so that the extension decoder traits are dyn-compatible).
         hugr: &mut Hugr,
         target: DecodeInsertionTarget,
-        options: DecodeOptions,
+        options: DecodeOptions<impl HugrView>,
     ) -> Result<Node, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
     ///
@@ -113,9 +113,13 @@ impl TKETDecode for SerialCircuit {
     type DecodeError = PytketDecodeError;
     type EncodeError = PytketEncodeError;
 
-    fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError> {
+    fn decode(&self, options: DecodeOptions<impl HugrView>) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
-        let main_func = self.decode_inplace(&mut hugr, DecodeInsertionTarget::Function, options)?;
+        let main_func = self.decode_inplace(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name: None },
+            options,
+        )?;
         hugr.set_entrypoint(main_func);
         Ok(hugr.into())
     }
@@ -124,7 +128,7 @@ impl TKETDecode for SerialCircuit {
         &self,
         hugr: &mut Hugr,
         target: DecodeInsertionTarget,
-        options: DecodeOptions,
+        options: DecodeOptions<impl HugrView>,
     ) -> Result<Node, Self::DecodeError> {
         let config = options
             .config
@@ -134,7 +138,6 @@ impl TKETDecode for SerialCircuit {
             self,
             hugr,
             target,
-            options.fn_name,
             options.signature,
             options.input_params,
             config,

@@ -7,7 +7,7 @@ use hugr::builder::{DFGBuilder, Dataflow as _};
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
-use hugr::{Hugr, Wire};
+use hugr::{Hugr, HugrView, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::ImplicitPermutation;
@@ -52,7 +52,7 @@ impl WireData {
     /// The pytket qubit arguments corresponding to this wire.
     pub fn qubits<'d>(
         &'d self,
-        decoder: &'d PytketDecoderContext<'d>,
+        decoder: &'d PytketDecoderContext<'d, impl HugrView>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.qubits
             .iter()
@@ -63,7 +63,7 @@ impl WireData {
     /// The pytket bit arguments corresponding to this wire.
     pub fn bits<'d>(
         &'d self,
-        decoder: &'d PytketDecoderContext<'d>,
+        decoder: &'d PytketDecoderContext<'d, impl HugrView>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
         self.bits
             .iter()
@@ -167,7 +167,7 @@ impl TrackedWires {
     #[inline]
     pub fn qubits<'d>(
         &'d self,
-        decoder: &'d PytketDecoderContext<'d>,
+        decoder: &'d PytketDecoderContext<'d, impl HugrView>,
     ) -> impl Iterator<Item = TrackedQubit> + 'd {
         self.value_wires
             .iter()
@@ -178,7 +178,7 @@ impl TrackedWires {
     #[inline]
     pub fn bits<'d>(
         &'d self,
-        decoder: &'d PytketDecoderContext<'d>,
+        decoder: &'d PytketDecoderContext<'d, impl HugrView>,
     ) -> impl Iterator<Item = TrackedBit> + 'd {
         self.value_wires.iter().flat_map(move |wd| wd.bits(decoder))
     }
@@ -588,7 +588,7 @@ impl WireTracker {
     /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub(super) fn find_typed_wires(
         &self,
-        config: &PytketDecoderConfig,
+        config: &PytketDecoderConfig<impl HugrView>,
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],

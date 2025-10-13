@@ -70,7 +70,7 @@ where
         Err(_) => (
             SerialCircuit::from_tket1(circ)?
                 .decode(
-                    DecodeOptions::new()
+                    DecodeOptions::new_any()
                         .with_config(tket_qsystem::pytket::qsystem_decoder_config()),
                 )
                 .convert_pyerrs()?,

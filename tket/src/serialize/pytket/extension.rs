@@ -105,7 +105,7 @@ pub trait PytketEmitter<H: HugrView> {
 ///
 /// A [decoder configuration](crate::serialize::pytket::PytketDecoderConfig)
 /// contains a list of such decoders.
-pub trait PytketDecoder {
+pub trait PytketDecoder<H: HugrView> {
     /// A list of pytket's [`tket_json_rs::OpType`] supported by this decoder.
     ///
     /// [`PytketDecoder::op_to_hugr`] will only be called for commands
@@ -130,7 +130,7 @@ pub trait PytketDecoder {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h>,
+        decoder: &mut PytketDecoderContext<'h, H>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let _ = (op, qubits, bits, params, opgroup, decoder);
         Ok(DecodeStatus::Unsupported)

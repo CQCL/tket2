@@ -34,14 +34,22 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
+use crate::serialize::pytket::opaque::OpaqueSubgraphs;
 use crate::serialize::pytket::{DecodeInsertionTarget, PytketDecodeErrorInner};
 use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
-/// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
+/// The state of an in-progress [`FunctionBuilder`] being built from a
+/// [`SerialCircuit`].
+///
+/// The generic parameter `H` is the HugrView type of the Hugr that was encoded
+/// into the circuit, if any. This is required when the encoded pytket circuit
+/// contains opaque barriers that reference subgraphs in the original HUGR. See
+/// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]
+/// for more details.
 #[derive(Debug)]
-pub struct PytketDecoderContext<'h> {
+pub struct PytketDecoderContext<'h, H: HugrView> {
     /// The Hugr being built.
     pub builder: DFGBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
@@ -50,10 +58,15 @@ pub struct PytketDecoderContext<'h> {
     ///
     /// Contains custom operation decoders, that define translation of legacy tket
     /// commands into HUGR operations.
-    config: Arc<PytketDecoderConfig>,
+    config: Arc<PytketDecoderConfig<H>>,
+    /// The HugrView type of the Hugr that originated the circuit, if any.
+    original_hugr: Option<&'h H>,
+    /// A registry of opaque subgraphs from `original_hugr`, that are referenced by opaque barriers in the pytket circuit
+    /// via their [`SubgraphId`].
+    opaque_subgraphs: Option<&'h OpaqueSubgraphs<H::Node>>,
 }
 
-impl<'h> PytketDecoderContext<'h> {
+impl<'h, H: HugrView> PytketDecoderContext<'h, H> {
     /// Initialize a new [`PytketDecoderContext`], using the metadata from a
     /// [`SerialCircuit`].
     ///
@@ -94,12 +107,11 @@ impl<'h> PytketDecoderContext<'h> {
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
         target: DecodeInsertionTarget,
-        fn_name: Option<String>,
         signature: Option<Signature>,
         input_params: impl IntoIterator<Item = String>,
-        config: impl Into<Arc<PytketDecoderConfig>>,
+        config: impl Into<Arc<PytketDecoderConfig<H>>>,
     ) -> Result<Self, PytketDecodeError> {
-        let config: Arc<PytketDecoderConfig> = config.into();
+        let config: Arc<PytketDecoderConfig<H>> = config.into();
         let signature = signature.unwrap_or_else(|| {
             let num_qubits = serialcirc.qubits.len();
             let num_bits = serialcirc.bits.len();
@@ -108,11 +120,11 @@ impl<'h> PytketDecoderContext<'h> {
                 .into();
             Signature::new(types.clone(), types)
         });
-        let name = fn_name
-            .or_else(|| serialcirc.name.clone())
-            .unwrap_or_default();
         let mut dfg: DFGBuilder<&mut Hugr> = match target {
-            DecodeInsertionTarget::Function => {
+            DecodeInsertionTarget::Function { fn_name } => {
+                let name = fn_name
+                    .or_else(|| serialcirc.name.clone())
+                    .unwrap_or_default();
                 FunctionBuilder::with_hugr(hugr, name, signature.clone())
                     .unwrap()
                     .into_dfg_builder()
@@ -146,6 +158,8 @@ impl<'h> PytketDecoderContext<'h> {
             builder: dfg,
             wire_tracker,
             config,
+            original_hugr: None,
+            opaque_subgraphs: None,
         })
     }
 
@@ -177,7 +191,7 @@ impl<'h> PytketDecoderContext<'h> {
         dfg: &mut DFGBuilder<&mut Hugr>,
         input_types: &TypeRow,
         input_params: impl IntoIterator<Item = String>,
-        config: &PytketDecoderConfig,
+        config: &PytketDecoderConfig<H>,
     ) -> Result<WireTracker, PytketDecodeError> {
         let num_qubits = serialcirc.qubits.len();
         let num_bits = serialcirc.bits.len();
@@ -332,6 +346,24 @@ impl<'h> PytketDecoderContext<'h> {
             .node())
     }
 
+    /// Register the set of opaque subgraphs that were present in the original HUGR,
+    /// along with a reference to the original HugrView.
+    ///
+    /// # Arguments
+    /// - `opaque_subgraphs`: A registry of opaque subgraphs from
+    ///   `original_hugr`, that are referenced by opaque barriers in the pytket
+    ///   circuit via their [`SubgraphId`].
+    /// - `original_hugr`: The [`Hugr`] that originated the circuit, if any.
+    #[expect(unused)]
+    pub(super) fn register_opaque_subgraphs(
+        &mut self,
+        opaque_subgraphs: &'h OpaqueSubgraphs<H::Node>,
+        original_hugr: &'h H,
+    ) {
+        self.opaque_subgraphs = Some(opaque_subgraphs);
+        self.original_hugr = Some(original_hugr);
+    }
+
     /// Decode a list of pytket commands.
     pub(super) fn run_decoder(
         &mut self,
@@ -351,7 +383,7 @@ impl<'h> PytketDecoderContext<'h> {
     pub(super) fn process_command(
         &mut self,
         command: &circuit_json::Command,
-        config: &PytketDecoderConfig,
+        config: &PytketDecoderConfig<H>,
     ) -> Result<(), PytketDecodeError> {
         let circuit_json::Command { op, args, opgroup } = command;
 
@@ -380,13 +412,13 @@ impl<'h> PytketDecoderContext<'h> {
     }
 
     /// Returns the configuration used by the decoder.
-    pub fn config(&self) -> &Arc<PytketDecoderConfig> {
+    pub fn config(&self) -> &Arc<PytketDecoderConfig<H>> {
         &self.config
     }
 }
 
 /// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder] implementers.
-impl<'h> PytketDecoderContext<'h> {
+impl<'h, H: HugrView> PytketDecoderContext<'h, H> {
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
     ///
@@ -723,7 +755,7 @@ pub enum DecodeStatus {
 
 /// Helper to continue exhausting the iterators in [`PytketDecoderContext::register_node_outputs`] until we have the total number of elements to report.
 fn make_unexpected_node_out_error<'ty>(
-    config: &PytketDecoderConfig,
+    config: &PytketDecoderConfig<impl HugrView>,
     port_types: impl IntoIterator<Item = (OutgoingPort, &'ty Type)>,
     mut partial_count: RegisterCount,
     expected_qubits: usize,

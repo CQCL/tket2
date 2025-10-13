@@ -15,7 +15,7 @@ use tket::serialize::pytket::{
 ///
 /// Contains a list of custom decoders that define translations of legacy tket
 /// primitives into HUGR operations.
-pub fn qsystem_decoder_config() -> PytketDecoderConfig {
+pub fn qsystem_decoder_config<H: HugrView>() -> PytketDecoderConfig<H> {
     let mut config = default_decoder_config();
     config.add_decoder(QSystemEmitter);
 

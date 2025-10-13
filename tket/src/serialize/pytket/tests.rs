@@ -567,7 +567,7 @@ fn json_roundtrip(
     let ser: circuit_json::SerialCircuit = serde_json::from_str(circ_s).unwrap();
     assert_eq!(ser.commands.len(), num_commands);
 
-    let circ: Circuit = ser.decode(DecodeOptions::new()).unwrap();
+    let circ: Circuit = ser.decode(DecodeOptions::new_any()).unwrap();
     assert_eq!(circ.qubit_count(), num_qubits);
 
     if !has_tk1_ops {
@@ -585,7 +585,7 @@ fn json_roundtrip(
 fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
-    let circ: Circuit = ser.decode(DecodeOptions::new()).unwrap();
+    let circ: Circuit = ser.decode(DecodeOptions::new_any()).unwrap();
 
     check_no_tk1_ops(&circ);
 
@@ -619,7 +619,7 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
         .extract_standalone()
         .unwrap_or_else(|e| panic!("{e}"));
     let deser: Circuit = ser
-        .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
+        .decode(DecodeOptions::new_any().with_signature(circ_signature.clone()))
         .unwrap_or_else(|e| panic!("{e}"));
 
     let deser_sig = deser.circuit_signature();
@@ -656,7 +656,7 @@ fn test_add_angle_serialise(#[case] circ_add_angles: (Circuit, String)) {
     assert_eq!(ser.commands[0].op.op_type, optype::OpType::Rx);
     assert_eq!(ser.commands[0].op.params, Some(vec![expected]));
 
-    let deser: Circuit = ser.decode(DecodeOptions::new()).unwrap();
+    let deser: Circuit = ser.decode(DecodeOptions::new_any()).unwrap();
     let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(&ser, &reser);
@@ -672,8 +672,8 @@ fn test_inplace_decoding() {
     let func1 = serial
         .decode_inplace(
             builder.hugr_mut(),
-            DecodeInsertionTarget::Function,
-            DecodeOptions::new(),
+            DecodeInsertionTarget::Function { fn_name: None },
+            DecodeOptions::new_any(),
         )
         .unwrap();
     let circ_signature = builder
@@ -694,7 +694,7 @@ fn test_inplace_decoding() {
             .decode_inplace(
                 fn_build.hugr_mut(),
                 DecodeInsertionTarget::Region { parent: fn2_node },
-                DecodeOptions::new(),
+                DecodeOptions::new_any(),
             )
             .unwrap();
 
