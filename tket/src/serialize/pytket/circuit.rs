@@ -150,17 +150,20 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// containing the whole original HUGR.
     ///
     /// Traverses the commands in `head_circuit` and replaces
-    /// [`UnsupportedSubgraphPayload::External`] pointers in opaque barriers
-    /// with standalone payloads.
+    /// [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+    /// pointers in opaque barriers with standalone payloads.
     ///
-    /// Discards any changes to the internal subcircuits, as they are not
-    /// part of the top-level circuit.
+    /// Discards any changes to the internal subcircuits, as they are not part
+    /// of the top-level circuit.
     ///
     /// # Errors
     ///
-    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if [`Self::head_region`] is not a dataflow container in the hugr.
+    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
     ///
-    /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
+    /// Returns an error if a barrier operation with the
+    /// [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`][super::unsupported::OPGROUP_EXTERNAL_UNSUPPORTED_HUGR]
+    /// opgroup has an invalid payload.
     //
     // TODO: We'll need to handle non-local edges and function definitions in this step.
     pub fn extract_standalone(mut self) -> Result<SerialCircuit, PytketEncodeError<H::Node>> {
@@ -220,9 +223,9 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// references.
     ///
     /// The circuits may be modified arbitrarily, as long as
-    /// [`UnsupportedSubgraphPayload::External`] pointers to HUGR subgraphs in
-    /// opaque barriers remain valid and topologically consistent with the
-    /// original circuit.
+    /// [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+    /// pointers to HUGR subgraphs in opaque barriers remain valid and
+    /// topologically consistent with the original circuit.
     pub fn circuits_mut(&mut self) -> impl Iterator<Item = (H::Node, &mut SerialCircuit)> {
         self.into_iter().map(|(&n, circ)| (n, circ))
     }

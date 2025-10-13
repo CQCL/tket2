@@ -11,12 +11,12 @@ use super::SubgraphId;
 
 /// Pytket opgroup used to identify opaque barrier operations that encode standalone unsupported HUGR subgraphs.
 ///
-/// See [`UnsupportedSubgraphPayload::Standalone`].
+/// See [`UnsupportedSubgraphPayloadType::Standalone`].
 pub const OPGROUP_STANDALONE_UNSUPPORTED_HUGR: &str = "UNSUPPORTED_HUGR";
 
 /// Pytket opgroup used to identify opaque barrier operations that encode external unsupported HUGR subgraphs.
 ///
-/// See [`UnsupportedSubgraphPayload::External`].
+/// See [`UnsupportedSubgraphPayloadType::External`].
 pub const OPGROUP_EXTERNAL_UNSUPPORTED_HUGR: &str = "EXTERNAL_UNSUPPORTED_HUGR";
 
 /// Identifier for a hyper edge in the Hugr, encoded as a 64-bit hash that is
@@ -57,7 +57,8 @@ impl EncodedEdgeID {
 /// an unsupported HUGR subgraph.
 ///
 /// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked inside a [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
+/// reference to a subgraph tracked inside a
+/// [`EncodedCircuit`][super::super::circuit::EncodedCircuit] structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UnsupportedSubgraphPayload {
     /// The type of payload.
@@ -87,7 +88,8 @@ pub struct UnsupportedSubgraphPayload {
 /// an unsupported HUGR subgraph.
 ///
 /// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked inside a [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
+/// reference to a subgraph tracked inside a
+/// [`EncodedCircuit`][super::super::circuit::EncodedCircuit] structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum UnsupportedSubgraphPayloadType {
     /// A standalone payload, carrying the encoded HUGR subgraph.
@@ -96,7 +98,8 @@ pub enum UnsupportedSubgraphPayloadType {
         hugr_envelope: String,
     },
     /// A reference to a subgraph tracked by an `UnsupportedSubgraphs` registry
-    /// in an [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
+    /// in an [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
+    /// structure.
     External {
         /// The ID of the subgraph in the `UnsupportedSubgraphs` registry.
         id: SubgraphId,
