@@ -86,7 +86,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
         id
     }
 
-    /// Returns the unsupported subgraph with the given ID.
+    /// Returns the opaque subgraph with the given ID.
     ///
     /// # Panics
     ///

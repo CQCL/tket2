@@ -115,7 +115,7 @@ impl QSystemEmitter {
     }
 }
 
-impl PytketDecoder for QSystemEmitter {
+impl<H: HugrView> PytketDecoder<H> for QSystemEmitter {
     fn op_types(&self) -> Vec<PytketOptype> {
         // Process native optypes that are not supported by the `TketOp` emitter.
         vec![
@@ -132,7 +132,7 @@ impl PytketDecoder for QSystemEmitter {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         _opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h>,
+        decoder: &mut PytketDecoderContext<'h, H>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let op = match op.op_type {
             PytketOptype::PhasedX => QSystemOp::PhasedX,

@@ -73,13 +73,13 @@ impl<H: HugrView> PytketEmitter<H> for Tk1Emitter {
 /// TODO: This only accepts input/outputs composed of bare qubit, bit, and parameter wires.
 /// We should accept arbitrary wires, but the opaque extension op needs to be modified (or replaced with a new one)
 /// since it currently has a limited signature definition.
-pub(crate) fn build_opaque_tket_op<'h>(
+pub(crate) fn build_opaque_tket_op<'h, H: HugrView>(
     op: &tket_json_rs::circuit_json::Operation,
     qubits: &[TrackedQubit],
     bits: &[TrackedBit],
     params: &[LoadedParameter],
     _opgroup: &Option<String>,
-    decoder: &mut PytketDecoderContext<'h>,
+    decoder: &mut PytketDecoderContext<'h, H>,
 ) -> Result<(), PytketDecodeError> {
     let tk1op: OpType = OpaqueTk1Op::new_from_op(op, qubits.len(), bits.len())
         .as_extension_op()
