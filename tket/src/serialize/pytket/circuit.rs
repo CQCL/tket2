@@ -4,13 +4,17 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 
 use hugr::core::HugrNode;
+use hugr::hugr::hugrmut::HugrMut;
+use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpTag, OpTrait};
-use hugr::{Hugr, HugrView};
+use hugr::{Hugr, HugrView, Node};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
 use tket_json_rs::circuit_json::{Command as PytketCommand, SerialCircuit};
 
+use crate::serialize::pytket::decoder::PytketDecoderContext;
 use crate::serialize::pytket::{
-    default_encoder_config, EncodeOptions, PytketEncodeError, PytketEncoderContext,
+    default_encoder_config, DecodeInsertionTarget, DecodeOptions, EncodeOptions, PytketDecodeError,
+    PytketDecodeErrorInner, PytketEncodeError, PytketEncoderContext,
 };
 use crate::Circuit;
 
@@ -147,6 +151,86 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         }
 
         Ok(())
+    }
+
+    /// Reassemble the encoded circuits into a new [`Hugr`], containing a
+    /// function defining the [`Self::head_region`] and expanding any opaque
+    /// hugrs in pytket barrier operations back into Hugr subgraphs.
+    ///
+    /// Functions called by the internal hugrs may be added to the hugr module
+    /// as well.
+    ///
+    /// # Arguments
+    ///
+    /// - `fn_name`: The name of the function to create. If `None`, we will use
+    ///   the name of the circuit, or "main" if the circuit has no name.
+    /// - `options`: The options for the decoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
+    /// Returns an error if a circuit being decoded is invalid. See
+    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
+    /// more details.
+    pub fn reassemble(
+        &self,
+        fn_name: Option<String>,
+        options: DecodeOptions<H>,
+    ) -> Result<Hugr, PytketDecodeError> {
+        let mut hugr = Hugr::new();
+        let main_func = self.reassemble_inline(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name },
+            options,
+        )?;
+        hugr.set_entrypoint(main_func);
+        Ok(hugr)
+    }
+
+    /// Reassemble the encoded circuits inside an existing [`Hugr`], containing
+    /// the [`Self::head_region`] at the given insertion target.
+    ///
+    /// Functions called by the internal hugrs may be added to the hugr module
+    /// as well.
+    ///
+    /// # Arguments
+    ///
+    /// - `hugr`: The [`Hugr`] to reassemble the circuits in.
+    /// - `target`: The target to insert the function at.
+    /// - `options`: The options for the decoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
+    /// Returns an error if a circuit being decoded is invalid. See
+    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
+    /// more details.
+    pub fn reassemble_inline(
+        &self,
+        hugr: &mut Hugr,
+        target: DecodeInsertionTarget,
+        options: DecodeOptions<H>,
+    ) -> Result<Node, PytketDecodeError> {
+        if !self.check_dataflow_head_region() {
+            let head_op = self.hugr.get_optype(self.head_region).to_string();
+            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op }.wrap());
+        };
+        let serial_circuit = &self[self.head_region];
+
+        if self.len() > 1 {
+            unimplemented!(
+                "Reassembling an `EncodedCircuit` with nested subcircuits is not yet implemented."
+            );
+        };
+
+        let mut decoder = PytketDecoderContext::<H>::new(serial_circuit, hugr, target, options)?;
+        decoder.register_opaque_subgraphs(&self.opaque_subgraphs, self.hugr);
+        decoder.run_decoder(&serial_circuit.commands)?;
+        Ok(decoder.finish()?.node())
     }
 
     /// Extract the top-level pytket circuit as a standalone definition

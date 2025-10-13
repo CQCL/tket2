@@ -4,7 +4,8 @@
 mod payload;
 
 pub use payload::{
-    EncodedEdgeID, OpaqueSubgraphPayload, OpaqueSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
+    EncodedEdgeID, ExtraCircuitDataPayload, OpaqueSubgraphPayload, OpaqueSubgraphPayloadType,
+    OPGROUP_OPAQUE_HUGR,
 };
 
 use std::collections::BTreeMap;

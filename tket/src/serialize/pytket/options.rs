@@ -2,10 +2,13 @@
 
 use std::sync::Arc;
 
+use hugr::extension::ExtensionRegistry;
 use hugr::types::Signature;
 use hugr::{Hugr, HugrView, Node};
 
 use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
+
+use super::default_decoder_config;
 
 /// Options used when decoding a pytket
 /// [`SerialCircuit`][tket_json_rs::circuit_json::SerialCircuit] into a HUGR.
@@ -21,7 +24,7 @@ use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
 /// HUGR. See
 /// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]
 /// for more details.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct DecodeOptions<H: HugrView = Hugr> {
     /// The configuration for the decoder, containing custom
@@ -51,6 +54,10 @@ pub struct DecodeOptions<H: HugrView = Hugr> {
     /// If additional parameters are found in the circuit, they will be added
     /// after these using generic names.
     pub input_params: Vec<String>,
+    /// The extensions to use when loading the HUGR envelope.
+    ///
+    /// When `None`, we will use [`crate::extension::REGISTRY`].
+    pub extensions: Option<ExtensionRegistry>,
 }
 
 impl<H: HugrView> DecodeOptions<H> {
@@ -65,6 +72,11 @@ impl<H: HugrView> DecodeOptions<H> {
         self
     }
 
+    /// Set `DecodeOptions::config` to use [`default_decoder_config`].
+    pub fn with_default_config(&mut self) {
+        self.config = Some(Arc::new(default_decoder_config()));
+    }
+
     /// Set the signature of the function to create.
     pub fn with_signature(mut self, signature: Signature) -> Self {
         self.signature = Some(signature);
@@ -75,6 +87,33 @@ impl<H: HugrView> DecodeOptions<H> {
     pub fn with_input_params(mut self, input_params: impl IntoIterator<Item = String>) -> Self {
         self.input_params = input_params.into_iter().collect();
         self
+    }
+
+    /// Set the extensions to use when loading the HUGR envelope.
+    pub fn with_extensions(mut self, extensions: ExtensionRegistry) -> Self {
+        self.extensions = Some(extensions);
+        self
+    }
+
+    /// Returns the extensions to use when loading the HUGR envelope.
+    ///
+    /// If the option is `None`, we will use [`crate::extension::REGISTRY`].
+    pub fn extension_registry(&self) -> &ExtensionRegistry {
+        self.extensions
+            .as_ref()
+            .unwrap_or(&crate::extension::REGISTRY)
+    }
+
+    /// Returns the [`PytketDecoderConfig`] to use when decoding the circuit.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the option is `None`. Use [`DecodeOptions::with_config`] or
+    /// [`DecodeOptions::with_default_config`] to set it.
+    pub(super) fn get_config(&self) -> &Arc<PytketDecoderConfig<H>> {
+        self.config
+            .as_ref()
+            .expect("DecodeOptions::config is not set")
     }
 }
 impl DecodeOptions<Hugr> {
@@ -94,6 +133,7 @@ impl<H: HugrView> Default for DecodeOptions<H> {
             config: Default::default(),
             signature: Default::default(),
             input_params: Default::default(),
+            extensions: None,
         }
     }
 }

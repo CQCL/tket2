@@ -130,18 +130,7 @@ impl TKETDecode for SerialCircuit {
         target: DecodeInsertionTarget,
         options: DecodeOptions<impl HugrView>,
     ) -> Result<Node, Self::DecodeError> {
-        let config = options
-            .config
-            .unwrap_or_else(|| default_decoder_config().into());
-
-        let mut decoder = PytketDecoderContext::new(
-            self,
-            hugr,
-            target,
-            options.signature,
-            options.input_params,
-            config,
-        )?;
+        let mut decoder = PytketDecoderContext::new(self, hugr, target, options)?;
         decoder.run_decoder(&self.commands)?;
         Ok(decoder.finish()?.node())
     }
