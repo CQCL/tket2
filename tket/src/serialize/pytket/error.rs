@@ -2,12 +2,14 @@
 
 use derive_more::{Display, Error, From};
 use hugr::core::HugrNode;
+use hugr::envelope::EnvelopeError;
 use hugr::ops::OpType;
 use hugr::Wire;
 use itertools::Itertools;
 use tket_json_rs::register::ElementId;
 
 use crate::serialize::pytket::extension::RegisterCount;
+use crate::serialize::pytket::opaque::SubgraphId;
 
 /// Error type for conversion between pytket operations and tket ops.
 #[derive(Display, derive_more::Debug, Error)]
@@ -103,7 +105,7 @@ impl<N> PytketEncodeError<N> {
 }
 
 /// Error type for conversion between tket2 ops and pytket operations.
-#[derive(derive_more::Debug, Display, Error, Clone)]
+#[derive(derive_more::Debug, Display, Error)]
 #[non_exhaustive]
 #[display(
     "{inner}{context}",
@@ -175,7 +177,7 @@ impl From<PytketDecodeErrorInner> for PytketDecodeError {
 
 /// Error variants of [`PytketDecodeError`], signalling errors during the
 /// conversion between tket2 ops and pytket operations.
-#[derive(derive_more::Debug, Display, Error, Clone)]
+#[derive(derive_more::Debug, Display, Error)]
 #[non_exhaustive]
 pub enum PytketDecodeErrorInner {
     /// The pytket circuit uses multi-indexed registers.
@@ -342,6 +344,12 @@ pub enum PytketDecodeErrorInner {
         /// The bit registers expected in the wire.
         bit_args: Vec<String>,
     },
+    /// We couldn't find a parameter for the required input type.
+    #[display("Could not find a parameter for the required input type {ty}")]
+    NoMatchingParameter {
+        /// The type that couldn't be found.
+        ty: String,
+    },
     /// The number of pytket registers passed to
     /// `PytketDecodeContext::wire_up_node` or `add_node_with_wires` does not
     /// match the number of registers required by the operation.
@@ -389,6 +397,19 @@ pub enum PytketDecodeErrorInner {
     NonDataflowHeadRegion {
         /// The head region operation that is not a dataflow container.
         head_op: String,
+    },
+    /// The pytket circuit contains an opaque barrier representing a unsupported subgraph in the original HUGR,
+    /// but the corresponding subgraph is not present in the [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
+    #[display("The pytket circuit contains a barrier representing an opaque subgraph in the original HUGR, but the corresponding subgraph is not present in the `EncodedCircuit` structure. Subgraph ID {id}")]
+    OpaqueSubgraphNotFound {
+        /// The ID of the opaque subgraph.
+        id: SubgraphId,
+    },
+    /// Cannot decode Hugr from an unsupported subgraph payload in a pytket barrier operation.
+    #[display("Cannot decode Hugr from an opaque subgraph payload in a pytket barrier operation. {source}")]
+    UnsupportedSubgraphPayload {
+        /// The envelope decoding error.
+        source: EnvelopeError,
     },
 }
 
