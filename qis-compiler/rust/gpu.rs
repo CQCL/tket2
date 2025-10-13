@@ -249,7 +249,8 @@ impl GpuCodegen {
                 let function = ctx
                     .get_current_module()
                     .add_function(&function_name, fn_type, None);
-                let noinline_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
+                let noinline_id =
+                    inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
                 let noinline = iwc.create_enum_attribute(noinline_id, 0);
                 function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
                 let entry = iwc.append_basic_block(function, "entry");
