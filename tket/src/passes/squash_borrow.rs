@@ -10,7 +10,7 @@ use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::BArrayUnsafeOpDef;
 use hugr::types::{Term, Type};
-use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex, Wire};
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::{Either, Itertools};
 
 use std::collections::hash_map::Entry;
@@ -19,18 +19,23 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// Identifies array types and borrows/returns on them
 pub trait IsBorrowReturn: Clone {
     /// Determine if the given node is a borrow or return node, and if so,
-    /// return the ports identifying the operands
+    /// return the ports identifying the operands. May also return
+    /// * [BRAction::Clobber] if the op is neither a borrow nor return but
+    ///   affects borrowedness of only some indices.
+    /// * `Ok(None)` if the node is not a borrow/return, and we should not
+    ///   elide any borrow/return pairs across this node.
     ///
     /// # Errors
     ///
-    /// [NodeInfoError] if the analysis cannot safely determine whether the
-    /// node is a borrow/return with known operands. (Assuming a not-understood
-    /// node is *not* a borrow/return might lead to unsafe transformation.)
+    /// [BorrowAnalysisError] if the analysis cannot safely determine whether the
+    /// node is a borrow/return with known operands. (Generally, returning `Ok(None)`
+    /// handles most situations by preventing optimization across a particular node;
+    /// however, returning an error prevents optimization across the wider DSG.)
     fn is_borrow_return<H: HugrView>(
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<BorrowReturnPorts>, NodeInfoError>;
+    ) -> Result<Option<BorrowReturnPorts>, BorrowAnalysisError>;
 
     /// If the specified type is an array that can be borrowed from,
     /// return `Some` of:
@@ -41,7 +46,7 @@ pub trait IsBorrowReturn: Clone {
     fn get_array_size(&self, ty: &Type) -> Option<Option<u64>>;
 }
 
-/// A pass for eliding `BorrowArray` reborrows of elements (with constant indices)
+/// A pass for eliding (e.g. `BorrowArray`) reborrows of elements (with constant indices)
 /// along with the preceding return.
 #[derive(Clone, Debug, Default)]
 pub struct BorrowSquashPass<BR> {
@@ -49,7 +54,7 @@ pub struct BorrowSquashPass<BR> {
     is_br: BR,
     /// If true, assume that at the point at which a new value of array type
     /// is created (i.e. at the output of any op that produces such an array type
-    /// that is not a borrow/return; and including Input nodes), that
+    /// that is not a borrow/return; including Input nodes), that
     /// all elements are present (not borrowed).
     ///
     /// This is private because it is unsound in the presence of "unsafe" put/get.
@@ -68,12 +73,12 @@ impl<BR> BorrowSquashPass<BR> {
 }
 
 impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSquashPass<BR> {
-    type Error = NodeInfoError;
+    type Error = BorrowAnalysisError;
     /// Pairs of (Return node, Borrow node) that were elided.
     type Result = Vec<(Node, Node)>;
 
     /// Perform the pass on the given hugr.
-    fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, NodeInfoError> {
+    fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
         let temp: Vec<Node>; // to keep alive
         let regions = if self.regions.is_empty() {
             temp = hugr
@@ -115,7 +120,7 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
 
 /// Reasons we may fail to determine whether a node is a borrow/return.
 #[derive(Debug, Display, Error)]
-pub enum NodeInfoError {
+pub enum BorrowAnalysisError {
     /// Borrow op is not a dataflow op.
     #[display("expected dataflow op: {op}")]
     NodeNotDataflow {
@@ -168,18 +173,6 @@ pub enum BRAction {
     Clobber(Vec<IncomingPort>),
 }
 
-impl BRAction {
-    /// Gets the port on which the borrowed value is output (for a [Self::Borrow])
-    /// or input (for a [Self::Return]).
-    pub fn borrowed_port(&self) -> Port {
-        match self {
-            BRAction::Borrow(p) => (*p).into(),
-            BRAction::Return(p) => (*p).into(),
-            BRAction::Clobber(_) => panic!("Clobber has no borrowed port"),
-        }
-    }
-}
-
 /// Ports common to a borrow or return op
 #[derive(Debug, Clone)]
 pub struct BorrowReturnPorts {
@@ -195,7 +188,9 @@ pub struct BorrowReturnPorts {
 /// If right, i.e. non-constant, then no elision may be possible.
 pub type BorrowIndex = Either<u64, Wire>;
 
-/// Implements [IsBorrowReturn] for `BorrowArray`s.
+/// Implements [IsBorrowReturn] for [BorrowArray]s.
+///
+/// [BorrowArray]: hugr_core::std_extensions::collections::borrow_array::BorrowArray
 #[derive(Debug, Default, Display, Clone)]
 #[allow(rustdoc::private_intra_doc_links)]
 pub struct DefaultBorrowArray;
@@ -205,7 +200,7 @@ impl IsBorrowReturn for DefaultBorrowArray {
         &self,
         node: H::Node,
         hugr: &H,
-    ) -> Result<Option<BorrowReturnPorts>, NodeInfoError> {
+    ) -> Result<Option<BorrowReturnPorts>, BorrowAnalysisError> {
         let op = hugr.get_optype(node);
 
         let Some(ext_op) = op.as_extension_op() else {
@@ -216,9 +211,9 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 let op = hugr.get_optype(node);
                 let sig = op
                     .dataflow_signature()
-                    .ok_or_else(|| NodeInfoError::NodeNotDataflow { op: op.clone() })?;
+                    .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
                 if sig.input_count() != 2 || sig.output_count() != 2 {
-                    return Err(NodeInfoError::BorrowNodeIncorrectSignature);
+                    return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
                 }
                 Some(BorrowReturnPorts {
                     action: BRAction::Borrow(OutgoingPort::from(0)),
@@ -233,10 +228,10 @@ impl IsBorrowReturn for DefaultBorrowArray {
                 let op = hugr.get_optype(node);
                 let sig = op
                     .dataflow_signature()
-                    .ok_or_else(|| NodeInfoError::NodeNotDataflow { op: op.clone() })?;
+                    .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
 
                 if sig.input_count() != 3 || sig.output_count() != 1 {
-                    return Err(NodeInfoError::BorrowNodeIncorrectSignature);
+                    return Err(BorrowAnalysisError::BorrowNodeIncorrectSignature);
                 }
                 Some(BorrowReturnPorts {
                     action: BRAction::Return(IncomingPort::from(2)),
@@ -282,7 +277,7 @@ pub fn borrow_squash_array<H: HugrMut<Node = Node>>(
     is_br: &impl IsBorrowReturn,
     start: Wire,
     recurse: bool,
-) -> Result<Vec<(Node, Node)>, NodeInfoError> {
+) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
     borrow_squash_traversal(hugr, is_br, &mut Vec::new(), start, recurse, false)
 }
 
@@ -295,7 +290,7 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
     start: Wire,
     recurse: bool,
     assume_all_present: bool,
-) -> Result<Vec<(Node, Node)>, NodeInfoError> {
+) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
     let array_ty = wire_type(hugr, start);
     let Some(array_sz) = is_br.get_array_size(&array_ty) else {
         for n in hugr
@@ -438,7 +433,7 @@ fn next_array_op(
     candidates: &mut impl Extend<Wire>,
     array: Wire,
     array_ty: &Type,
-) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, NodeInfoError> {
+) -> Result<Option<(Node, u64, BRAction, BorrowFromPorts)>, BorrowAnalysisError> {
     let (node, inport) = hugr
         .single_linked_input(array.node(), array.source())
         .expect("array is linear");
@@ -450,14 +445,13 @@ fn next_array_op(
     };
 
     if inport != is_br.borrow_from.inc {
-        match is_br.action {
-            BRAction::Clobber(_) => (), // Must be reachable along array inport
-            BRAction::Return(rv) => {
-                assert_eq!(rv, inport);
-                // this array ends here (by being returned to outer array).
-                // Processing of outer array will continue after the Return.
-            }
-            BRAction::Borrow(_) => panic!("Array fed into unexpected port of borrow"),
+        if let BRAction::Borrow(_) = is_br.action {
+            panic!("Array fed into unexpected port of borrow")
+        }
+        // Op will be reachable along the incoming-array port, so some other call
+        // (along that path) will process it.
+        if let BRAction::Return(rv) = is_br.action {
+            assert_eq!(rv, inport); // Nested array being returned into outer array.
         }
         return Ok(None);
     }
@@ -466,7 +460,7 @@ fn next_array_op(
         let out_ty = wire_type(hugr, Wire::new(node, is_br.borrow_from.out));
         if *array_ty != out_ty {
             let array_ty = array_ty.clone();
-            return Err(NodeInfoError::InconsistentArrayType { array_ty, out_ty });
+            return Err(BorrowAnalysisError::InconsistentArrayType { array_ty, out_ty });
         }
     }
     let Some(idx) = find_const(hugr, node, is_br.elem_index) else {
