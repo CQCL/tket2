@@ -4,8 +4,8 @@
 mod payload;
 
 pub use payload::{
-    UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
-    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
+    EncodedEdgeID, UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType,
+    OPGROUP_EXTERNAL_UNSUPPORTED_HUGR, OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
 };
 
 use std::collections::BTreeMap;
