@@ -33,7 +33,7 @@ use crate::circuit::Circuit;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::unsupported::{
-    UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
+    UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -576,7 +576,12 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let subgraph_id = self
             .unsupported_subgraphs
             .register_unsupported_subgraph(subgraph);
-        let payload = UnsupportedSubgraphPayload::external(subgraph_id);
+        let subgraph = &self.unsupported_subgraphs[subgraph_id];
+        let payload = UnsupportedSubgraphPayload::new(
+            subgraph,
+            circ.hugr(),
+            UnsupportedSubgraphPayloadType::External { id: subgraph_id },
+        );
 
         // Collects the input values for the subgraph.
         //

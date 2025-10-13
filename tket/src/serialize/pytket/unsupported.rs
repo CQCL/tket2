@@ -1,23 +1,20 @@
 //! Subgraphs of unsupported (non-encodable) nodes in the hugr, and their
 //! encoding as barrier metadata in pytket circuits.
 
+mod payload;
+
+pub use payload::{
+    UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
+    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
+};
+
 use std::collections::BTreeMap;
+use std::ops::Index;
 
+use crate::serialize::pytket::PytketEncodeError;
 use hugr::core::HugrNode;
-use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::package::Package;
 use hugr::HugrView;
-
-/// Pytket opgroup used to identify opaque barrier operations that encode standalone unsupported HUGR subgraphs.
-///
-/// See [`UnsupportedSubgraphPayload::Standalone`].
-pub const OPGROUP_STANDALONE_UNSUPPORTED_HUGR: &str = "UNSUPPORTED_HUGR";
-
-/// Pytket opgroup used to identify opaque barrier operations that encode external unsupported HUGR subgraphs.
-///
-/// See [`UnsupportedSubgraphPayload::External`].
-pub const OPGROUP_EXTERNAL_UNSUPPORTED_HUGR: &str = "EXTERNAL_UNSUPPORTED_HUGR";
 
 /// The ID of a subgraph in the Hugr.
 #[derive(
@@ -46,26 +43,6 @@ pub(super) struct UnsupportedSubgraphs<N> {
     ///
     /// Subcircuits are identified in the barrier metadata by their ID. See [`SubgraphId`].
     opaque_subgraphs: BTreeMap<SubgraphId, SiblingSubgraph<N>>,
-}
-
-/// Payload for a pytket barrier metadata that indicates the barrier represents
-/// an unsupported HUGR subgraph.
-///
-/// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked inside a [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub enum UnsupportedSubgraphPayload {
-    /// A standalone payload, carrying the encoded HUGR subgraph.
-    Standalone {
-        /// A string envelope containing the encoded HUGR subgraph.
-        hugr_envelope: String,
-    },
-    /// A reference to a subgraph tracked by an `UnsupportedSubgraphs` registry
-    /// in an [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
-    External {
-        /// The ID of the subgraph in the `UnsupportedSubgraphs` registry.
-        id: SubgraphId,
-    },
 }
 
 impl SubgraphId {
@@ -124,36 +101,51 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     pub fn merge(&mut self, other: Self) {
         self.opaque_subgraphs.extend(other.opaque_subgraphs);
     }
+
+    /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`UnsupportedSubgraphPayload::External`] pointer
+    /// if present with a [`UnsupportedSubgraphPayload::Standalone`] payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
+    pub(super) fn replace_external_with_standalone(
+        &self,
+        command: &mut tket_json_rs::circuit_json::Command,
+        hugr: &impl HugrView<Node = N>,
+    ) -> Result<(), PytketEncodeError<N>> {
+        if command.op.op_type != tket_json_rs::OpType::Barrier
+            || command.opgroup.as_deref() != Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR)
+        {
+            return Ok(());
+        }
+
+        let Some(payload) = command.op.data.take() else {
+            return Err(PytketEncodeError::custom(
+                    format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has no data payload.")
+                ));
+        };
+        let mut payload: UnsupportedSubgraphPayload = serde_json::from_str(&payload).map_err(|e|
+                PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has corrupt data payload: {e}"))
+            )?;
+        let UnsupportedSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
+            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has an invalid data payload variant: {payload:?}")));
+        };
+        if !self.contains(subgraph_id) {
+            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} points to an unknown subgraph: {subgraph_id}")));
+        }
+
+        payload.typ = UnsupportedSubgraphPayloadType::standalone(&self[subgraph_id], hugr);
+        command.op.data = Some(serde_json::to_string(&payload).unwrap());
+        command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
+
+        Ok(())
+    }
 }
 
-impl UnsupportedSubgraphPayload {
-    /// Create a new external payload, referencing a subgraph tracked by a
-    /// `UnsupportedSubgraphs` registry in an
-    /// [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
-    pub fn external(id: SubgraphId) -> Self {
-        Self::External { id }
-    }
+impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
+    type Output = SiblingSubgraph<N>;
 
-    /// Create a new standalone payload, by extracting a sibling subgraph from a
-    /// HUGR and encoding it.
-    ///
-    /// Note that this will produce incomplete hugrs when external function
-    /// calls or  non-local edges are present.
-    //
-    // TODO: Detect and deal with non-local edges? What to do there is not
-    // clear, we need further discussion.
-    //
-    // TODO: This should include descendants of the subgraph. Test that.
-    pub fn standalone<N: HugrNode>(
-        subgraph: &SiblingSubgraph<N>,
-        hugr: &impl HugrView<Node = N>,
-    ) -> Self {
-        let unsupported_hugr = subgraph.extract_subgraph(hugr, "");
-        let payload = Package::from_hugr(unsupported_hugr)
-            .store_str(EnvelopeConfig::text())
-            .unwrap();
-        Self::Standalone {
-            hugr_envelope: payload,
-        }
+    fn index(&self, index: SubgraphId) -> &Self::Output {
+        self.get_unsupported_subgraph(index)
     }
 }

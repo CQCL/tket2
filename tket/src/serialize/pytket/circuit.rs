@@ -3,15 +3,12 @@
 use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 
+use hugr::core::HugrNode;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{Hugr, HugrView};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator};
-use tket_json_rs::circuit_json::SerialCircuit;
+use tket_json_rs::circuit_json::{Command as PytketCommand, SerialCircuit};
 
-use crate::serialize::pytket::unsupported::{
-    UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
-    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
-};
 use crate::serialize::pytket::{
     default_encoder_config, EncodeOptions, PytketEncodeError, PytketEncoderContext,
 };
@@ -161,48 +158,47 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     ///
     /// # Errors
     ///
-    /// Returns an error if [`Self::head_region`] is not a dataflow container in the hugr.
+    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
     /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
     //
     // TODO: We'll need to handle non-local edges and function definitions in this step.
     pub fn extract_standalone(mut self) -> Result<SerialCircuit, PytketEncodeError<H::Node>> {
-        let Some(mut serial_circuit) = self.circuits.remove(&self.head_region) else {
-            return Err(PytketEncodeError::custom(format!(
-                "Head region {} is not a dataflow container in the hugr",
-                self.head_region
-            )));
+        if !self.check_dataflow_head_region() {
+            let head_op = self.hugr.get_optype(self.head_region).to_string();
+            return Err(PytketEncodeError::InvalidStandaloneHeadRegion { head_op });
         };
+        let mut serial_circuit = self.circuits.remove(&self.head_region).unwrap();
 
-        for command in serial_circuit.commands.iter_mut() {
-            if command.op.op_type != tket_json_rs::OpType::Barrier
-                || command.opgroup.as_deref() != Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR)
-            {
-                continue;
+        fn make_commands_standalone<N: HugrNode>(
+            commands: &mut [PytketCommand],
+            subgraphs: &UnsupportedSubgraphs<N>,
+            hugr: &impl HugrView<Node = N>,
+        ) -> Result<(), PytketEncodeError<N>> {
+            for command in commands.iter_mut() {
+                subgraphs.replace_external_with_standalone(command, hugr)?;
+
+                if let Some(tket_json_rs::opbox::OpBox::CircBox { circuit, .. }) =
+                    &mut command.op.op_box
+                {
+                    make_commands_standalone(&mut circuit.commands, subgraphs, hugr)?;
+                }
             }
-
-            let Some(payload) = command.op.data.take() else {
-                return Err(PytketEncodeError::custom(
-                    format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has no data payload.")
-                ));
-            };
-            let payload: UnsupportedSubgraphPayload = serde_json::from_str(&payload).map_err(|e|
-                PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has corrupt data payload: {e}"))
-            )?;
-            let UnsupportedSubgraphPayload::External { id: subgraph_id } = payload else {
-                return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has an invalid data payload variant: {payload:?}")));
-            };
-            if !self.opaque_subgraphs.contains(subgraph_id) {
-                return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} points to an unknown subgraph: {subgraph_id}")));
-            }
-
-            let payload = UnsupportedSubgraphPayload::standalone(
-                self.opaque_subgraphs.get_unsupported_subgraph(subgraph_id),
-                self.hugr,
-            );
-            command.op.data = Some(serde_json::to_string(&payload).unwrap());
-            command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
+            Ok(())
         }
+        make_commands_standalone(
+            &mut serial_circuit.commands,
+            &self.opaque_subgraphs,
+            self.hugr,
+        )?;
+
         Ok(serial_circuit)
+    }
+
+    /// Checks if [`Self::head_region`] was a dataflow container in the original hugr,
+    /// and therefore has an encoded circuit in this structure.
+    fn check_dataflow_head_region(&self) -> bool {
+        self.circuits.contains_key(&self.head_region)
     }
 
     /// Returns the HUGR from where the circuit was encoded.

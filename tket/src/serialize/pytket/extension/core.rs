@@ -10,12 +10,17 @@ use crate::serialize::pytket::decoder::{
     DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
 use crate::serialize::pytket::extension::PytketDecoder;
+use crate::serialize::pytket::unsupported::{
+    UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
+    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
+};
 use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeError};
 use crate::serialize::TKETDecode;
 use hugr::builder::Container;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::types::{Signature, Type};
 use itertools::Itertools;
+use tket_json_rs::circuit_json::Operation as PytketOperation;
 use tket_json_rs::opbox::OpBox;
 use tket_json_rs::optype::OpType as PytketOptype;
 
@@ -25,20 +30,50 @@ pub struct CoreDecoder;
 
 impl PytketDecoder for CoreDecoder {
     fn op_types(&self) -> Vec<PytketOptype> {
-        vec![PytketOptype::CircBox]
+        vec![PytketOptype::Barrier, PytketOptype::CircBox]
     }
 
     fn op_to_hugr<'h>(
         &self,
-        op: &tket_json_rs::circuit_json::Operation,
+        op: &PytketOperation,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
         params: &[LoadedParameter],
-        _opgroup: Option<&str>,
+        opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
-        match (op.op_type, &op.op_box) {
-            (PytketOptype::CircBox, Some(OpBox::CircBox { id: _id, circuit })) => {
+        match &op {
+            PytketOperation {
+                op_type: PytketOptype::Barrier,
+                data: Some(payload),
+                ..
+            } if [
+                Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR),
+                Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR),
+            ]
+            .contains(&opgroup) =>
+            {
+                let payload: UnsupportedSubgraphPayload = match serde_json::from_str(payload) {
+                    Ok(payload) => payload,
+                    Err(_) => {
+                        // Payload is invalid. We don't error here to avoid
+                        // panicking on corrupted/old user submissions.
+                        return Ok(DecodeStatus::Unsupported);
+                    }
+                };
+                if payload.is_external() {
+                    unimplemented!("Extract external unsupported hugr subgraphs.");
+                }
+                // TODO: Extract standalone unsupported hugr subgraphs.
+                //
+                // For now we keep the old behaviour of producing opaque TKET1.tk1op operations.
+                Ok(DecodeStatus::Unsupported)
+            }
+            PytketOperation {
+                op_type: PytketOptype::CircBox,
+                op_box: Some(OpBox::CircBox { id: _id, circuit }),
+                ..
+            } => {
                 // We have no way to distinguish between input and output bits
                 // in the circuit box, so we assume all bits are both inputs and
                 // outputs here.
