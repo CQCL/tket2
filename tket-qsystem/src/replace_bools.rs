@@ -222,12 +222,8 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-fn array_clone_dest(array_ty: Type) -> NodeTemplate {
-    let mut dfb = DFGBuilder::new(inout_sig(
-        vec![array_ty.clone()],
-        vec![array_ty.clone(), array_ty],
-    ))
-    .unwrap();
+fn copy_dfg(ty: Type) -> NodeTemplate {
+    let mut dfb = DFGBuilder::new(inout_sig(vec![ty.clone()], vec![ty.clone(), ty])).unwrap();
     let mut h = std::mem::take(dfb.hugr_mut());
     let [inp, outp] = h.get_io(h.entrypoint()).unwrap();
     h.connect(inp, 0, outp, 0);
@@ -299,87 +295,52 @@ fn lowerer() -> ReplaceTypes {
     lw.replace_op(&qsystem_measure, measure_dest());
     lw.replace_op(&qsystem_measure_reset, measure_reset_dest());
 
-    // Replace array and borrow ops with copyable bounds with DFGs that the linearizer
-    // can act on now that the elements are no longer copyable.
-    lw.replace_parametrized_op_with(
-        array::EXTENSION.get_op(ARRAY_CLONE_OP_ID.as_str()).unwrap(),
-        move |args| {
-            let [size, elem_ty] = args else {
-                unreachable!()
-            };
-            let size = size.as_nat().unwrap();
-            let elem_ty = elem_ty.as_runtime().unwrap();
-            (!elem_ty.copyable()).then(|| {
-                let array_ty = array_type(size, elem_ty.clone());
-                array_clone_dest(array_ty)
-            })
-        },
-        ReplacementOptions::default().with_linearization(true),
-    );
+    // Replace (borrow/)array ops that used to have with copyable bounds with DFGs that
+    // the linearizer can act on now that the elements are no longer copyable.
+    for (array_ext, type_fn) in [
+        (
+            array::EXTENSION.to_owned(),
+            array_type as fn(u64, Type) -> Type,
+        ),
+        (
+            borrow_array::EXTENSION.to_owned(),
+            borrow_array_type as fn(u64, Type) -> Type,
+        ),
+    ] {
+        lw.replace_parametrized_op_with(
+            array_ext.get_op(ARRAY_CLONE_OP_ID.as_str()).unwrap(),
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                let size = size.as_nat().unwrap();
+                let elem_ty = elem_ty.as_runtime().unwrap();
+                (!elem_ty.copyable()).then(|| copy_dfg(type_fn(size, elem_ty.clone())))
+            },
+            ReplacementOptions::default().with_linearization(true),
+        );
+        let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
 
-    lw.replace_parametrized_op_with(
-        borrow_array::EXTENSION
-            .get_op(ARRAY_CLONE_OP_ID.as_str())
-            .unwrap(),
-        move |args| {
-            let [size, elem_ty] = args else {
-                unreachable!()
-            };
-            let size = size.as_nat().unwrap();
-            let elem_ty = elem_ty.as_runtime().unwrap();
-            (!elem_ty.copyable()).then(|| {
-                let array_ty = borrow_array_type(size, elem_ty.clone());
-                array_clone_dest(array_ty)
-            })
-        },
-        ReplacementOptions::default().with_linearization(true),
-    );
-
-    let drop_op_def = GUPPY_EXTENSION.get_op(DROP_OP_NAME.as_str()).unwrap();
-
-    lw.replace_parametrized_op(
-        array::EXTENSION
-            .get_op(ARRAY_DISCARD_OP_ID.as_str())
-            .unwrap(),
-        move |args| {
-            let [size, elem_ty] = args else {
-                unreachable!()
-            };
-            let size = size.as_nat().unwrap();
-            let elem_ty = elem_ty.as_runtime().unwrap();
-            if elem_ty.copyable() {
-                return None;
-            }
-            let drop_op = ExtensionOp::new(
-                drop_op_def.clone(),
-                vec![array_type(size, elem_ty.clone()).into()],
-            )
-            .unwrap();
-            Some(NodeTemplate::SingleOp(drop_op.into()))
-        },
-    );
-
-    lw.replace_parametrized_op(
-        borrow_array::EXTENSION
-            .get_op(ARRAY_DISCARD_OP_ID.as_str())
-            .unwrap(),
-        move |args| {
-            let [size, elem_ty] = args else {
-                unreachable!()
-            };
-            let size = size.as_nat().unwrap();
-            let elem_ty = elem_ty.as_runtime().unwrap();
-            if elem_ty.copyable() {
-                return None;
-            }
-            let drop_op = ExtensionOp::new(
-                drop_op_def.clone(),
-                vec![borrow_array_type(size, elem_ty.clone()).into()],
-            )
-            .unwrap();
-            Some(NodeTemplate::SingleOp(drop_op.into()))
-        },
-    );
+        lw.replace_parametrized_op(
+            array_ext.get_op(ARRAY_DISCARD_OP_ID.as_str()).unwrap(),
+            move |args| {
+                let [size, elem_ty] = args else {
+                    unreachable!()
+                };
+                let size = size.as_nat().unwrap();
+                let elem_ty = elem_ty.as_runtime().unwrap();
+                if elem_ty.copyable() {
+                    return None;
+                }
+                let drop_op = ExtensionOp::new(
+                    drop_op_def.clone(),
+                    vec![type_fn(size, elem_ty.clone()).into()],
+                )
+                .unwrap();
+                Some(NodeTemplate::SingleOp(drop_op.into()))
+            },
+        );
+    }
 
     lw
 }
@@ -390,7 +351,9 @@ mod test {
 
     use super::*;
     use hugr::ops::OpType;
-    use hugr::std_extensions::collections::borrow_array::BArrayOpBuilder;
+    use hugr::std_extensions::collections::array::op_builder::GenericArrayOpBuilder;
+    use hugr::std_extensions::collections::array::{Array, ArrayKind};
+    use hugr::std_extensions::collections::borrow_array::BorrowArray;
     use hugr::type_row;
     use hugr::{
         builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
@@ -544,18 +507,22 @@ mod test {
         assert_eq!(sig.output(), &TypeRow::from(vec![qb_t(), bool_dest()]));
     }
 
-    #[test]
-    fn test_array_clone_bool() {
+    #[rstest]
+    #[case(Array)]
+    #[case(BorrowArray)]
+    fn test_array_clone_bool<AK: ArrayKind>(#[case] _ak: AK) {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let arr_ty = AK::ty(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(
             vec![arr_ty.clone()],
             vec![arr_ty.clone(), arr_ty.clone()],
         ))
         .unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        let (arr1, arr2) = dfb.add_borrow_array_clone(elem_ty, size, arr_in).unwrap();
+        let (arr1, arr2) = dfb
+            .add_generic_array_clone::<AK>(elem_ty, size, arr_in)
+            .unwrap();
         let mut h = dfb.finish_hugr_with_outputs([arr1, arr2]).unwrap();
 
         h.validate().unwrap();
@@ -565,7 +532,7 @@ mod test {
 
         let sig = h.signature(h.entrypoint()).unwrap();
         let bool_dest_ty = bool_dest();
-        let arr_dest_ty = borrow_array_type(size, bool_dest_ty);
+        let arr_dest_ty = AK::ty(size, bool_dest_ty);
         assert_eq!(sig.input(), &TypeRow::from(vec![arr_dest_ty.clone()]));
         assert_eq!(
             sig.output(),
@@ -573,14 +540,17 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_array_discard_bool() {
+    #[rstest]
+    #[case(Array)]
+    #[case(BorrowArray)]
+    fn test_array_discard_bool<AK: ArrayKind>(#[case] _ak: AK) {
         let elem_ty = bool_type();
         let size = 4;
-        let arr_ty = borrow_array_type(size, elem_ty.clone());
+        let arr_ty = AK::ty(size, elem_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(vec![arr_ty.clone()], type_row![])).unwrap();
         let [arr_in] = dfb.input_wires_arr();
-        dfb.add_borrow_array_discard(elem_ty, size, arr_in).unwrap();
+        dfb.add_generic_array_discard::<AK>(elem_ty, size, arr_in)
+            .unwrap();
         let mut h = dfb.finish_hugr_with_outputs([]).unwrap();
 
         h.validate().unwrap();

@@ -121,8 +121,6 @@ impl QSystemPass {
         }
         // We expect any Hugr will have *either* drop ops, or ValueArrays (without drops),
         // so only one of these passes will do anything; the order is thus immaterial.
-        // Drop should come after borrow array replacement so that we don't require a
-        // copy/discard handler for borrow arrays + avoid lowering the discard function.
         self.lower_drops().run(hugr)?;
         self.linearize_arrays().run(hugr)?;
 
