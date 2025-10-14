@@ -334,6 +334,9 @@ impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {
 
         for (inp, unit) in inputs.into_iter().zip_eq(units) {
             for (node, port) in inp {
+                if !this.subgraph_nodes().contains(&node) {
+                    continue;
+                }
                 let Some(node_units) =
                     node_circuit_units_mut(&mut this.circuit_units, node, &this.hugr)
                 else {
@@ -405,23 +408,27 @@ impl<N: HugrNode> NewCircuitRewrite<N> {
 
         debug_assert_eq!(inputs.len(), replacement.circuit_signature().input_count());
 
-        let units_at_inputs = inputs.iter().enumerate().map(|(i, inp)| {
-            debug_assert!(inp
-                .iter()
-                .map(|&(node, port)| circuit.get_circuit_unit(node, port))
-                .all_equal());
-            debug_assert!(!inp.is_empty());
+        let units_at_inputs = inputs
+            .iter()
+            .enumerate()
+            .map(|(i, inp)| {
+                debug_assert!(inp
+                    .iter()
+                    .map(|&(node, port)| circuit.get_circuit_unit(node, port))
+                    .all_equal());
+                debug_assert!(!inp.is_empty());
 
-            let &(node, port) = inp.first().expect("just checked");
-            circuit
-                .get_circuit_unit(node, port)
-                .expect("just checked")
-                .map_node_port(|u, p| {
-                    let repl_inp_port = (replacement.input_node(), OutgoingPort::from(i));
-                    input_remap.insert(repl_inp_port, (u, p));
-                    repl_inp_port
-                })
-        });
+                let &(node, port) = inp.first().expect("just checked");
+                circuit
+                    .get_circuit_unit(node, port)
+                    .expect("just checked")
+                    .map_node_port(|u, p| {
+                        let repl_inp_port = (replacement.input_node(), OutgoingPort::from(i));
+                        input_remap.insert(repl_inp_port, (u, p));
+                        repl_inp_port
+                    })
+            })
+            .collect_vec();
         let units_at_outputs = outputs.iter().map(|&(node, port)| {
             circuit
                 .get_circuit_unit(node, port)
@@ -433,18 +440,22 @@ impl<N: HugrNode> NewCircuitRewrite<N> {
         if replacement.num_operations() > 0 {
             let repl_scope = repl_scope.insert(ResourceScope::from_circuit_with_input_units(
                 replacement.clone(),
-                units_at_inputs,
+                units_at_inputs.iter().cloned(),
             ));
 
+            let io_nodes = repl_scope.as_circuit().io_nodes();
             let effective_units_at_outputs = repl_scope
-                .subgraph()
-                .unwrap()
-                .outgoing_ports()
-                .iter()
-                .map(|&(node, port)| {
-                    repl_scope
-                        .get_circuit_unit(node, port)
-                        .expect("output must exist")
+                .hugr()
+                .all_linked_outputs(io_nodes[1])
+                .filter_map(|(out_node, out_port)| {
+                    if let Some(unit) = repl_scope.get_circuit_unit(out_node, out_port) {
+                        Some(unit)
+                    } else if out_node == io_nodes[0] {
+                        // passthrough from input to output
+                        Some(units_at_inputs[out_port.index()].clone())
+                    } else {
+                        None
+                    }
                 });
             if effective_units_at_outputs
                 .zip(units_at_outputs)

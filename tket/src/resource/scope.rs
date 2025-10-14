@@ -199,6 +199,11 @@ impl<H: HugrView> ResourceScope<H> {
         Circuit::new(self.hugr())
     }
 
+    /// Get all nodes in the subgraph.
+    pub fn subgraph_nodes(&self) -> &[H::Node] {
+        self.subgraph.as_ref().map_or(&[], |sg| sg.nodes())
+    }
+
     /// Careful: this will not update the circuit units, so do not modify
     /// the HUGR using this.
     pub(super) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
