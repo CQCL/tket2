@@ -2,8 +2,10 @@
 
 from tket_exts.tket.bool import BoolExtension
 from tket_exts.tket.debug import DebugExtension
+from tket_exts.tket.global_phase import GlobalPhaseExtension
 from tket_exts.tket.gpu import GpuExtension
 from tket_exts.tket.guppy import GuppyExtension
+from tket_exts.tket.modifier import ModifierExtension
 from tket_exts.tket.rotation import RotationExtension
 from tket_exts.tket.futures import FuturesExtension
 from tket_exts.tket.qsystem import (
@@ -36,6 +38,8 @@ __all__ = [
     "quantum",
     "result",
     "wasm",
+    "modifier",
+    "global_phase",
 ]
 
 bool: BoolExtension = tket.bool.BoolExtension()
@@ -50,6 +54,8 @@ qsystem_utils: QSystemUtilsExtension = tket.qsystem.QSystemUtilsExtension()
 quantum: QuantumExtension = tket.quantum.QuantumExtension()
 result: ResultExtension = tket.result.ResultExtension()
 wasm: WasmExtension = tket.wasm.WasmExtension()
+modifier: ModifierExtension = tket.modifier.ModifierExtension()
+global_phase: GlobalPhaseExtension = tket.global_phase.GlobalPhaseExtension()
 
 
 @deprecated("Use tket_exts.bool() instead")
