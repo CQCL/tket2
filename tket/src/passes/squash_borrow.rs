@@ -72,7 +72,7 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
     /// Note it is recommended to run [ConstantFoldPass] first to make as many indices
     /// constant as possible.
     ///
-    /// [ConstantFoldPass]: hugr_passes::constant_fold::ConstantFoldPass
+    /// [ConstantFoldPass]: hugr::algorithms::const_fold::ConstantFoldPass
     fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
         let mut temp = Vec::new(); // to keep alive
         let regions = self.regions.as_ref().unwrap_or_else(|| {
