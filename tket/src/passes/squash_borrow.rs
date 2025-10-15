@@ -170,7 +170,6 @@ impl IsBorrowReturn for BorrowArray {
         };
         Ok(match BArrayUnsafeOpDef::from_extension_op(ext_op) {
             Ok(BArrayUnsafeOpDef::borrow) => {
-                let op = hugr.get_optype(node);
                 let sig = op
                     .dataflow_signature()
                     .ok_or_else(|| BorrowAnalysisError::NodeNotDataflow { op: op.clone() })?;
