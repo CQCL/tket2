@@ -24,7 +24,6 @@ tket = { path = "../tket" }
 tket-qsystem = { path = "../tket-qsystem", version = "0.21.0", features = [
     "llvm",
 ] }
-insta = "1.43"
 
 [features]
 default = []
@@ -38,6 +37,7 @@ pyo3-build-config.workspace = true
 rstest.workspace = true
 serde.workspace = true
 typetag.workspace = true
+insta = "1.43"
 
 [package.metadata.cargo-machete]
 ignored = ["cbindgen", "pyo3-build-config"]
