@@ -16,7 +16,7 @@ use hugr::std_extensions::collections::borrow_array::{
 };
 use hugr::types::Type;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -169,10 +169,6 @@ pub struct BorrowReturnPorts {
     /// The ports by which the container array reaches and leaves this node.
     pub borrow_from: BorrowFromPorts,
 }
-
-/// An element index to a borrow/return.
-/// If right, i.e. non-constant, then no elision may be possible.
-pub type BorrowIndex = Either<u64, Wire>;
 
 impl IsBorrowReturn for BorrowArray {
     fn is_borrow_return<H: HugrView>(
