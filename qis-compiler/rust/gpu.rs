@@ -89,6 +89,8 @@
 use crate::selene_specific;
 use anyhow::{Result, bail};
 use hugr::llvm::{CodegenExtension, CodegenExtsBuilder, inkwell};
+use hugr::std_extensions::arithmetic::int_types::int_type;
+use hugr::extension::prelude::option_type;
 use hugr::{HugrView, Node};
 use inkwell::AddressSpace;
 use inkwell::types::{BasicType as _, BasicTypeEnum};
@@ -132,24 +134,25 @@ impl GpuCodegen {
         let [index] = &op.inputs[..] else {
             bail!("GetContext operation requires exactly one input");
         };
+        let iwc = ctx.iw_context();
+        let ts = ctx.typing_session();
         let index = {
             let index = index.into_int_value();
             let width = index.get_type().get_bit_width();
             match width.cmp(&64) {
                 Ordering::Greater => ctx.builder().build_int_truncate(
                     index,
-                    ctx.iw_context().i64_type(),
+                    iwc.i64_type(),
                     "context_index_trunc",
                 )?,
                 Ordering::Less => ctx.builder().build_int_z_extend(
                     index,
-                    ctx.iw_context().i64_type(),
+                    iwc.i64_type(),
                     "context_index_zext",
                 )?,
                 Ordering::Equal => index,
             }
         };
-        let iwc = ctx.iw_context();
         let builder = ctx.builder();
 
         let handle_ptr = builder.build_alloca(iwc.i64_type(), "handle_ptr")?;
@@ -179,19 +182,11 @@ impl GpuCodegen {
             .into_int_value();
         verify_gpu_call(ctx, success, "gpu_init")?;
 
-        let gpu_ref = builder.build_load(handle_ptr, "gpu_ref")?.into_int_value();
-
-        let struct_ty = iwc.struct_type(&[iwc.bool_type().into(), iwc.i64_type().into()], false);
-        // Failure has already been handled by verify_gpu_call, so always
-        // return success.
-        let pair = builder.build_insert_value(
-            struct_ty.get_undef(),
-            iwc.bool_type().const_int(1, false),
-            0,
-            "status",
-        )?;
-        let pair =
-            builder.build_insert_value(pair.into_struct_value(), gpu_ref, 1, "gpu_ref_result")?;
+        let gpu_ref = builder.build_load(handle_ptr, "gpu_ref")?;
+        let result_t = ts.llvm_sum_type(option_type(int_type(6)))?;
+        // Although the result is an option type, we always return true
+        // in this lowering: failure is already handled.
+        let pair = result_t.build_tag(builder, 1, vec![gpu_ref])?;
         op.outputs
             .finish(ctx.builder(), [pair.as_basic_value_enum()])
     }
