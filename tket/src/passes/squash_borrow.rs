@@ -9,13 +9,12 @@ use hugr::extension::prelude::ConstUsize;
 use hugr::extension::simple_op::MakeExtensionOp;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait, OpType, Value};
-use hugr::std_extensions::arithmetic::conversions::ConvertOpDef;
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::{
     BArrayUnsafeOpDef, BorrowArray, BORROW_ARRAY_TYPENAME,
 };
 use hugr::types::Type;
-use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Wire};
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -67,6 +66,11 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
     type Result = Vec<(Node, Node)>;
 
     /// Perform the pass on the given hugr.
+    ///
+    /// Note it is recommended to run [ConstantFoldPass] first to make as many indices
+    /// constant as possible.
+    ///
+    /// [ConstantFoldPass]: hugr_passes::constant_fold::ConstantFoldPass
     fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
         let temp: Vec<Node>; // to keep alive
         let regions = if self.regions.is_empty() {
@@ -392,31 +396,16 @@ fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wir
 }
 
 fn find_const<H: HugrView>(hugr: &H, n: H::Node, inp: IncomingPort) -> Option<u64> {
-    let (mut curr_node, mut outp) = hugr.single_linked_output(n, inp).unwrap();
-
-    fn is_const_conversion_op(op: &OpType) -> bool {
-        matches!(op, OpType::LoadConstant(..))
-            || op
-                .as_extension_op()
-                .is_some_and(|op| ConvertOpDef::from_extension_op(op) == Ok(ConvertOpDef::itousize))
+    let (load_const, _) = hugr.single_linked_output(n, inp).expect("dataflow input");
+    if !hugr.get_optype(load_const).is_load_constant() {
+        return None;
     }
 
-    let op = loop {
-        if outp.index() > 0 {
-            return None;
-        }
-        let op = hugr.get_optype(curr_node);
-        if !is_const_conversion_op(op) {
-            break op;
-        }
-        (curr_node, outp) = hugr
-            .single_linked_output(curr_node, IncomingPort::from(0))
-            .expect("invalid signature for conversion op");
-    };
+    let const_op = hugr
+        .single_linked_output(load_const, 0)
+        .and_then(|(n, _)| hugr.get_optype(n).as_const())
+        .expect("LoadConstant input is constant");
 
-    let OpType::Const(const_op) = op else {
-        return None;
-    };
     if let Value::Extension { e } = &const_op.value {
         if let Some(c) = e.value().downcast_ref::<ConstUsize>() {
             return Some(c.value());
@@ -435,7 +424,7 @@ mod test {
     use super::{find_const, BorrowSquashPass};
     use crate::extension::REGISTRY;
     use hugr::{
-        algorithms::ComposablePass,
+        algorithms::{const_fold::ConstantFoldPass, ComposablePass},
         extension::{prelude::qb_t, simple_op::MakeExtensionOp},
         hugr::hugrmut::HugrMut,
         ops::OpTrait,
@@ -471,6 +460,7 @@ mod test {
         #[case] expected_elisions: usize,
         #[case] expected_indices: Option<Vec<u64>>,
     ) {
+        ConstantFoldPass::default().run(&mut h).unwrap();
         let orig_num_nodes = h.num_nodes();
         let res = BorrowSquashPass::<BorrowArray>::default()
             .run(&mut h)
@@ -527,6 +517,7 @@ mod test {
             })
             .unwrap();
         h.set_entrypoint(array_func);
+        ConstantFoldPass::default().run(&mut h).unwrap();
         // Sanity checks: all borrows are qs[0][1 or 2]
         for nodes in [find_borrows(&h).collect_vec(), find_returns(&h).collect()] {
             let mut outer_count = 0;
@@ -566,6 +557,7 @@ mod test {
             assert!(BTreeSet::from_iter(find_borrows(&h))
                 .is_superset(&h.input_neighbours(cx).collect()));
         }
+
         let res = BorrowSquashPass::<BorrowArray>::default()
             .run(&mut h)
             .unwrap();
