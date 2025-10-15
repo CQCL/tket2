@@ -35,31 +35,43 @@ entry_block:                                      ; preds = %alloca_block
   %"2_56" = load i1, i1* %"2_5", align 1
   %gpu_input_blob = alloca [25 x i8], align 1
   %dest_ptr = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 0
-  %dest_i64_ptr = bitcast i8* %dest_ptr to i64*
-  store i64 %"2_23", i64* %dest_i64_ptr, align 4
+  %arg_i64_tmp = alloca i64, align 8
+  store i64 %"2_23", i64* %arg_i64_tmp, align 4
+  %arg_i8_ptr = bitcast i64* %arg_i64_tmp to [8 x i8]*
+  %6 = bitcast [8 x i8]* %arg_i8_ptr to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %dest_ptr, i8* align 1 %6, i64 8, i1 false)
   %dest_ptr7 = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 8
-  %dest_i64_ptr8 = bitcast i8* %dest_ptr7 to i64*
-  store i64 %"2_34", i64* %dest_i64_ptr8, align 4
-  %dest_ptr9 = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 16
-  %dest_f64_ptr = bitcast i8* %dest_ptr9 to double*
-  store double %"2_45", double* %dest_f64_ptr, align 8
-  %dest_ptr10 = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 24
+  %arg_i64_tmp8 = alloca i64, align 8
+  store i64 %"2_34", i64* %arg_i64_tmp8, align 4
+  %arg_i8_ptr9 = bitcast i64* %arg_i64_tmp8 to [8 x i8]*
+  %7 = bitcast [8 x i8]* %arg_i8_ptr9 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %dest_ptr7, i8* align 1 %7, i64 8, i1 false)
+  %dest_ptr10 = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 16
+  %arg_f64_tmp = alloca double, align 8
+  store double %"2_45", double* %arg_f64_tmp, align 8
+  %arg_i8_ptr11 = bitcast double* %arg_f64_tmp to [8 x i8]*
+  %8 = bitcast [8 x i8]* %arg_i8_ptr11 to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %dest_ptr10, i8* align 1 %8, i64 8, i1 false)
+  %dest_ptr12 = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 24
   %arg_i8 = zext i1 %"2_56" to i8
-  store i8 %arg_i8, i8* %dest_ptr10, align 1
+  store i8 %arg_i8, i8* %dest_ptr12, align 1
   %gpu_input_blob_ptr = getelementptr inbounds [25 x i8], [25 x i8]* %gpu_input_blob, i64 0, i64 0
-  %6 = call i8 @gpu_call(i64 %"2_01", i64 %"2_12", i64 25, i8* %gpu_input_blob_ptr, i8* getelementptr inbounds ([7 x i8], [7 x i8]* @arg_types, i32 0, i32 0))
-  call void @validate_gpu_response(i8 %6)
+  %9 = call i8 @gpu_call(i64 %"2_01", i64 %"2_12", i64 25, i8* %gpu_input_blob_ptr, i8* getelementptr inbounds ([7 x i8], [7 x i8]* @arg_types, i32 0, i32 0))
+  call void @validate_gpu_response(i8 %9)
   store i64 %"2_01", i64* %"4_0", align 4
-  %"4_011" = load i64, i64* %"4_0", align 4
-  store i64 %"4_011", i64* %"0", align 4
-  %"012" = load i64, i64* %"0", align 4
-  ret i64 %"012"
+  %"4_013" = load i64, i64* %"4_0", align 4
+  store i64 %"4_013", i64* %"0", align 4
+  %"014" = load i64, i64* %"0", align 4
+  ret i64 %"014"
 }
 
 declare i8 @gpu_call(i64, i64, i64, i8*, i8*)
 
+; Function Attrs: argmemonly nofree nounwind willreturn
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* noalias nocapture writeonly, i8* noalias nocapture readonly, i64, i1 immarg) #0
+
 ; Function Attrs: noinline
-define void @validate_gpu_response(i8 %0) #0 {
+define void @validate_gpu_response(i8 %0) #1 {
 entry:
   %success = icmp ne i8 %0, 0
   br i1 %success, label %ok, label %err
@@ -73,7 +85,7 @@ err:                                              ; preds = %entry
 }
 
 ; Function Attrs: noinline
-define void @gpu_error_handler() #0 {
+define void @gpu_error_handler() #1 {
 entry:
   %error_message = call i8* @gpu_get_error()
   %is_null = icmp eq i8* %error_message, null
@@ -85,7 +97,8 @@ entry:
 declare i8* @gpu_get_error()
 
 ; Function Attrs: noreturn
-declare void @panic_str(i32, i8*) #1
+declare void @panic_str(i32, i8*) #2
 
-attributes #0 = { noinline }
-attributes #1 = { noreturn }
+attributes #0 = { argmemonly nofree nounwind willreturn }
+attributes #1 = { noinline }
+attributes #2 = { noreturn }
