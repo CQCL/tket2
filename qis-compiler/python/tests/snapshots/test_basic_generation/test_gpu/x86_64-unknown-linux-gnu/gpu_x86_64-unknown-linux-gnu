@@ -14,10 +14,98 @@ target triple = "x86_64-unknown-linux-gnu"
 @arg_types.2 = private unnamed_addr constant [4 x i8] c"i:f\00", align 1
 @res_b.0E048F9C.0 = private constant [13 x i8] c"\0CUSER:FLOAT:b"
 
+define private fastcc void @__hugr__.main.1() unnamed_addr {
+alloca_block:
+  %validate_call = tail call i8 @gpu_validate_api(i64 0, i64 1, i64 0)
+  %success.not.i = icmp eq i8 %validate_call, 0
+  br i1 %success.not.i, label %err.i, label %validate_gpu_response.exit
+
+err.i:                                            ; preds = %alloca_block
+  tail call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit:                       ; preds = %alloca_block
+  %function_id_call = tail call i64 @gpu_get_function_id_fn_returning_float()
+  %function_id_call3 = tail call i64 @gpu_get_function_id_fn_returning_int()
+  %handle_ptr = alloca i64, align 8
+  %gpu_ref_call = call i8 @gpu_init(i64 0, i64* nonnull %handle_ptr)
+  %success.not.i39 = icmp eq i8 %gpu_ref_call, 0
+  br i1 %success.not.i39, label %err.i40, label %validate_gpu_response.exit41
+
+err.i40:                                          ; preds = %validate_gpu_response.exit
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit41:                     ; preds = %validate_gpu_response.exit
+  %gpu_ref = load i64, i64* %handle_ptr, align 8
+  %gpu_input_blob = alloca [16 x i8], align 8
+  %dest_ptr = getelementptr inbounds [16 x i8], [16 x i8]* %gpu_input_blob, i64 0, i64 0
+  %dest_i64_ptr = bitcast [16 x i8]* %gpu_input_blob to i64*
+  store i64 42, i64* %dest_i64_ptr, align 8
+  %dest_ptr17 = getelementptr inbounds [16 x i8], [16 x i8]* %gpu_input_blob, i64 0, i64 8
+  %dest_f64_ptr = bitcast i8* %dest_ptr17 to double*
+  store double 2.718280e+00, double* %dest_f64_ptr, align 8
+  %0 = call i8 @gpu_call(i64 %gpu_ref, i64 %function_id_call3, i64 16, i8* nonnull %dest_ptr, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @arg_types, i64 0, i64 0))
+  %success.not.i42 = icmp eq i8 %0, 0
+  br i1 %success.not.i42, label %err.i43, label %validate_gpu_response.exit44
+
+err.i43:                                          ; preds = %validate_gpu_response.exit41
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit44:                     ; preds = %validate_gpu_response.exit41
+  %int_result = alloca i64, align 8
+  %read_status = call i8 @gpu_get_result_64bits(i64 %gpu_ref, i64* nonnull %int_result)
+  %success.not.i45 = icmp eq i8 %read_status, 0
+  br i1 %success.not.i45, label %err.i46, label %validate_gpu_response.exit47
+
+err.i46:                                          ; preds = %validate_gpu_response.exit44
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit47:                     ; preds = %validate_gpu_response.exit44
+  %int_result19 = load i64, i64* %int_result, align 8
+  call void @print_int(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @res_a.19FB4E83.0, i64 0, i64 0), i64 10, i64 %int_result19)
+  %gpu_input_blob25 = alloca i64, align 8
+  %dest_ptr26 = bitcast i64* %gpu_input_blob25 to i8*
+  store i64 %int_result19, i64* %gpu_input_blob25, align 8
+  %1 = call i8 @gpu_call(i64 %gpu_ref, i64 %function_id_call, i64 8, i8* nonnull %dest_ptr26, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @arg_types.2, i64 0, i64 0))
+  %success.not.i48 = icmp eq i8 %1, 0
+  br i1 %success.not.i48, label %err.i49, label %validate_gpu_response.exit50
+
+err.i49:                                          ; preds = %validate_gpu_response.exit47
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit50:                     ; preds = %validate_gpu_response.exit47
+  %int_result30 = alloca i64, align 8
+  %read_status31 = call i8 @gpu_get_result_64bits(i64 %gpu_ref, i64* nonnull %int_result30)
+  %success.not.i51 = icmp eq i8 %read_status31, 0
+  br i1 %success.not.i51, label %err.i52, label %validate_gpu_response.exit53
+
+err.i52:                                          ; preds = %validate_gpu_response.exit50
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit53:                     ; preds = %validate_gpu_response.exit50
+  %float_result_ptr = bitcast i64* %int_result30 to double*
+  %float_result = load double, double* %float_result_ptr, align 8
+  %2 = call i8 @gpu_discard(i64 %gpu_ref)
+  %success.not.i54 = icmp eq i8 %2, 0
+  br i1 %success.not.i54, label %err.i55, label %validate_gpu_response.exit56
+
+err.i55:                                          ; preds = %validate_gpu_response.exit53
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit56:                     ; preds = %validate_gpu_response.exit53
+  call void @print_float(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @res_b.0E048F9C.0, i64 0, i64 0), i64 12, double %float_result)
+  ret void
+}
+
 declare i8 @gpu_validate_api(i64, i64, i64) local_unnamed_addr
 
-; Function Attrs: noinline
-define void @validate_gpu_response(i8 %0) local_unnamed_addr #0 {
+define void @validate_gpu_response(i8 %0) local_unnamed_addr {
 entry:
   %success.not = icmp eq i8 %0, 0
   br i1 %success.not, label %err, label %ok
@@ -30,8 +118,8 @@ err:                                              ; preds = %entry
   unreachable
 }
 
-; Function Attrs: noinline noreturn
-define void @gpu_error_handler() local_unnamed_addr #1 {
+; Function Attrs: noreturn
+define void @gpu_error_handler() local_unnamed_addr #0 {
 entry:
   %error_message = tail call i8* @gpu_get_error()
   %is_null = icmp eq i8* %error_message, null
@@ -43,10 +131,9 @@ entry:
 declare i8* @gpu_get_error() local_unnamed_addr
 
 ; Function Attrs: noreturn
-declare void @panic_str(i32, i8*) local_unnamed_addr #2
+declare void @panic_str(i32, i8*) local_unnamed_addr #0
 
-; Function Attrs: noinline
-define i64 @gpu_get_function_id_fn_returning_float() local_unnamed_addr #0 {
+define i64 @gpu_get_function_id_fn_returning_float() local_unnamed_addr {
 entry:
   %function_id = load i64, i64* @gpu_function_id_fn_returning_float, align 8
   %needs_lookup = icmp eq i64 %function_id, -1
@@ -55,20 +142,26 @@ entry:
 lookup:                                           ; preds = %entry
   %function_id_ptr = alloca i64, align 8
   %function_id_call = call i8 @gpu_get_function_id(i8* getelementptr inbounds ([19 x i8], [19 x i8]* @function_name, i64 0, i64 0), i64* nonnull %function_id_ptr)
-  call void @validate_gpu_response(i8 %function_id_call)
+  %success.not.i = icmp eq i8 %function_id_call, 0
+  br i1 %success.not.i, label %err.i, label %validate_gpu_response.exit
+
+err.i:                                            ; preds = %lookup
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit:                       ; preds = %lookup
   %function_id1 = load i64, i64* %function_id_ptr, align 8
   store i64 %function_id1, i64* @gpu_function_id_fn_returning_float, align 8
   br label %done
 
-done:                                             ; preds = %lookup, %entry
-  %function_id2 = phi i64 [ %function_id1, %lookup ], [ %function_id, %entry ]
+done:                                             ; preds = %validate_gpu_response.exit, %entry
+  %function_id2 = phi i64 [ %function_id1, %validate_gpu_response.exit ], [ %function_id, %entry ]
   ret i64 %function_id2
 }
 
 declare i8 @gpu_get_function_id(i8*, i64*) local_unnamed_addr
 
-; Function Attrs: noinline
-define i64 @gpu_get_function_id_fn_returning_int() local_unnamed_addr #0 {
+define i64 @gpu_get_function_id_fn_returning_int() local_unnamed_addr {
 entry:
   %function_id = load i64, i64* @gpu_function_id_fn_returning_int, align 8
   %needs_lookup = icmp eq i64 %function_id, -1
@@ -77,13 +170,20 @@ entry:
 lookup:                                           ; preds = %entry
   %function_id_ptr = alloca i64, align 8
   %function_id_call = call i8 @gpu_get_function_id(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @function_name.1, i64 0, i64 0), i64* nonnull %function_id_ptr)
-  call void @validate_gpu_response(i8 %function_id_call)
+  %success.not.i = icmp eq i8 %function_id_call, 0
+  br i1 %success.not.i, label %err.i, label %validate_gpu_response.exit
+
+err.i:                                            ; preds = %lookup
+  call void @gpu_error_handler()
+  unreachable
+
+validate_gpu_response.exit:                       ; preds = %lookup
   %function_id1 = load i64, i64* %function_id_ptr, align 8
   store i64 %function_id1, i64* @gpu_function_id_fn_returning_int, align 8
   br label %done
 
-done:                                             ; preds = %lookup, %entry
-  %function_id2 = phi i64 [ %function_id1, %lookup ], [ %function_id, %entry ]
+done:                                             ; preds = %validate_gpu_response.exit, %entry
+  %function_id2 = phi i64 [ %function_id1, %validate_gpu_response.exit ], [ %function_id, %entry ]
   ret i64 %function_id2
 }
 
@@ -101,73 +201,17 @@ declare void @print_float(i8*, i64, double) local_unnamed_addr
 
 define i64 @qmain(i64 %0) local_unnamed_addr {
 entry:
-  %handle_ptr.i = alloca i64, align 8
-  %gpu_input_blob.i = alloca [16 x i8], align 8
-  %int_result.i = alloca i64, align 8
-  %gpu_input_blob25.i = alloca i64, align 8
-  %int_result30.i = alloca i64, align 8
   tail call void @setup(i64 %0)
-  %1 = bitcast i64* %handle_ptr.i to i8*
-  call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %1)
-  %2 = getelementptr inbounds [16 x i8], [16 x i8]* %gpu_input_blob.i, i64 0, i64 0
-  call void @llvm.lifetime.start.p0i8(i64 16, i8* nonnull %2)
-  %3 = bitcast i64* %int_result.i to i8*
-  call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %3)
-  %4 = bitcast i64* %gpu_input_blob25.i to i8*
-  call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %4)
-  %5 = bitcast i64* %int_result30.i to i8*
-  call void @llvm.lifetime.start.p0i8(i64 8, i8* nonnull %5)
-  %validate_call.i = tail call i8 @gpu_validate_api(i64 0, i64 1, i64 0)
-  tail call void @validate_gpu_response(i8 %validate_call.i)
-  %function_id_call.i = tail call i64 @gpu_get_function_id_fn_returning_float()
-  %function_id_call3.i = tail call i64 @gpu_get_function_id_fn_returning_int()
-  %gpu_ref_call.i = call i8 @gpu_init(i64 0, i64* nonnull %handle_ptr.i)
-  call void @validate_gpu_response(i8 %gpu_ref_call.i)
-  %gpu_ref.i = load i64, i64* %handle_ptr.i, align 8
-  %dest_i64_ptr.i = bitcast [16 x i8]* %gpu_input_blob.i to i64*
-  store i64 42, i64* %dest_i64_ptr.i, align 8
-  %dest_ptr17.i = getelementptr inbounds [16 x i8], [16 x i8]* %gpu_input_blob.i, i64 0, i64 8
-  %dest_f64_ptr.i = bitcast i8* %dest_ptr17.i to double*
-  store double 2.718280e+00, double* %dest_f64_ptr.i, align 8
-  %6 = call i8 @gpu_call(i64 %gpu_ref.i, i64 %function_id_call3.i, i64 16, i8* nonnull %2, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @arg_types, i64 0, i64 0))
-  call void @validate_gpu_response(i8 %6)
-  %read_status.i = call i8 @gpu_get_result_64bits(i64 %gpu_ref.i, i64* nonnull %int_result.i)
-  call void @validate_gpu_response(i8 %read_status.i)
-  %int_result19.i = load i64, i64* %int_result.i, align 8
-  call void @print_int(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @res_a.19FB4E83.0, i64 0, i64 0), i64 10, i64 %int_result19.i)
-  store i64 %int_result19.i, i64* %gpu_input_blob25.i, align 8
-  %7 = call i8 @gpu_call(i64 %gpu_ref.i, i64 %function_id_call.i, i64 8, i8* nonnull %4, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @arg_types.2, i64 0, i64 0))
-  call void @validate_gpu_response(i8 %7)
-  %read_status31.i = call i8 @gpu_get_result_64bits(i64 %gpu_ref.i, i64* nonnull %int_result30.i)
-  call void @validate_gpu_response(i8 %read_status31.i)
-  %float_result_ptr.i = bitcast i64* %int_result30.i to double*
-  %float_result.i = load double, double* %float_result_ptr.i, align 8
-  %8 = call i8 @gpu_discard(i64 %gpu_ref.i)
-  call void @validate_gpu_response(i8 %8)
-  call void @print_float(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @res_b.0E048F9C.0, i64 0, i64 0), i64 12, double %float_result.i)
-  call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %1)
-  call void @llvm.lifetime.end.p0i8(i64 16, i8* nonnull %2)
-  call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %3)
-  call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %4)
-  call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %5)
-  %9 = call i64 @teardown()
-  ret i64 %9
+  tail call fastcc void @__hugr__.main.1()
+  %1 = tail call i64 @teardown()
+  ret i64 %1
 }
 
 declare void @setup(i64) local_unnamed_addr
 
 declare i64 @teardown() local_unnamed_addr
 
-; Function Attrs: argmemonly nofree nosync nounwind willreturn
-declare void @llvm.lifetime.start.p0i8(i64 immarg, i8* nocapture) #3
-
-; Function Attrs: argmemonly nofree nosync nounwind willreturn
-declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #3
-
-attributes #0 = { noinline }
-attributes #1 = { noinline noreturn }
-attributes #2 = { noreturn }
-attributes #3 = { argmemonly nofree nosync nounwind willreturn }
+attributes #0 = { noreturn }
 
 !name = !{!0}
 

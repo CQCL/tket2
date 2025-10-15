@@ -249,10 +249,6 @@ impl GpuCodegen {
                 let function = ctx
                     .get_current_module()
                     .add_function(&function_name, fn_type, None);
-                let noinline_id =
-                    inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
-                let noinline = iwc.create_enum_attribute(noinline_id, 0);
-                function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
                 let entry = iwc.append_basic_block(function, "entry");
                 ctx.builder().position_at_end(entry);
                 // if the function id is all ones, we need to look it up
@@ -654,9 +650,6 @@ fn emit_panic_with_gpu_error<'c, H: HugrView<Node = Node>>(
             let current_block = builder.get_insert_block().unwrap();
             let fn_type = iwc.void_type().fn_type(&[], false);
             let function = module.add_function("gpu_error_handler", fn_type, None);
-            let noinline_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
-            let noinline = iwc.create_enum_attribute(noinline_id, 0);
-            function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
             let entry = iwc.append_basic_block(function, "entry");
             builder.position_at_end(entry);
             // Try to get the error message from the GPU library.
@@ -725,18 +718,11 @@ fn verify_gpu_call<'c, H: HugrView<Node = Node>>(
     let module = ctx.get_current_module();
     let iwc = ctx.iw_context();
     let builder = ctx.builder();
-    // Rather than emiting the validation code inline after each gpu call,
-    // we define a response validation function and call into it after each
-    // gpu call. Keeping it noinline keeps the resulting IR clean, but
-    // we can always inline it later if required.
     let handle_error = match module.get_function("validate_gpu_response") {
         None => {
             let current_block = builder.get_insert_block().unwrap();
             let fn_type = iwc.void_type().fn_type(&[iwc.i8_type().into()], false);
             let function = module.add_function("validate_gpu_response", fn_type, None);
-            let noinline_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
-            let noinline = iwc.create_enum_attribute(noinline_id, 0);
-            function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
             let entry = iwc.append_basic_block(function, "entry");
             builder.position_at_end(entry);
             let ok_block = iwc.append_basic_block(function, "ok");
