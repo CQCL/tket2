@@ -88,9 +88,9 @@
 
 use crate::selene_specific;
 use anyhow::{Result, bail};
+use hugr::extension::prelude::option_type;
 use hugr::llvm::{CodegenExtension, CodegenExtsBuilder, inkwell};
 use hugr::std_extensions::arithmetic::int_types::int_type;
-use hugr::extension::prelude::option_type;
 use hugr::{HugrView, Node};
 use inkwell::AddressSpace;
 use inkwell::types::{BasicType as _, BasicTypeEnum};
@@ -145,11 +145,10 @@ impl GpuCodegen {
                     iwc.i64_type(),
                     "context_index_trunc",
                 )?,
-                Ordering::Less => ctx.builder().build_int_z_extend(
-                    index,
-                    iwc.i64_type(),
-                    "context_index_zext",
-                )?,
+                Ordering::Less => {
+                    ctx.builder()
+                        .build_int_z_extend(index, iwc.i64_type(), "context_index_zext")?
+                }
                 Ordering::Equal => index,
             }
         };
