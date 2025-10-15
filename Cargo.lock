@@ -2208,6 +2208,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "cbindgen",
+ "insta",
  "itertools 0.14.0",
  "pyo3",
  "pyo3-build-config",

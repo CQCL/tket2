@@ -885,3 +885,73 @@ fn pack_arguments<'c, H: HugrView<Node = Node>>(
     }
     Ok((blob, blob_size))
 }
+
+#[cfg(test)]
+mod test {
+    use hugr::llvm::check_emission;
+    use hugr::llvm::test::{TestContext, llvm_ctx, single_op_hugr};
+    use rstest::Context;
+    use tket::circuit::TypeRow;
+    use tket::hugr::extension::prelude::{bool_t, usize_t};
+    use tket::hugr::std_extensions::arithmetic::float_types::float64_type;
+    use tket::hugr::std_extensions::arithmetic::int_types::INT_TYPES;
+    use tket::hugr::type_row;
+    use tket_qsystem::extension::gpu::GpuOp;
+
+    use super::*;
+
+    #[rstest::rstest]
+    #[case::get_context(GpuOp::GetContext)]
+    #[case::dispose_context(GpuOp::DisposeContext)]
+    #[case::lookup(GpuOp::LookupById {
+        id: 42,
+        inputs: type_row![].into(),
+        outputs: type_row![].into(),
+    })]
+    #[case::call_args(GpuOp::Call {
+        inputs: TypeRow::from(vec![
+            usize_t(),
+            INT_TYPES[6].clone(),
+            float64_type(),
+            bool_t()
+        ]),
+        outputs: TypeRow::from(vec![]),
+    })]
+    #[case::call_ret_int(GpuOp::Call {
+        inputs: type_row![],
+        outputs: TypeRow::from(usize_t()),
+    })]
+    #[case::call_ret_float(GpuOp::Call {
+        inputs: type_row![],
+        outputs: TypeRow::from(float64_type()),
+    })]
+    #[case::read_result_int(GpuOp::ReadResult {
+        outputs: TypeRow::from(usize_t()),
+    })]
+    #[case::read_result_float(GpuOp::ReadResult {
+        outputs: TypeRow::from(float64_type()),
+    })]
+    fn gpu_codegen(#[context] ctx: Context, mut llvm_ctx: TestContext, #[case] op: GpuOp) {
+        let _g = {
+            let desc = ctx.description.unwrap();
+            let mut settings = insta::Settings::clone_current();
+            settings.set_snapshot_path("../snapshots");
+
+            let suffix = settings
+                .snapshot_suffix()
+                .map_or_else(|| desc.to_string(), |s| format!("{s}_{desc}"));
+            settings.set_snapshot_suffix(suffix);
+            settings
+        }
+        .bind_to_scope();
+
+        llvm_ctx.add_extensions(move |cge| {
+            cge.add_default_prelude_extensions()
+                .add_default_int_extensions()
+                .add_float_extensions()
+                .add_extension(GpuCodegen)
+        });
+        let hugr = single_op_hugr(op.into());
+        check_emission!(hugr, llvm_ctx);
+    }
+}
