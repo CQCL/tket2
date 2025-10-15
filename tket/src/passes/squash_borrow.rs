@@ -83,9 +83,9 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
             &temp
         });
         let mut results = Vec::new();
-        let mut seen = HashSet::new();
         for region in regions {
-            // Start with all nodes not reachable along dataflow edges from other nodes. (INcludes Input.)
+            let mut seen = HashSet::new();
+            // Start with all nodes not reachable along dataflow edges from other nodes. (Includes Input.)
             let mut queue = VecDeque::from_iter(
                 hugr.children(*region)
                     .filter(|n| hugr.in_value_types(*n).next().is_none())
