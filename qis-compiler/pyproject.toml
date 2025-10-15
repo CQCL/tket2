@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [dependency-groups]
 dev = [
-    "guppylang~=0.21.0",
+    # "guppylang~=0.21.0",
     "pytest-snapshot~=0.9.0",
     "cibuildwheel>=2.23.2",
     "pytket~=2.9",
