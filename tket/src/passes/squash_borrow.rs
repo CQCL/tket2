@@ -23,12 +23,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Identifies array types and borrows/returns on them
 pub trait IsBorrowReturn: Clone {
-    /// Determine if the given node is a borrow or return node, and if so,
-    /// return the ports identifying the operands. May also return
-    /// * [BRAction::Clobber] if the op is neither a borrow nor return but
-    ///   affects borrowedness of only some indices.
-    /// * `Ok(None)` if the node is not a borrow/return, and we should not
-    ///   elide any borrow/return pairs across this node.
+    /// Determine if the given node is a borrow or return node, and if so, return
+    /// the ports identifying the operands. If not, return `Ok(None)` - this will
+    /// prevent elision of any return-borrow-return spread over this node.
     ///
     /// # Errors
     ///
@@ -144,19 +141,6 @@ pub enum BRAction {
     Borrow(OutgoingPort),
     /// A return action, containing the port on which the value to return is input.
     Return(IncomingPort),
-    /// Some other action that requires borrowedness of some indices to be as it
-    /// would be in the unoptimized Hugr. Thus, we cannot optimize any boro-ret or
-    /// ret-boro pair across this op.
-    ///
-    /// The indices are given by the combination of [BorrowReturnPorts::elem_index]
-    /// and any indices in the `Vec` herein.
-    ///
-    /// If the op clobbers even a single index which is definitely unknown (not from
-    /// an [IncomingPort]), then we must assume borrowedness of *all* indices must be
-    /// preserved, so no optimization of any pairs around this op is possible; in such
-    /// case, the outputs of the op can be considered to be fresh arrays so the
-    /// appropriate return value from [IsBorrowReturn::is_borrow_return] is `None`.
-    Clobber(Vec<IncomingPort>),
 }
 
 /// Ports common to a borrow or return op
@@ -164,7 +148,7 @@ pub enum BRAction {
 pub struct BorrowReturnPorts {
     /// Whether this is a borrow or return, and the port for the borrowed value.
     pub action: BRAction,
-    /// Port on which the index to borrow, return, or clobber, is passed in
+    /// Port on which the index (of the element to borrow or return) is passed in
     pub elem_index: IncomingPort,
     /// The ports by which the container array reaches and leaves this node.
     pub borrow_from: BorrowFromPorts,
@@ -285,28 +269,6 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
         array = Wire::new(node, borrow_from.out); // for next iteration
 
         match (action, borrowed.entry(index)) {
-            (BRAction::Clobber(other_idxs), _) => {
-                let Some(mut clobbered_indices) = other_idxs
-                    .iter()
-                    .map(|inp| find_const(hugr, node, *inp))
-                    .collect::<Option<Vec<_>>>()
-                else {
-                    // At least one unknown index - must preserve all borrowedness
-                    // so no elision possible across this op.
-                    candidates.extend(all_outs(hugr, node));
-                    break;
-                };
-                clobbered_indices.push(index);
-
-                for idx in clobbered_indices {
-                    if let Entry::Occupied(oe) = borrowed.entry(idx) {
-                        let (boro, opt_ret) = oe.remove();
-                        if let Some(ret) = opt_ret {
-                            br_pairs.push((idx, boro, ret));
-                        }
-                    }
-                }
-            }
             (BRAction::Borrow(borrowed_out), Entry::Vacant(ve)) => {
                 // initial borrow - record
                 ve.insert((Borrow(node, borrowed_out, borrow_from), None));
@@ -423,10 +385,6 @@ fn next_array_op(
         candidates.extend(all_outs(hugr, node));
         return Ok(None);
     };
-    if matches!(is_br.action, BRAction::Clobber(_)) {
-        // We'll process the borrow-from-out port here, but the others are potentially fresh arrays.
-        candidates.extend(all_outs(hugr, node).filter(|w| w.source() != is_br.borrow_from.out));
-    }
     Ok(Some((node, idx, is_br.action, is_br.borrow_from)))
 }
 
