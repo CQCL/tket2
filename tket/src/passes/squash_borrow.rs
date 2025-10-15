@@ -45,17 +45,19 @@ pub trait IsBorrowReturn: Clone {
 /// along with the preceding return.
 #[derive(Clone, Debug, Default)]
 pub struct BorrowSquashPass<BR> {
-    regions: Vec<Node>,
+    regions: Option<Vec<Node>>,
     is_br: BR,
 }
 
 impl<BR> BorrowSquashPass<BR> {
-    /// Add regions (subgraphs) in which to perform the pass.
+    /// Sets the regions (subgraphs) in which to perform the pass.
     ///
-    /// If no regions are specified, the pass is performed on all dataflow regions
+    /// Overrides effect of any previous call; if `regions` is empty, the pass will do nothing.
+    ///
+    /// If `with_regions` is not called, the default is for the pass to act on all dataflow regions
     /// beneath the entrypoint.
-    pub fn with_regions(mut self, regions: impl IntoIterator<Item = Node>) -> Self {
-        self.regions.extend(regions);
+    pub fn set_regions(mut self, regions: impl IntoIterator<Item = Node>) -> Self {
+        self.regions = Some(regions.into_iter().collect());
         self
     }
 }
@@ -72,16 +74,14 @@ impl<H: HugrMut<Node = Node>, BR: IsBorrowReturn> ComposablePass<H> for BorrowSq
     ///
     /// [ConstantFoldPass]: hugr_passes::constant_fold::ConstantFoldPass
     fn run(&self, hugr: &mut H) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
-        let temp: Vec<Node>; // to keep alive
-        let regions = if self.regions.is_empty() {
-            temp = hugr
-                .entry_descendants()
-                .filter(|n| OpTag::DataflowParent.is_superset(hugr.get_optype(*n).tag()))
-                .collect();
+        let mut temp = Vec::new(); // to keep alive
+        let regions = self.regions.as_ref().unwrap_or_else(|| {
+            temp.extend(
+                hugr.entry_descendants()
+                    .filter(|n| OpTag::DataflowParent.is_superset(hugr.get_optype(*n).tag())),
+            );
             &temp
-        } else {
-            &self.regions
-        };
+        });
         let mut results = Vec::new();
         let mut seen = HashSet::new();
         for region in regions {
