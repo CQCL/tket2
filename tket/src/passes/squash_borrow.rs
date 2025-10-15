@@ -368,13 +368,18 @@ mod test {
     use crate::extension::REGISTRY;
     use hugr::{
         algorithms::{const_fold::ConstantFoldPass, ComposablePass},
-        extension::{prelude::qb_t, simple_op::MakeExtensionOp},
+        builder::{Dataflow, DataflowHugr, FunctionBuilder},
+        extension::{
+            prelude::{qb_t, usize_t, ConstUsize},
+            simple_op::MakeExtensionOp,
+        },
         hugr::hugrmut::HugrMut,
-        ops::OpTrait,
+        ops::{handle::NodeHandle, OpTrait},
         std_extensions::collections::{
             array::ArrayKind,
             borrow_array::{BArrayUnsafeOpDef, BorrowArray},
         },
+        types::Signature,
         Hugr, HugrView, Node,
     };
     use itertools::Itertools;
@@ -525,5 +530,83 @@ mod test {
                 .is_some_and(|eop| eop.qualified_id() == "tket.quantum.CX"));
         }
         assert!(h.output_neighbours(cx1).all(|n| n == cx2));
+    }
+
+    /// Captures (somewhere) dynamic borrow, return or both together
+    ///   coming at any position before/during/after borrow-return-reborrow
+    #[rstest]
+    fn test_dynamic(#[values(0, 1, 2)] dyn_pos: usize) {
+        // element 1:               Borrow Return Reborrow
+        // dyn_pos==0:  dyn Borrow                          dyn Return
+        // element 2:                        Borrow Return                          Reborrow
+        // dyn_pos==1:                                      dyn Borrow                                      dyn Return
+        // element 3:                               Borrow                          Return Reborrow
+        // dyn_pos==2:                                      dyn Borrow, dyn Return
+        // element 4:                                                               Borrow Return Reborrow
+        let ins = vec![usize_t(), BorrowArray::ty(10, usize_t())];
+        let mut outs = vec![usize_t(); 3];
+        outs.extend(ins.clone());
+        let mut fb = FunctionBuilder::new("test", Signature::new(ins, outs)).unwrap();
+        let [i, arr] = fb.input_wires_arr();
+        let borrow = |fb: &mut FunctionBuilder<Hugr>, arr, i| {
+            let op = BArrayUnsafeOpDef::borrow.to_concrete(usize_t(), 10);
+            let h = fb.add_dataflow_op(op, [arr, i]).unwrap();
+            (h.node(), h.outputs_arr::<2>())
+        };
+        let return_ = |fb: &mut FunctionBuilder<Hugr>, arr, i, val| {
+            let op = BArrayUnsafeOpDef::r#return.to_concrete(usize_t(), 10);
+            let h = fb.add_dataflow_op(op, [arr, i, val]).unwrap();
+            (h.node(), h.outputs_arr::<1>()[0])
+        };
+        let [one, two, three, four] = [1, 2, 3, 4].map(|i| fb.add_load_value(ConstUsize::new(i)));
+        let (arr, xi) = if dyn_pos == 0 {
+            // Borrow dynamic index first
+            let (_, [xi, arr]) = borrow(&mut fb, arr, i);
+            (arr, Some(xi))
+        } else {
+            (arr, None)
+        };
+        // Element 1: all three operations together (either before any dynamic indexing, or between dynamic borrow and return)
+        let (_, [x1, arr]) = borrow(&mut fb, arr, one);
+        let (ret1, arr) = return_(&mut fb, arr, one, x1);
+        let (rebo1, [x1, arr]) = borrow(&mut fb, arr, one);
+        // Element 2: initial borrow and return together, final reborrow later
+        let (_, [x2, arr]) = borrow(&mut fb, arr, two);
+        let (_, arr) = return_(&mut fb, arr, two, x2);
+        // Element 3: initial borrow first, return + reborrow together later
+        let (_, [x3, arr]) = borrow(&mut fb, arr, three);
+        // Element 4: all three operations together later
+
+        // *Some* dynamic indexing ops midway through index 2 and index 3
+        let (arr, xi) = if dyn_pos == 0 {
+            let (_, arr) = return_(&mut fb, arr, i, xi.unwrap());
+            (arr, None)
+        } else {
+            assert!(xi.is_none());
+            let (_, [xi, arr]) = borrow(&mut fb, arr, i);
+            if dyn_pos == 1 {
+                (arr, Some(xi))
+            } else {
+                let (_, arr) = return_(&mut fb, arr, i, xi);
+                (arr, None)
+            }
+        };
+
+        // Element 1 finished; final borrow of element 2, return+reborrow of element 3
+        let (_, [x2, arr]) = borrow(&mut fb, arr, two);
+        let (_, arr) = return_(&mut fb, arr, three, x3);
+        let (_, [x3, arr]) = borrow(&mut fb, arr, three);
+        // Element 4: all three operations together (either after all dynamic indexing, or between dynamic borrow and return)
+        let (_, [x4, arr]) = borrow(&mut fb, arr, four);
+        let (ret4, arr) = return_(&mut fb, arr, four, x4);
+        let (rebo4, [x4, arr]) = borrow(&mut fb, arr, four);
+
+        // Possibly final dynamic return
+        let arr = xi.map_or(arr, |xi| return_(&mut fb, arr, i, xi).1);
+        let mut h = fb.finish_hugr_with_outputs([x1, x2, x3, x4, arr]).unwrap();
+
+        let res = BorrowSquashPass::default().run(&mut h).unwrap();
+        assert_eq!(res, [(ret1, rebo1), (ret4, rebo4)]);
+        h.validate().unwrap();
     }
 }
