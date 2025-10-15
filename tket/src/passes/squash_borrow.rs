@@ -16,7 +16,6 @@ use hugr::std_extensions::collections::borrow_array::{
 };
 use hugr::types::Type;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
-use itertools::Itertools;
 
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -243,11 +242,9 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
 ) -> Result<Vec<(Node, Node)>, BorrowAnalysisError> {
     let array_ty = wire_type(hugr, start);
     if !is_br.is_array(&array_ty) {
-        for n in hugr
-            .linked_inputs(start.node(), start.source())
-            .map(|(n, _)| n)
-            .dedup()
-        {
+        for (n, _) in hugr.linked_inputs(start.node(), start.source()) {
+            // Traverse successors until we find an array-creating op. Borrows/Returns
+            // will be traversed when reached along their array input.
             if is_br.is_borrow_return(n, hugr)?.is_none() {
                 candidates.extend(all_outs(hugr, n));
             }
