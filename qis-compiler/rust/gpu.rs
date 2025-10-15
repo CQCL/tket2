@@ -970,6 +970,17 @@ mod test {
         outputs: TypeRow::from(float64_type()),
     })]
     fn gpu_codegen(#[context] ctx: Context, mut llvm_ctx: TestContext, #[case] op: GpuOp) {
+        let _g = {
+            let desc = ctx.description.unwrap();
+            let mut settings = insta::Settings::clone_current();
+            let suffix = settings
+                .snapshot_suffix()
+                .map_or_else(|| desc.to_string(), |s| format!("{s}_{desc}"));
+            settings.set_snapshot_suffix(suffix);
+            settings
+        }
+        .bind_to_scope();
+
         llvm_ctx.add_extensions(move |cge| {
             cge.add_default_prelude_extensions()
                 .add_default_int_extensions()
