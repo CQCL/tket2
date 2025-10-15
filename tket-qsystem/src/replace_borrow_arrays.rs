@@ -83,7 +83,7 @@ fn borrow_dest(size: u64, elem_ty: Type) -> NodeTemplate {
     let arr_type = array_type(size, opt_elem_ty.clone().into());
     let mut dfb = DFGBuilder::new(inout_sig(
         vec![arr_type.clone(), usize_t()],
-        vec![elem_ty.clone(), arr_type.clone()],
+        vec![arr_type.clone(), elem_ty.clone()],
     ))
     .unwrap();
 
@@ -110,7 +110,7 @@ fn borrow_dest(size: u64, elem_ty: Type) -> NodeTemplate {
         })
         .unwrap();
 
-    let h = dfb.finish_hugr_with_outputs([out, out_arr]).unwrap();
+    let h = dfb.finish_hugr_with_outputs([out_arr, out]).unwrap();
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
@@ -947,7 +947,7 @@ mod tests {
         let mut dfb = DFGBuilder::new(inout_sig(vec![ba_ty.clone()], vec![ba_ty.clone()])).unwrap();
         let [ba] = dfb.input_wires_arr();
         let idx = dfb.add_load_value(ConstUsize::new(11));
-        let (el, arr_with_borrow) = dfb
+        let (arr_with_borrow, el) = dfb
             .add_borrow_array_borrow(elem_ty.clone(), size, ba, idx)
             .unwrap();
         let arr_with_return = dfb
@@ -969,7 +969,7 @@ mod tests {
             DFGBuilder::new(Signature::new(vec![arr_ty.clone()], vec![qb_t()])).unwrap();
         let idx = builder.add_load_value(ConstUsize::new(0));
         let [arr] = builder.input_wires_arr();
-        let (el, arr_with_borrowed) = builder
+        let (arr_with_borrowed, el) = builder
             .add_borrow_array_borrow(elem_ty.clone(), size, arr, idx)
             .unwrap();
         builder
