@@ -24,6 +24,7 @@ tket = { path = "../tket", version = "0.16.0" }
 tket-qsystem = { path = "../tket-qsystem", version = "0.21.0", features = [
     "llvm",
 ] }
+insta = "1.43"
 
 [features]
 default = []
