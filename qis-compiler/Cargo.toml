@@ -1,0 +1,41 @@
+[package]
+name = "selene-hugr-qis-compiler"
+authors = ["Seyon Sivarajah <seyon.sivarajah@quantinuum.com>"]
+description = "Compiler for HUGR to LLVM targeting the Helios QIS"
+publish = false
+readme = "README.md"
+repository = "https://github.com/CQCL/tket2/tree/main/qis-compiler"
+license = "Apache-2.0"
+edition = "2024"
+
+[lib]
+name = "selene_hugr_qis_compiler"
+path = "rust/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+pyo3 = { workspace = true, features = ["abi3-py310", "anyhow"] }
+serde_json.workspace = true
+tracing.workspace = true
+itertools.workspace = true
+tket = { path = "../tket", version = "0.15.0" }
+tket-qsystem = { path = "../tket-qsystem", version = "0.21.0", features = [
+    "llvm",
+] }
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]
+
+[build-dependencies]
+cbindgen.workspace = true
+pyo3-build-config.workspace = true
+
+[dev-dependencies]
+rstest.workspace = true
+serde.workspace = true
+typetag.workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["cbindgen", "pyo3-build-config"]

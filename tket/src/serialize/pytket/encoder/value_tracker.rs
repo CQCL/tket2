@@ -138,6 +138,18 @@ pub struct TrackedValues {
     pub params: Vec<TrackedParam>,
 }
 
+impl Extend<TrackedValue> for TrackedValues {
+    fn extend<T: IntoIterator<Item = TrackedValue>>(&mut self, iter: T) {
+        for v in iter {
+            match v {
+                TrackedValue::Qubit(qb) => self.qubits.push(qb),
+                TrackedValue::Bit(bit) => self.bits.push(bit),
+                TrackedValue::Param(param) => self.params.push(param),
+            }
+        }
+    }
+}
+
 /// Data associated with a tracked wire in the hugr.
 #[derive(Debug, Clone)]
 struct TrackedWire {

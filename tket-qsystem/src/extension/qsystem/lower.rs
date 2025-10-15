@@ -79,11 +79,6 @@ enum ReplaceOps {
     Barrier(Barrier),
 }
 
-pub(super) fn insert_function(hugr: &mut impl HugrMut<Node = Node>, func_def: Hugr) -> Node {
-    let inserted = hugr.insert_hugr(hugr.module_root(), func_def);
-    inserted.inserted_entrypoint
-}
-
 /// Lower [`TketOp`] operations to [`QSystemOp`] operations.
 ///
 /// Single op replacements are done directly, while multi-op replacements are done
@@ -131,7 +126,7 @@ pub fn lower_tk2_op(hugr: &mut impl HugrMut<Node = Node>) -> Result<Vec<Node>, L
                     Entry::Occupied(e) => *e.get(),
                     Entry::Vacant(e) => {
                         let h = build_func(tket_op)?;
-                        let inserted = insert_function(hugr, h);
+                        let inserted = hugr.insert_hugr(hugr.module_root(), h).inserted_entrypoint;
                         *e.insert(inserted)
                     }
                 };

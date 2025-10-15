@@ -73,7 +73,7 @@ impl BoolCodegenExtension {
                 let [inp1, inp2] = args
                     .inputs
                     .try_into()
-                    .map_err(|_| anyhow!("BoolOp::{:?} expects two arguments", binary_op))?;
+                    .map_err(|_| anyhow!("BoolOp::{binary_op:?} expects two arguments"))?;
                 let inp1_val = inp1.into_int_value();
                 let inp2_val = inp2.into_int_value();
                 let res = match binary_op {
