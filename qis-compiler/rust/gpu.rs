@@ -434,11 +434,9 @@ impl GpuCodegen {
                 // and process as needed; for now, we just handle the two
                 // supported types.
                 let int_result_ptr = ctx.builder().build_alloca(iwc.i64_type(), "int_result")?;
-                let result_ptr = ctx.builder().build_pointer_cast(
-                    int_result_ptr,
-                    result_ptr_t,
-                    "result_ptr",
-                )?;
+                let result_ptr =
+                    ctx.builder()
+                        .build_pointer_cast(int_result_ptr, result_ptr_t, "result_ptr")?;
 
                 let read_func = ctx.get_extern_func(
                     "gpu_get_result",
@@ -459,7 +457,7 @@ impl GpuCodegen {
                         &[
                             gpu_ref.into(),
                             iwc.i64_type().const_int(8, false).into(),
-                            result_ptr.into()
+                            result_ptr.into(),
                         ],
                         "read_status",
                     )?
