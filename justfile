@@ -2,11 +2,16 @@
 help:
     @just --list --justfile {{justfile()}}
 
+_check_nextest_installed:
+    #!/usr/bin/env bash
+    cargo nextest --version >/dev/null 2>&1 || { echo "❌ cargo-nextest not found. Install binary from https://nexte.st/docs/installation/pre-built-binaries/"; exit 1; }
+
 # Prepare the environment for development, installing all the dependencies and
 # setting up the pre-commit hooks.
 setup:
     uv sync
     [[ -n "${TKET_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
+    _check_nextest_installed
 
 # Run the pre-commit checks.
 check:
@@ -19,8 +24,8 @@ build:
 # Run all the tests.
 test: test-rust test-python
 # Run all rust tests.
-test-rust *TEST_ARGS:
-    uv run cargo test --all-features {{TEST_ARGS}}
+test-rust *TEST_ARGS: _check_nextest_installed
+    uv run cargo nextest r --all-features {{TEST_ARGS}}
 # Run all python tests.
 test-python *TEST_ARGS:
     uv run maturin develop --uv

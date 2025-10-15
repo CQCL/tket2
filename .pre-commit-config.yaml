@@ -70,9 +70,9 @@ repos:
         files: \.rs$
         pass_filenames: false
       - id: cargo-test
-        name: cargo test
-        description: Run tests with `cargo test`.
-        entry: uv run -- cargo test --all-features
+        name: cargo nextest r
+        description: Run tests with `cargo nextest r`.
+        entry: uv run -- cargo nextest r --all-features
         language: system
         files: \.rs$
         pass_filenames: false
