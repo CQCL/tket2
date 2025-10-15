@@ -260,7 +260,6 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
 
     let mut borrowed: HashMap<u64, (Borrow, Option<Return>)> = HashMap::new(); // Key is elem index
     let mut rb_elisions: Vec<(Return, Borrow)> = Vec::new();
-    let mut br_pairs: Vec<(u64, Borrow, Return)> = Vec::new();
 
     let mut array = start;
     while let Some((node, index, action, borrow_from)) =
@@ -322,22 +321,18 @@ fn borrow_squash_traversal<H: HugrMut<Node = Node>>(
             (ret.0, bor.0)
         })
         .collect();
-    br_pairs.extend(
-        borrowed
-            .into_iter()
-            .filter_map(|(idx, (bor, opt_return))| opt_return.map(|ret| (idx, bor, ret))),
-    );
-    for (_idx, bor, _ret) in br_pairs {
-        if recurse {
-            // Recurse to elide any intervening borrows/returns on the same array
-            let new_elided =
-                borrow_squash_traversal(hugr, is_br, candidates, Wire::new(bor.0, bor.1), true)?;
-            // TODO can we avoid duplicates? (e.g. if we've seen them in this array - second traversal will do nothing)
+
+    if recurse {
+        // Elide any intervening borrows/returns on nested arrays
+        for (bor, _) in borrowed.into_values() {
+            let start = Wire::new(bor.0, bor.1);
+            let new_elided = borrow_squash_traversal(hugr, is_br, candidates, start, true)?;
             elided.extend(new_elided);
+            // TODO: it would be good to elide borrow-return (of the same value), but we would need to know
+            // the index was not already borrowed, e.g. had just been returned before the borrow.
         }
-        // It would be good to elide borrow-return (of the same value), but we would need to know
-        // the index was not already borrowed, e.g. had just been returned.
     }
+
     Ok(elided)
 }
 
