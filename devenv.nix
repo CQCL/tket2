@@ -32,6 +32,11 @@ in
 
   env = {
     "LLVM_SYS_${llvmVersion}0_PREFIX" = "${llvmPackages.libllvm.dev}";
+    "LIBCLANG_PATH" = "${pkgs.libclang.lib}/lib";
+    # hardening removed due its impact on tikv-jemalloc-sys build,
+    # as depended upon by tikv-jemalloc-sys
+    # See https://github.com/tikv/jemallocator/issues/108
+    "NIX_HARDENING_ENABLE" = "";
   };
 
   # https://devenv.sh/languages/
