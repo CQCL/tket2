@@ -7,10 +7,11 @@ in
 {
   # https://devenv.sh/packages/
   # on macos frameworks have to be explicitly specified
-  # otherwise a linker error ocurs on rust packages
+  # otherwise a linker error occurs on rust packages
   packages = [
     pkgs.just
     pkgs.cargo-insta
+    pkgs.cargo-nextest
 
     # These are required to be able to link to llvm.
     pkgs.libffi
