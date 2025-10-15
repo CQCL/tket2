@@ -20,7 +20,8 @@ entry_block:                                      ; preds = %alloca_block
   store i64 %0, i64* %"2_0", align 4
   %"2_01" = load i64, i64* %"2_0", align 4
   %int_result = alloca i64, align 8
-  %read_status = call i8 @gpu_get_result_64bits(i64 %"2_01", i64* %int_result)
+  %result_ptr = bitcast i64* %int_result to i8*
+  %read_status = call i8 @gpu_get_result(i64 %"2_01", i64 8, i8* %result_ptr)
   call void @validate_gpu_response(i8 %read_status)
   %int_result2 = load i64, i64* %int_result, align 4
   store i64 %"2_01", i64* %"4_0", align 4
@@ -36,7 +37,7 @@ entry_block:                                      ; preds = %alloca_block
   ret { i64, i64 } %mrv7
 }
 
-declare i8 @gpu_get_result_64bits(i64, i64*)
+declare i8 @gpu_get_result(i64, i64, i8*)
 
 ; Function Attrs: noinline
 define void @validate_gpu_response(i8 %0) #0 {
