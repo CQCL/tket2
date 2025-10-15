@@ -14,7 +14,7 @@ setup:
     _check_nextest_installed
 
 # Run the pre-commit checks.
-check:
+check: _check_nextest_installed
     uv run pre-commit run --all-files
 
 # Compile the wheels for the python package.
