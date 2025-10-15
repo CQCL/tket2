@@ -835,7 +835,7 @@ fn pack_arguments<'c, H: HugrView<Node = Node>>(
     ctx: &EmitFuncContext<'c, '_, H>,
     fn_args: &[BasicValueEnum<'c>],
 ) -> Result<(inkwell::values::PointerValue<'c>, u32)> {
-    // 
+    //
     let iwc = ctx.iw_context();
     let builder = ctx.builder();
 
@@ -883,16 +883,12 @@ fn pack_arguments<'c, H: HugrView<Node = Node>>(
                 builder.build_store(tmp, arg)?;
                 let src_i8 = builder.build_pointer_cast(
                     tmp,
-                    iwc.i8_type().array_type(8).ptr_type(AddressSpace::default()),
+                    iwc.i8_type()
+                        .array_type(8)
+                        .ptr_type(AddressSpace::default()),
                     "arg_i8_ptr",
                 )?;
-                builder.build_memcpy(
-                    dest_ptr,
-                    1,
-                    src_i8,
-                    1,
-                    iwc.i64_type().const_int(8, false),
-                )?;
+                builder.build_memcpy(dest_ptr, 1, src_i8, 1, iwc.i64_type().const_int(8, false))?;
                 offset += 8;
             }
             BasicTypeEnum::FloatType(_) => {
@@ -902,16 +898,12 @@ fn pack_arguments<'c, H: HugrView<Node = Node>>(
                 builder.build_store(tmp, arg)?;
                 let src_i8 = builder.build_pointer_cast(
                     tmp,
-                    iwc.i8_type().array_type(8).ptr_type(AddressSpace::default()),
+                    iwc.i8_type()
+                        .array_type(8)
+                        .ptr_type(AddressSpace::default()),
                     "arg_i8_ptr",
                 )?;
-                builder.build_memcpy(
-                    dest_ptr,
-                    1,
-                    src_i8,
-                    1,
-                    iwc.i64_type().const_int(8, false),
-                )?;
+                builder.build_memcpy(dest_ptr, 1, src_i8, 1, iwc.i64_type().const_int(8, false))?;
                 offset += 8;
             }
             // We have already validated types when sizing the blob,
