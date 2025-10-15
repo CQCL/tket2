@@ -134,6 +134,9 @@ impl GpuCodegen {
         let [index] = &op.inputs[..] else {
             bail!("GetContext operation requires exactly one input");
         };
+        // Ensure the API is validated at least once if we are initializing
+        // a context.
+        emit_api_validation(ctx)?;
         let iwc = ctx.iw_context();
         let ts = ctx.typing_session();
         let index = {
@@ -233,22 +236,20 @@ impl GpuCodegen {
         let function_name = format!("gpu_get_function_id_{}", name);
         let func = match module.get_function(&function_name) {
             None => {
-                let stored =
-                    ctx.get_current_module()
-                        .add_global(iwc.i64_type(), None, &constant_name);
+                let stored = module.add_global(iwc.i64_type(), None, &constant_name);
                 stored.set_initializer(&iwc.i64_type().const_all_ones());
 
                 let current_block = ctx.builder().get_insert_block().unwrap();
                 let fn_type = iwc.i64_type().fn_type(&[], false);
-                let function = ctx
-                    .get_current_module()
-                    .add_function(&function_name, fn_type, None);
+                let function = module.add_function(&function_name, fn_type, None);
                 let noinline_id =
                     inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
                 let noinline = iwc.create_enum_attribute(noinline_id, 0);
                 function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
                 let entry = iwc.append_basic_block(function, "entry");
                 ctx.builder().position_at_end(entry);
+                // validate before calling if validation hasn't been done yet
+                emit_api_validation(ctx)?;
                 // if the function id is all ones, we need to look it up
                 let func_id = ctx
                     .builder()
@@ -580,7 +581,6 @@ impl GpuCodegen {
             .simple_extension_op::<T>(move |context, args, _| self.emit_op(context, args))
             .custom_const::<ConstGpuModule>({
                 move |ctx, _mod| {
-                    emit_api_validation(ctx)?;
                     Ok(ctx.iw_context().const_struct(&[], false).into())
                 }
             })
@@ -603,39 +603,77 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
 ) -> Result<()> {
     let iwc = ctx.iw_context();
     let module = ctx.get_current_module();
-    if module.get_global("gpu_validated").is_some() {
-        // Already validated
-        return Ok(());
-    } else {
-        module
-            .add_global(iwc.i8_type(), None, "gpu_validated")
-            .set_initializer(&iwc.i8_type().const_int(1, false));
-    }
     let builder = ctx.builder();
-    let major = iwc.i64_type().const_int(API_MAJOR, false);
-    let minor = iwc.i64_type().const_int(API_MINOR, false);
-    let patch = iwc.i64_type().const_int(API_PATCH, false);
-    let validate_func = ctx.get_extern_func(
-        "gpu_validate_api",
-        iwc.i8_type().fn_type(
-            &[
-                iwc.i64_type().into(),
-                iwc.i64_type().into(),
-                iwc.i64_type().into(),
-            ],
-            false,
-        ),
-    )?;
-    let success = builder
-        .build_call(
-            validate_func,
-            &[major.into(), minor.into(), patch.into()],
-            "validate_call",
-        )?
+    let func = match module.get_function("run_gpu_validation") {
+        Some(f) => f,
+        None => {
+            let stored = module.add_global(iwc.i8_type(), None, "gpu_validated");
+            stored.set_initializer(&iwc.i8_type().const_zero());
+
+            let current_block = builder.get_insert_block().unwrap();
+            let fn_type = iwc.void_type().fn_type(&[], false);
+            let function = module.add_function("run_gpu_validation", fn_type, None);
+            let noinline_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noinline");
+            let noinline = iwc.create_enum_attribute(noinline_id, 0);
+            function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
+            let entry = iwc.append_basic_block(function, "entry");
+            builder.position_at_end(entry);
+
+            // if we have already validated, return
+            let already_validated = builder.build_int_compare(
+                inkwell::IntPredicate::NE,
+                builder
+                    .build_load(stored.as_pointer_value(), "validated")?
+                    .into_int_value(),
+                iwc.i8_type().const_zero(),
+                "already_validated",
+            )?;
+
+            let done_block = iwc.append_basic_block(function, "done");
+            let validate_block = iwc.append_basic_block(function, "validate");
+            builder.build_conditional_branch(already_validated, done_block, validate_block)?;
+            builder.position_at_end(done_block);
+            builder.build_return(None)?;
+            builder.position_at_end(validate_block);
+
+
+            let major = iwc.i64_type().const_int(API_MAJOR, false);
+            let minor = iwc.i64_type().const_int(API_MINOR, false);
+            let patch = iwc.i64_type().const_int(API_PATCH, false);
+
+            let validate_func = ctx.get_extern_func(
+                "gpu_validate_api",
+                iwc.i8_type().fn_type(
+                    &[
+                        iwc.i64_type().into(),
+                        iwc.i64_type().into(),
+                        iwc.i64_type().into(),
+                    ],
+                    false,
+                ),
+            )?;
+            let success = builder
+                .build_call(
+                    validate_func,
+                    &[major.into(), minor.into(), patch.into()],
+                    "validate_call",
+                )?
+                .try_as_basic_value()
+                .unwrap_left()
+                .into_int_value();
+            verify_gpu_call(ctx, success, "gpu_validate_api")?;
+            // Mark as validated
+            builder.build_store(stored.as_pointer_value(), iwc.i8_type().const_int(1, false))?;
+            builder.build_return(None)?;
+            builder.position_at_end(current_block);
+            function
+        }
+    };
+    ctx
+        .builder()
+        .build_call(func, &[], "run_gpu_validation_call")?
         .try_as_basic_value()
-        .unwrap_left()
-        .into_int_value();
-    verify_gpu_call(ctx, success, "gpu_validate_api")?;
+        .unwrap_right();
     Ok(())
 }
 
@@ -941,8 +979,13 @@ mod test {
     #[rstest::rstest]
     #[case::get_context(GpuOp::GetContext)]
     #[case::dispose_context(GpuOp::DisposeContext)]
-    #[case::lookup(GpuOp::LookupById {
+    #[case::lookup_by_id(GpuOp::LookupById {
         id: 42,
+        inputs: type_row![].into(),
+        outputs: type_row![].into(),
+    })]
+    #[case::lookup_by_name(GpuOp::LookupByName {
+        name: "example_function".into(),
         inputs: type_row![].into(),
         outputs: type_row![].into(),
     })]
