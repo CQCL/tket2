@@ -336,10 +336,11 @@ impl GpuCodegen {
     /// Emit the Call operation. This invokes a GPU function using
     /// the external `gpu_call` function.
     ///
-    /// Arguments are packed into a binary blob, and a signature
-    /// string is generated to describe the types of the arguments
-    /// and the expected output type, which may be used by the
-    /// GPU library for validation purposes.
+    /// Arguments are packed into a binary blob (see the documentation
+    /// on `pack_arguments`), and a signature string is generated
+    /// to describe the types of the arguments and the expected output
+    /// type, which may be used by the GPU library for validation
+    /// purposes or for flexibility.
     ///
     /// Upon failure, this emits a panic with the error message
     /// from the GPU library.
@@ -814,11 +815,27 @@ fn generate_signature<'c, H: HugrView<Node = Node>>(
 /// suitable for passing to the GPU call.
 ///
 /// Returns a pointer to the blob and its size in bytes.
+///
+/// To pack the arguments, we concatenate their binary
+/// representation as follows:
+/// - Booleans are encoded as 1-byte values (0x00 or 0x01)
+/// - Integers are encoded as 8-byte values (u64, matching system endian)
+/// - Floats are encoded as 8-byte values (f64, matching system endian)
+/// - Each argument is encoded immediately following the previous,
+///   without padding, without managing alignment requirements.
+///
+/// It is recommended that implementations avoid issues that may arise
+/// from endian or alignment assumptions by copying blob sections into
+/// appropriately aligned local variables rather than iterating through
+/// the blob directly.
+///
+/// The blob is allocated on the stack: the implementation must not
+/// attempt to free it.
 fn pack_arguments<'c, H: HugrView<Node = Node>>(
     ctx: &EmitFuncContext<'c, '_, H>,
     fn_args: &[BasicValueEnum<'c>],
 ) -> Result<(inkwell::values::PointerValue<'c>, u32)> {
-    // append each arg in binary form to the blob
+    // 
     let iwc = ctx.iw_context();
     let builder = ctx.builder();
 
@@ -860,21 +877,41 @@ fn pack_arguments<'c, H: HugrView<Node = Node>>(
                 offset += 1;
             }
             BasicTypeEnum::IntType(i) if i.get_bit_width() == 64 => {
-                let dst_i64_ptr = builder.build_pointer_cast(
-                    dest_ptr,
-                    iwc.i64_type().ptr_type(AddressSpace::default()),
-                    "dest_i64_ptr",
+                // Store the integer into an aligned i64 temporary,
+                // then copy its bytes into the blob in an unaligned manner.
+                let tmp = builder.build_alloca(iwc.i64_type(), "arg_i64_tmp")?;
+                builder.build_store(tmp, arg)?;
+                let src_i8 = builder.build_pointer_cast(
+                    tmp,
+                    iwc.i8_type().array_type(8).ptr_type(AddressSpace::default()),
+                    "arg_i8_ptr",
                 )?;
-                builder.build_store(dst_i64_ptr, arg)?;
+                builder.build_memcpy(
+                    dest_ptr,
+                    1,
+                    src_i8,
+                    1,
+                    iwc.i64_type().const_int(8, false),
+                )?;
                 offset += 8;
             }
             BasicTypeEnum::FloatType(_) => {
-                let dst_f64_ptr = builder.build_pointer_cast(
-                    dest_ptr,
-                    iwc.f64_type().ptr_type(AddressSpace::default()),
-                    "dest_f64_ptr",
+                // Store the float into an aligned f64 temporary,
+                // then copy its bytes into the blob in an unaligned manner.
+                let tmp = builder.build_alloca(iwc.f64_type(), "arg_f64_tmp")?;
+                builder.build_store(tmp, arg)?;
+                let src_i8 = builder.build_pointer_cast(
+                    tmp,
+                    iwc.i8_type().array_type(8).ptr_type(AddressSpace::default()),
+                    "arg_i8_ptr",
                 )?;
-                builder.build_store(dst_f64_ptr, arg)?;
+                builder.build_memcpy(
+                    dest_ptr,
+                    1,
+                    src_i8,
+                    1,
+                    iwc.i64_type().const_int(8, false),
+                )?;
                 offset += 8;
             }
             // We have already validated types when sizing the blob,
