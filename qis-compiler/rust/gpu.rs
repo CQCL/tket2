@@ -580,9 +580,7 @@ impl GpuCodegen {
             )
             .simple_extension_op::<T>(move |context, args, _| self.emit_op(context, args))
             .custom_const::<ConstGpuModule>({
-                move |ctx, _mod| {
-                    Ok(ctx.iw_context().const_struct(&[], false).into())
-                }
+                move |ctx, _mod| Ok(ctx.iw_context().const_struct(&[], false).into())
             })
     }
 }
@@ -636,7 +634,6 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
             builder.build_return(None)?;
             builder.position_at_end(validate_block);
 
-
             let major = iwc.i64_type().const_int(API_MAJOR, false);
             let minor = iwc.i64_type().const_int(API_MINOR, false);
             let patch = iwc.i64_type().const_int(API_PATCH, false);
@@ -669,8 +666,7 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
             function
         }
     };
-    ctx
-        .builder()
+    ctx.builder()
         .build_call(func, &[], "run_gpu_validation_call")?
         .try_as_basic_value()
         .unwrap_right();
