@@ -77,7 +77,7 @@
 //!
 //!  - Result retrieval
 //!    ```rust
-//!    gpu_get_result_64bits(gpu_ref: u64, out_result: *mut i64) -> bool
+//!    gpu_get_result(gpu_ref: u64, out_len: u64, out_result: *mut i8) -> bool
 //!    ```
 //!
 //!    Writes the next result in the result queue to out_result,
@@ -427,18 +427,26 @@ impl GpuCodegen {
                 let i8_t = iwc.i8_type().as_basic_type_enum();
                 let i64_t = iwc.i64_type().as_basic_type_enum();
                 let f64_t = iwc.f64_type().as_basic_type_enum();
-                let int_result_ptr_t = iwc.i64_type().ptr_type(AddressSpace::default());
+                let result_ptr_t = iwc.i8_type().ptr_type(AddressSpace::default());
 
-                // Results can come in as ints or floats. We receive it as an int into int_result,
-                // and reinterpret it as a float if required.
+                // Results can currently come in as ints or floats.
+                // When this expands we can allocate an appropriate buffer
+                // and process as needed; for now, we just handle the two
+                // supported types.
                 let int_result_ptr = ctx.builder().build_alloca(iwc.i64_type(), "int_result")?;
+                let result_ptr = ctx.builder().build_pointer_cast(
+                    int_result_ptr,
+                    result_ptr_t,
+                    "result_ptr",
+                )?;
 
                 let read_func = ctx.get_extern_func(
-                    "gpu_get_result_64bits",
+                    "gpu_get_result",
                     i8_t.fn_type(
                         &[
                             /* gpu_ref    */ iwc.i64_type().into(),
-                            /* out result */ int_result_ptr_t.into(),
+                            /* out_len    */ iwc.i64_type().into(),
+                            /* out result */ result_ptr_t.into(),
                         ],
                         false,
                     ),
@@ -448,7 +456,11 @@ impl GpuCodegen {
                     .builder()
                     .build_call(
                         read_func,
-                        &[gpu_ref.into(), int_result_ptr.into()],
+                        &[
+                            gpu_ref.into(),
+                            iwc.i64_type().const_int(8, false).into(),
+                            result_ptr.into()
+                        ],
                         "read_status",
                     )?
                     .try_as_basic_value()

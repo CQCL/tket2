@@ -91,7 +91,7 @@ declare i8 @gpu_init(i64, i64*) local_unnamed_addr
 
 declare i8 @gpu_call(i64, i64, i64, i8*, i8*) local_unnamed_addr
 
-declare i8 @gpu_get_result_64bits(i64, i64*) local_unnamed_addr
+declare i8 @gpu_get_result(i64, i64, i8*) local_unnamed_addr
 
 declare void @print_int(i8*, i64, i64) local_unnamed_addr
 
@@ -127,15 +127,15 @@ entry:
   store <2 x i64> <i64 42, i64 4613303441197561744>, <2 x i64>* %gpu_input_blob.i, align 16
   %6 = call i8 @gpu_call(i64 %gpu_ref.i, i64 %function_id_call3.i, i64 16, i8* nonnull %2, i8* getelementptr inbounds ([5 x i8], [5 x i8]* @arg_types, i64 0, i64 0))
   call void @validate_gpu_response(i8 %6)
-  %read_status.i = call i8 @gpu_get_result_64bits(i64 %gpu_ref.i, i64* nonnull %int_result.i)
+  %read_status.i = call i8 @gpu_get_result(i64 %gpu_ref.i, i64 8, i8* nonnull %3)
   call void @validate_gpu_response(i8 %read_status.i)
   %int_result20.i = load i64, i64* %int_result.i, align 8
   call void @print_int(i8* getelementptr inbounds ([11 x i8], [11 x i8]* @res_a.19FB4E83.0, i64 0, i64 0), i64 10, i64 %int_result20.i)
   store i64 %int_result20.i, i64* %gpu_input_blob26.i, align 8
   %7 = call i8 @gpu_call(i64 %gpu_ref.i, i64 %function_id_call.i, i64 8, i8* nonnull %4, i8* getelementptr inbounds ([4 x i8], [4 x i8]* @arg_types.2, i64 0, i64 0))
   call void @validate_gpu_response(i8 %7)
-  %read_status33.i = call i8 @gpu_get_result_64bits(i64 %gpu_ref.i, i64* nonnull %int_result32.i)
-  call void @validate_gpu_response(i8 %read_status33.i)
+  %read_status34.i = call i8 @gpu_get_result(i64 %gpu_ref.i, i64 8, i8* nonnull %5)
+  call void @validate_gpu_response(i8 %read_status34.i)
   %float_result_ptr.i = bitcast i64* %int_result32.i to double*
   %float_result.i = load double, double* %float_result_ptr.i, align 8
   %8 = call i8 @gpu_discard(i64 %gpu_ref.i)
