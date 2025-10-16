@@ -5,7 +5,7 @@ expression: mod_str
 ; ModuleID = 'test_context'
 source_filename = "test_context"
 
-@gpu_validated = global i8 0
+@gpu_validated = thread_local global i8 0
 @no_gpu_error = private unnamed_addr constant [27 x i8] c"No error message available\00", align 1
 
 define private { i1, i64 } @_hl.main.1(i64 %0) {
@@ -19,10 +19,10 @@ entry_block:                                      ; preds = %alloca_block
   store i64 %0, i64* %"2_0", align 4
   %"2_01" = load i64, i64* %"2_0", align 4
   call void @run_gpu_validation()
-  %handle_ptr = alloca i64, align 8
-  %gpu_ref_call = call i8 @gpu_init(i64 %"2_01", i64* %handle_ptr)
+  %gpu_ref_ptr = alloca i64, align 8
+  %gpu_ref_call = call i8 @gpu_init(i64 %"2_01", i64* %gpu_ref_ptr)
   call void @validate_gpu_response(i8 %gpu_ref_call)
-  %gpu_ref = load i64, i64* %handle_ptr, align 4
+  %gpu_ref = load i64, i64* %gpu_ref_ptr, align 4
   %1 = insertvalue { i1, i64 } { i1 true, i64 poison }, i64 %gpu_ref, 1
   store { i1, i64 } %1, { i1, i64 }* %"4_0", align 4
   %"4_02" = load { i1, i64 }, { i1, i64 }* %"4_0", align 4

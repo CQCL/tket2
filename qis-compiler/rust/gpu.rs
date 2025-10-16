@@ -82,9 +82,10 @@
 //!
 //!    Writes the next result in the result queue to out_result,
 //!    returning true on success or false on failure. The result
-//!    may be in the form of i64 or f64; we handle any necessary
-//!    casting within this lowering.
-//!
+//!    may currently be in the form of i64 or f64, such that in
+//!    the current version we always provide out_len = 8, as per
+//!    the GpuModule HUGR. This design allows for future expansion
+//!    to other result types in future.
 
 use crate::selene_specific;
 use anyhow::{Result, bail};
@@ -134,13 +135,14 @@ impl GpuCodegen {
         let [index] = &op.inputs[..] else {
             bail!("GetContext operation requires exactly one input");
         };
-        // Ensure the API is validated at least once if we are initializing
-        // a context.
+        // Ensure the API is validated before we make any calls that may
+        // be broken in later API versions.
         emit_api_validation(ctx)?;
         let iwc = ctx.iw_context();
         let ts = ctx.typing_session();
         let index = {
             let index = index.into_int_value();
+            // always coerce to i64
             let width = index.get_type().get_bit_width();
             match width.cmp(&64) {
                 Ordering::Greater => ctx.builder().build_int_truncate(
@@ -157,7 +159,8 @@ impl GpuCodegen {
         };
         let builder = ctx.builder();
 
-        let handle_ptr = builder.build_alloca(iwc.i64_type(), "handle_ptr")?;
+        // allocate space for the gpu_ref that we will return
+        let gpu_ref_ptr = builder.build_alloca(iwc.i64_type(), "gpu_ref_ptr")?;
 
         let get_gpu_init = ctx.get_extern_func(
             "gpu_init",
@@ -171,12 +174,12 @@ impl GpuCodegen {
         )?;
 
         // `gpu_init` returns false on failure. Otherwise, it provides
-        // in handle_ptr a handle to the GPU context, which is
+        // in gpu_ref_ptr a handle to the GPU context, which is
         // used for subsequent GPU calls.
         let success = builder
             .build_call(
                 get_gpu_init,
-                &[index.into(), handle_ptr.into()],
+                &[index.into(), gpu_ref_ptr.into()],
                 "gpu_ref_call",
             )?
             .try_as_basic_value()
@@ -184,7 +187,7 @@ impl GpuCodegen {
             .into_int_value();
         verify_gpu_call(ctx, success, "gpu_init")?;
 
-        let gpu_ref = builder.build_load(handle_ptr, "gpu_ref")?;
+        let gpu_ref = builder.build_load(gpu_ref_ptr, "gpu_ref")?;
         let result_t = ts.llvm_sum_type(option_type(int_type(6)))?;
         // Although the result is an option type, we always return true
         // in this lowering: failure is already handled.
@@ -208,6 +211,9 @@ impl GpuCodegen {
         };
         let gpu_ref = gpu_ref.into_int_value();
         let iwc = ctx.iw_context();
+        // At the point of running discard, we assume the API was already
+        // validated - otherwise the context would not have been created.
+        // So we assume there is no need to validate again here.
 
         let gpu_discard = ctx.get_extern_func(
             "gpu_discard",
@@ -232,13 +238,26 @@ impl GpuCodegen {
     ) -> Result<()> {
         let iwc = ctx.iw_context();
         let module = ctx.get_current_module();
-        let constant_name = format!("gpu_function_id_{}", name);
-        let function_name = format!("gpu_get_function_id_{}", name);
+        let flag_name = format!("gpu_cache_is_set_function_id_{}", name);
+        let stored_id_name = format!("gpu_cache_function_id_{}", name);
+        let function_name = format!("gpu_function_id_{}", name);
         let func = match module.get_function(&function_name) {
             None => {
-                let stored = module.add_global(iwc.i64_type(), None, &constant_name);
-                stored.set_initializer(&iwc.i64_type().const_all_ones());
+                // We utilise a thread-local global variable to hold
+                // the function id once looked up, to avoid repeated
+                // lookups.
+                let set_flag = module.add_global(iwc.i8_type(), None, &flag_name);
+                set_flag.set_thread_local(true);
+                set_flag.set_initializer(&iwc.i8_type().const_zero());
 
+                let stored_id = module.add_global(iwc.i64_type(), None, &stored_id_name);
+                stored_id.set_thread_local(true);
+                stored_id.set_initializer(&iwc.i64_type().const_zero());
+
+                // We wrap the behaviour of looking up the function id into
+                // a noinline function to keep the IR clean. If the global
+                // ID is all ones, we perform the lookup and store it;
+                // otherwise we just return the stored value.
                 let current_block = ctx.builder().get_insert_block().unwrap();
                 let fn_type = iwc.i64_type().fn_type(&[], false);
                 let function = module.add_function(&function_name, fn_type, None);
@@ -248,25 +267,39 @@ impl GpuCodegen {
                 function.add_attribute(inkwell::attributes::AttributeLoc::Function, noinline);
                 let entry = iwc.append_basic_block(function, "entry");
                 ctx.builder().position_at_end(entry);
-                // validate before calling if validation hasn't been done yet
-                emit_api_validation(ctx)?;
-                // if the function id is all ones, we need to look it up
-                let func_id = ctx
+
+                // Grab the set flag to check if it is initialized.
+                let is_set = ctx
                     .builder()
-                    .build_load(stored.as_pointer_value(), "function_id")?
+                    .build_load(set_flag.as_pointer_value(), "function_id")?
                     .into_int_value();
                 let needs_lookup = ctx.builder().build_int_compare(
                     inkwell::IntPredicate::EQ,
-                    func_id,
-                    iwc.i64_type().const_all_ones(),
+                    is_set,
+                    iwc.i8_type().const_zero(),
                     "needs_lookup",
                 )?;
                 let lookup_block = iwc.append_basic_block(function, "lookup");
-                let done_block = iwc.append_basic_block(function, "done");
-                ctx.builder()
-                    .build_conditional_branch(needs_lookup, lookup_block, done_block)?;
-                // if required, perform the lookup
+                let read_cache_block = iwc.append_basic_block(function, "read_cache");
+                ctx.builder().build_conditional_branch(
+                    needs_lookup,
+                    lookup_block,
+                    read_cache_block,
+                )?;
+
+                // if it's already set, read from the cache
+                ctx.builder().position_at_end(read_cache_block);
+                let stored_func_id = ctx
+                    .builder()
+                    .build_load(stored_id.as_pointer_value(), "function_id")?
+                    .into_int_value();
+                ctx.builder().build_return(Some(&stored_func_id))?;
+
+                // otherwise, perform the lookup
                 ctx.builder().position_at_end(lookup_block);
+                // validate before calling if validation hasn't been done yet
+                emit_api_validation(ctx)?;
+                // call gpu_get_function_id
                 let gpu_get_function_id = ctx.get_extern_func(
                     "gpu_get_function_id",
                     iwc.i8_type().fn_type(
@@ -293,21 +326,22 @@ impl GpuCodegen {
                     .try_as_basic_value()
                     .unwrap_left()
                     .into_int_value();
+                // On failure, we emit a panic
                 verify_gpu_call(ctx, success, "gpu_get_function_id")?;
+                // Otherwise, store the function id and set the flag
                 let func_id = ctx
                     .builder()
                     .build_load(function_id_ptr, "function_id")?
                     .into_int_value();
                 ctx.builder()
-                    .build_store(stored.as_pointer_value(), func_id)?;
+                    .build_store(stored_id.as_pointer_value(), func_id)?;
+                ctx.builder().build_store(
+                    set_flag.as_pointer_value(),
+                    iwc.i8_type().const_int(1, false),
+                )?;
                 // return the function id
-                ctx.builder().build_unconditional_branch(done_block)?;
-                ctx.builder().position_at_end(done_block);
-                let func_id = ctx
-                    .builder()
-                    .build_load(stored.as_pointer_value(), "function_id")?
-                    .into_int_value();
                 ctx.builder().build_return(Some(&func_id))?;
+
                 ctx.builder().position_at_end(current_block);
                 function
             }
@@ -328,6 +362,8 @@ impl GpuCodegen {
         op: EmitOpArgs<'c, '_, ExtensionOp, H>,
         id: u64,
     ) -> Result<()> {
+        // This is a no-op in the current API. We just return
+        // the id back.
         op.outputs.finish(
             ctx.builder(),
             [ctx.iw_context().i64_type().const_int(id, false).into()],
@@ -353,6 +389,7 @@ impl GpuCodegen {
     ) -> Result<()> {
         let iwc = ctx.iw_context();
 
+        // Expect at least two inputs: the GPU context and the function id.
         let [gpu_ref, fn_id, fn_args @ ..] = &op.inputs[..] else {
             bail!("GPU call operation requires at least two inputs: context and function");
         };
@@ -383,9 +420,10 @@ impl GpuCodegen {
 
         let signature = generate_signature(ctx, fn_args, outputs)?;
 
-        // create an i8 array of length blob_size
-        let i64_zero = iwc.i64_type().const_zero();
+        // create an i8 array of length blob_size and populate it with
+        // the packed arguments
         let (blob, blob_size) = pack_arguments(ctx, fn_args)?;
+        let i64_zero = iwc.i64_type().const_zero();
         let blob_ptr = unsafe {
             builder.build_in_bounds_gep(blob, &[i64_zero, i64_zero], "gpu_input_blob_ptr")?
         };
@@ -402,6 +440,7 @@ impl GpuCodegen {
             .try_as_basic_value()
             .unwrap_left()
             .into_int_value();
+        // validate the call succeeded (panic otherwise)
         verify_gpu_call(ctx, success, "gpu_call")?;
         op.outputs.finish(ctx.builder(), [gpu_ref.into()])?;
         Ok(())
@@ -606,6 +645,7 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
         Some(f) => f,
         None => {
             let stored = module.add_global(iwc.i8_type(), None, "gpu_validated");
+            stored.set_thread_local(true);
             stored.set_initializer(&iwc.i8_type().const_zero());
 
             let current_block = builder.get_insert_block().unwrap();
@@ -617,7 +657,6 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
             let entry = iwc.append_basic_block(function, "entry");
             builder.position_at_end(entry);
 
-            // if we have already validated, return
             let already_validated = builder.build_int_compare(
                 inkwell::IntPredicate::NE,
                 builder
@@ -629,15 +668,18 @@ fn emit_api_validation<'c, H: HugrView<Node = Node>>(
 
             let done_block = iwc.append_basic_block(function, "done");
             let validate_block = iwc.append_basic_block(function, "validate");
+
+            // if we have already validated, return
             builder.build_conditional_branch(already_validated, done_block, validate_block)?;
             builder.position_at_end(done_block);
             builder.build_return(None)?;
+
+            // otherwise, perform validation
             builder.position_at_end(validate_block);
 
             let major = iwc.i64_type().const_int(API_MAJOR, false);
             let minor = iwc.i64_type().const_int(API_MINOR, false);
             let patch = iwc.i64_type().const_int(API_PATCH, false);
-
             let validate_func = ctx.get_extern_func(
                 "gpu_validate_api",
                 iwc.i8_type().fn_type(

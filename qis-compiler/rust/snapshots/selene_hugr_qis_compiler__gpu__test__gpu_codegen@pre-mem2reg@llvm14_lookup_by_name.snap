@@ -5,8 +5,9 @@ expression: mod_str
 ; ModuleID = 'test_context'
 source_filename = "test_context"
 
-@gpu_function_id_example_function = global i64 -1
-@gpu_validated = global i8 0
+@gpu_cache_is_set_function_id_example_function = thread_local global i8 0
+@gpu_cache_function_id_example_function = thread_local global i64 0
+@gpu_validated = thread_local global i8 0
 @no_gpu_error = private unnamed_addr constant [27 x i8] c"No error message available\00", align 1
 @function_name = private unnamed_addr constant [17 x i8] c"example_function\00", align 1
 
@@ -20,7 +21,7 @@ alloca_block:
 entry_block:                                      ; preds = %alloca_block
   store {} %0, {}* %"2_0", align 1
   %"2_01" = load {}, {}* %"2_0", align 1
-  %function_id_call = call i64 @gpu_get_function_id_example_function()
+  %function_id_call = call i64 @gpu_function_id_example_function()
   store i64 %function_id_call, i64* %"4_0", align 4
   %"4_02" = load i64, i64* %"4_0", align 4
   store i64 %"4_02", i64* %"0", align 4
@@ -29,24 +30,25 @@ entry_block:                                      ; preds = %alloca_block
 }
 
 ; Function Attrs: noinline
-define i64 @gpu_get_function_id_example_function() #0 {
+define i64 @gpu_function_id_example_function() #0 {
 entry:
-  call void @run_gpu_validation()
-  %function_id = load i64, i64* @gpu_function_id_example_function, align 4
-  %needs_lookup = icmp eq i64 %function_id, -1
-  br i1 %needs_lookup, label %lookup, label %done
+  %function_id = load i8, i8* @gpu_cache_is_set_function_id_example_function, align 1
+  %needs_lookup = icmp eq i8 %function_id, 0
+  br i1 %needs_lookup, label %lookup, label %read_cache
 
 lookup:                                           ; preds = %entry
+  call void @run_gpu_validation()
   %function_id_ptr = alloca i64, align 8
   %function_id_call = call i8 @gpu_get_function_id(i8* getelementptr inbounds ([17 x i8], [17 x i8]* @function_name, i32 0, i32 0), i64* %function_id_ptr)
   call void @validate_gpu_response(i8 %function_id_call)
-  %function_id1 = load i64, i64* %function_id_ptr, align 4
-  store i64 %function_id1, i64* @gpu_function_id_example_function, align 4
-  br label %done
-
-done:                                             ; preds = %lookup, %entry
-  %function_id2 = load i64, i64* @gpu_function_id_example_function, align 4
+  %function_id2 = load i64, i64* %function_id_ptr, align 4
+  store i64 %function_id2, i64* @gpu_cache_function_id_example_function, align 4
+  store i8 1, i8* @gpu_cache_is_set_function_id_example_function, align 1
   ret i64 %function_id2
+
+read_cache:                                       ; preds = %entry
+  %function_id1 = load i64, i64* @gpu_cache_function_id_example_function, align 4
+  ret i64 %function_id1
 }
 
 ; Function Attrs: noinline
