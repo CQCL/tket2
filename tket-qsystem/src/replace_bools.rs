@@ -222,13 +222,13 @@ fn measure_reset_dest() -> NodeTemplate {
     NodeTemplate::CompoundOp(Box::new(h))
 }
 
-fn copy_dfg(ty: Type) -> NodeTemplate {
-    let mut dfb = DFGBuilder::new(inout_sig(vec![ty.clone()], vec![ty.clone(), ty])).unwrap();
+fn copy_dfg(ty: Type) -> Hugr {
+    let mut dfb = DFGBuilder::new(inout_sig(ty.clone(), vec![ty.clone(), ty])).unwrap();
     let mut h = std::mem::take(dfb.hugr_mut());
     let [inp, outp] = h.get_io(h.entrypoint()).unwrap();
     h.connect(inp, 0, outp, 0);
     h.connect(inp, 0, outp, 1);
-    NodeTemplate::CompoundOp(Box::new(h))
+    h
 }
 
 /// The configuration used for replacing tket.bool extension types and ops.
@@ -315,7 +315,9 @@ fn lowerer() -> ReplaceTypes {
                 };
                 let size = size.as_nat().unwrap();
                 let elem_ty = elem_ty.as_runtime().unwrap();
-                (!elem_ty.copyable()).then(|| copy_dfg(type_fn(size, elem_ty.clone())))
+                (!elem_ty.copyable()).then(|| {
+                    NodeTemplate::CompoundOp(Box::new(copy_dfg(type_fn(size, elem_ty.clone()))))
+                })
             },
             ReplacementOptions::default().with_linearization(true),
         );
