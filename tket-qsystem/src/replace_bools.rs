@@ -15,19 +15,21 @@ use hugr::{
         DataflowSubContainer, SubContainer,
     },
     extension::{
-        prelude::{bool_t, qb_t},
-        simple_op::MakeRegisteredOp,
+        prelude::{bool_t, option_type, qb_t, usize_t},
+        simple_op::{MakeOpDef, MakeRegisteredOp},
     },
     hugr::hugrmut::HugrMut,
     ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
     std_extensions::{
+        arithmetic::{conversions::ConvertOpDef, int_ops::IntOpDef, int_types::ConstInt},
         collections::{
-            array::{self, array_type, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
-            borrow_array::{self, borrow_array_type},
+            array::{self, array_type, GenericArrayOpDef, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+            borrow_array::{self, borrow_array_type, BArrayUnsafeOpDef, BorrowArray},
         },
         logic::LogicOp,
     },
-    types::{SumType, Type},
+    type_row,
+    types::{SumType, Term, Type},
     Hugr, HugrView, Node, Wire,
 };
 use static_array::{ReplaceStaticArrayBoolPass, ReplaceStaticArrayBoolPassError};
@@ -231,6 +233,73 @@ fn copy_dfg(ty: Type) -> Hugr {
     h
 }
 
+fn barray_get_dest(size: u64, elem_ty: Type) -> NodeTemplate {
+    let array_ty = borrow_array_type(size, elem_ty.clone());
+    let opt_el = option_type(elem_ty.clone());
+    let mut dfb = DFGBuilder::new(inout_sig(
+        vec![array_ty.clone(), usize_t()],
+        vec![opt_el.clone().into(), array_ty.clone()],
+    ))
+    .unwrap();
+    let [arr_in, idx] = dfb.input_wires_arr();
+    let [idx_as_int] = dfb
+        .add_dataflow_op(ConvertOpDef::ifromusize.without_log_width(), [idx])
+        .unwrap()
+        .outputs_arr();
+    let bound = dfb.add_load_value(ConstInt::new_u(6, size).unwrap());
+    let [is_in_range] = dfb
+        .add_dataflow_op(IntOpDef::ilt_u.with_log_width(6), [idx_as_int, bound])
+        .unwrap()
+        .outputs_arr();
+    let mut cb = dfb
+        .conditional_builder(
+            (vec![type_row![]; 2], is_in_range),
+            [(array_ty.clone(), arr_in), (usize_t(), idx)],
+            vec![opt_el.clone().into(), array_ty.clone()].into(),
+        )
+        .unwrap();
+
+    let mut out_of_range = cb.case_builder(0).unwrap();
+    let [arr_in, _] = out_of_range.input_wires_arr();
+    let [none] = out_of_range
+        .add_dataflow_op(Tag::new(0, vec![type_row![], elem_ty.clone().into()]), [])
+        .unwrap()
+        .outputs_arr();
+    out_of_range.finish_with_outputs([none, arr_in]).unwrap();
+
+    let mut in_range = cb.case_builder(1).unwrap();
+    let [arr_in, idx] = in_range.input_wires_arr();
+    let [arr, elem] = in_range
+        .add_dataflow_op(
+            BArrayUnsafeOpDef::borrow.to_concrete(elem_ty.clone(), size),
+            [arr_in, idx],
+        )
+        .unwrap()
+        .outputs_arr();
+    let [elem1, elem2] = in_range
+        .add_hugr_with_wires(copy_dfg(elem_ty.clone()), [elem])
+        .unwrap()
+        .outputs_arr();
+    let [arr] = in_range
+        .add_dataflow_op(
+            BArrayUnsafeOpDef::r#return.to_concrete(elem_ty.clone(), size),
+            [arr, idx, elem1],
+        )
+        .unwrap()
+        .outputs_arr();
+    let [some] = in_range
+        .add_dataflow_op(Tag::new(1, vec![type_row![], elem_ty.into()]), [elem2])
+        .unwrap()
+        .outputs_arr();
+    in_range.finish_with_outputs([some, arr]).unwrap();
+
+    let outs = cb.finish_sub_container().unwrap().outputs();
+    // Do not finish DFG: it contains "invalid" copy_dfg that needs linearizing
+    dfb.set_outputs(outs).unwrap();
+    let h = std::mem::take(dfb.hugr_mut());
+    NodeTemplate::CompoundOp(Box::new(h))
+}
+
 /// The configuration used for replacing tket.bool extension types and ops.
 fn lowerer() -> ReplaceTypes {
     let mut lw = ReplaceTypes::default();
@@ -343,6 +412,22 @@ fn lowerer() -> ReplaceTypes {
             },
         );
     }
+
+    lw.replace_parametrized_op_with(
+        borrow_array::EXTENSION
+            .get_op(GenericArrayOpDef::<BorrowArray>::get.opdef_id().as_str())
+            .unwrap(),
+        |args| {
+            let [Term::BoundedNat(size), Term::Runtime(elem_ty)] = args else {
+                unreachable!()
+            };
+            if elem_ty.copyable() {
+                return None;
+            }
+            Some(barray_get_dest(*size, elem_ty.clone()))
+        },
+        ReplacementOptions::default().with_linearization(true),
+    );
 
     lw
 }
@@ -566,7 +651,6 @@ mod test {
     }
 
     #[rstest]
-    #[should_panic] // TODO not handled yet
     #[case(tket_bool_t(), bool_dest())]
     #[case(usize_t(), usize_t())]
     fn test_barray_get(#[case] src_ty: Type, #[case] dest_ty: Type) {
