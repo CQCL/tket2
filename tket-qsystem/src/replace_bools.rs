@@ -641,9 +641,10 @@ mod test {
     }
 
     #[rstest]
-    #[case(tket_bool_t(), bool_dest())]
-    #[case(usize_t(), usize_t())]
-    fn test_barray_get(#[case] src_ty: Type, #[case] dest_ty: Type) {
+    #[case(Type::new_tuple(vec![tket_bool_t(), usize_t()]), Type::new_tuple(vec![bool_dest(), usize_t()]), true)]
+    #[case(tket_bool_t(), bool_dest(), true)]
+    #[case(usize_t(), usize_t(), false)]
+    fn test_barray_get(#[case] src_ty: Type, #[case] dest_ty: Type, #[case] expect_dup: bool) {
         let arr_ty = borrow_array_type(4, src_ty.clone());
         let mut dfb = DFGBuilder::new(inout_sig(
             vec![arr_ty.clone(), usize_t()],
@@ -678,7 +679,6 @@ mod test {
                 FutureOp::from_op(eop).is_ok_and(|fop| fop.op == FutureOpDef::Dup)
             })
         });
-        // This will do for the cases above, but would be too simple for e.g. nested array of bools:
-        assert_eq!(src_ty == tket_bool_t(), contains_dup);
+        assert_eq!(contains_dup, expect_dup);
     }
 }
