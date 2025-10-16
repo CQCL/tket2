@@ -36,9 +36,9 @@ pub struct EncodedCircuit<'a, H: HugrView = Hugr> {
     /// only contain an entry for this region if it was a dataflow container, or
     /// no entries if it was not.
     head_region: H::Node,
-    /// Circuits encoded from dataflow regions in the HUGR.
+    /// Circuits encoded from independent dataflow regions in the HUGR.
     ///
-    /// These correspond to disjoint sections of the HUGR and can be optimized
+    /// These correspond to sections of the HUGR that can be optimized
     /// independently.
     circuits: HashMap<H::Node, SerialCircuit>,
     /// Sets of subgraphs in the HUGR that have been encoded as opaque barriers
@@ -116,7 +116,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         let add_subgraph_candidates =
             |subgraphs: &UnsupportedSubgraphs<H::Node>, queue: &mut VecDeque<H::Node>| {
                 for subgraph_id in subgraphs.ids() {
-                    for &node in subgraphs.get_unsupported_subgraph(subgraph_id).nodes() {
+                    for &node in subgraphs[subgraph_id].nodes() {
                         add_candidate(node, queue);
                     }
                 }
@@ -231,7 +231,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     }
 
     /// Returns `true` if there is an encoded pytket circuit for the given region.
-    pub fn contains(&self, region: H::Node) -> bool {
+    pub fn contains_circuit(&self, region: H::Node) -> bool {
         self.circuits.contains_key(&region)
     }
 

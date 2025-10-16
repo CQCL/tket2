@@ -612,7 +612,7 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
         EncodedCircuit::from_hugr(&circ, EncodeOptions::new_with_subcircuits())
             .unwrap_or_else(|e| panic!("{e}"));
 
-    assert!(encoded.contains(circ.parent()));
+    assert!(encoded.contains_circuit(circ.parent()));
     assert_eq!(encoded.len(), num_circuits);
 
     let ser: SerialCircuit = encoded
