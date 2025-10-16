@@ -3,43 +3,33 @@
 mod static_array;
 
 use derive_more::{Display, Error, From};
-use hugr::{
-    algorithms::{
-        ensure_no_nonlocal_edges,
-        non_local::FindNonLocalEdgesError,
-        replace_types::{NodeTemplate, ReplaceTypesError, ReplacementOptions},
-        ComposablePass, ReplaceTypes,
-    },
-    builder::{
-        inout_sig, BuildHandle, Container, DFGBuilder, Dataflow, DataflowHugr,
-        DataflowSubContainer, SubContainer,
-    },
-    extension::{
-        prelude::{bool_t, option_type, qb_t, usize_t},
-        simple_op::{MakeOpDef, MakeRegisteredOp},
-    },
-    hugr::hugrmut::HugrMut,
-    ops::{handle::ConditionalID, ExtensionOp, Tag, Value},
-    std_extensions::{
-        arithmetic::{conversions::ConvertOpDef, int_ops::IntOpDef, int_types::ConstInt},
-        collections::{
-            array::{self, array_type, GenericArrayOpDef, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
-            borrow_array::{self, borrow_array_type, BArrayUnsafeOpDef, BorrowArray},
-        },
-        logic::LogicOp,
-    },
-    type_row,
-    types::{SumType, Term, Type},
-    Hugr, HugrView, Node, Wire,
+use hugr::algorithms::replace_types::{NodeTemplate, ReplaceTypesError, ReplacementOptions};
+use hugr::algorithms::{
+    ensure_no_nonlocal_edges, non_local::FindNonLocalEdgesError, ComposablePass, ReplaceTypes,
 };
+use hugr::builder::{
+    inout_sig, BuildHandle, Container, DFGBuilder, Dataflow, DataflowHugr, DataflowSubContainer,
+    SubContainer,
+};
+use hugr::extension::prelude::{bool_t, option_type, qb_t, usize_t};
+use hugr::extension::simple_op::{MakeOpDef, MakeRegisteredOp};
+use hugr::ops::{handle::ConditionalID, ExtensionOp, Tag, Value};
+use hugr::std_extensions::arithmetic::{
+    conversions::ConvertOpDef, int_ops::IntOpDef, int_types::ConstInt,
+};
+use hugr::std_extensions::collections::{
+    array::{self, array_type, GenericArrayOpDef, ARRAY_CLONE_OP_ID, ARRAY_DISCARD_OP_ID},
+    borrow_array::{self, borrow_array_type, BArrayUnsafeOpDef, BorrowArray},
+};
+use hugr::std_extensions::logic::LogicOp;
+use hugr::types::{SumType, Term, Type};
+use hugr::{hugr::hugrmut::HugrMut, type_row, Hugr, HugrView, Node, Wire};
 use static_array::{ReplaceStaticArrayBoolPass, ReplaceStaticArrayBoolPassError};
-use tket::{
-    extension::{
-        bool::{bool_type, BoolOp, ConstBool},
-        guppy::{DROP_OP_NAME, GUPPY_EXTENSION},
-    },
-    TketOp,
+use tket::extension::{
+    bool::{bool_type, BoolOp, ConstBool},
+    guppy::{DROP_OP_NAME, GUPPY_EXTENSION},
 };
+use tket::TketOp;
 
 use crate::extension::{
     futures::{future_type, FutureOp, FutureOpBuilder, FutureOpDef},
