@@ -350,10 +350,14 @@ mod test {
     use crate::extension::qsystem::{QSystemOp, QSystemOpBuilder};
 
     use super::*;
+    use hugr::extension::prelude::{option_type, usize_t, UnwrapBuilder};
+    use hugr::extension::simple_op::HasDef;
     use hugr::ops::OpType;
     use hugr::std_extensions::collections::array::op_builder::GenericArrayOpBuilder;
     use hugr::std_extensions::collections::array::{Array, ArrayKind};
-    use hugr::std_extensions::collections::borrow_array::BorrowArray;
+    use hugr::std_extensions::collections::borrow_array::{
+        borrow_array_type, BArrayOpBuilder, BorrowArray,
+    };
     use hugr::type_row;
     use hugr::{
         builder::{inout_sig, DFGBuilder, Dataflow, DataflowHugr},
@@ -368,7 +372,7 @@ mod test {
     };
 
     fn tket_bool_t() -> Type {
-        bool_type().clone()
+        bool_type()
     }
 
     #[test]
@@ -557,5 +561,48 @@ mod test {
         let pass = ReplaceBoolPass;
         pass.run(&mut h).unwrap();
         h.validate().unwrap();
+    }
+
+    #[rstest]
+    #[should_panic] // TODO not handled yet
+    #[case(tket_bool_t(), bool_dest())]
+    #[case(usize_t(), usize_t())]
+    fn test_barray_get(#[case] src_ty: Type, #[case] dest_ty: Type) {
+        let arr_ty = borrow_array_type(4, src_ty.clone());
+        let mut dfb = DFGBuilder::new(inout_sig(
+            vec![arr_ty.clone(), usize_t()],
+            vec![arr_ty, src_ty.clone()],
+        ))
+        .unwrap();
+        let [arr_in, idx] = dfb.input_wires_arr();
+        let (opt_elem, arr) = dfb
+            .add_borrow_array_get(src_ty.clone(), 4, arr_in, idx)
+            .unwrap();
+        let [elem] = dfb
+            .build_unwrap_sum(1, option_type(src_ty.clone()), opt_elem)
+            .unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([arr, elem]).unwrap();
+
+        h.validate().unwrap();
+        let pass = ReplaceBoolPass;
+        pass.run(&mut h).unwrap(); // Fails here with mismatch, option_type(bool_dest()) is not Copyable
+        h.validate().unwrap();
+
+        let sig = h.signature(h.entrypoint()).unwrap();
+        let dest_arr_ty = borrow_array_type(4, dest_ty.clone());
+        assert_eq!(
+            sig.as_ref(),
+            &inout_sig(
+                vec![dest_arr_ty.clone(), usize_t()],
+                vec![dest_arr_ty, dest_ty]
+            )
+        );
+        let contains_dup = h.nodes().any(|n| {
+            h.get_optype(n).as_extension_op().is_some_and(|eop| {
+                FutureOp::from_op(eop).is_ok_and(|fop| fop.op == FutureOpDef::Dup)
+            })
+        });
+        // This will do for the cases above, but would be too simple for e.g. nested array of bools:
+        assert_eq!(src_ty == tket_bool_t(), contains_dup);
     }
 }
