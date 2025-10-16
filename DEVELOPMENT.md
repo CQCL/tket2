@@ -30,6 +30,7 @@ To setup the environment manually you will need:
 
 - Just: <https://just.systems/>
 - Rust `>=1.85`: <https://www.rust-lang.org/tools/install>
+- cargo-nextest: <https://nexte.st/docs/installation/pre-built-binaries/>
 - uv `>=0.3`: docs.astral.sh/uv/getting-started/installation
 
 Once you have these installed, install the required python dependencies and setup pre-commit hooks with:
