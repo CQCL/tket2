@@ -53,13 +53,12 @@ impl PytketDecoder for CoreDecoder {
             ]
             .contains(&opgroup) =>
             {
-                let payload: UnsupportedSubgraphPayload = match serde_json::from_str(payload) {
-                    Ok(payload) => payload,
-                    Err(_) => {
-                        // Payload is invalid. We don't error here to avoid
-                        // panicking on corrupted/old user submissions.
-                        return Ok(DecodeStatus::Unsupported);
-                    }
+                let Ok(payload): Result<UnsupportedSubgraphPayload, _> =
+                    serde_json::from_str(payload)
+                else {
+                    // Payload is invalid. We don't error here to avoid
+                    // panicking on corrupted/old user submissions.
+                    return Ok(DecodeStatus::Unsupported);
                 };
                 if payload.is_external() {
                     unimplemented!("Extract external unsupported hugr subgraphs.");

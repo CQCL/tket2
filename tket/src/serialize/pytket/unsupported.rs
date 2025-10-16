@@ -81,10 +81,8 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     /// # Panics
     ///
     /// Panics if the ID is invalid.
-    pub fn get_unsupported_subgraph(&self, id: SubgraphId) -> &SiblingSubgraph<N> {
-        self.opaque_subgraphs
-            .get(&id)
-            .unwrap_or_else(|| panic!("Invalid subgraph ID: {id}"))
+    pub fn get(&self, id: SubgraphId) -> Option<&SiblingSubgraph<N>> {
+        self.opaque_subgraphs.get(&id)
     }
 
     /// Returns `true` if the unsupported subgraph with the given ID exists.
@@ -146,6 +144,7 @@ impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
     type Output = SiblingSubgraph<N>;
 
     fn index(&self, index: SubgraphId) -> &Self::Output {
-        self.get_unsupported_subgraph(index)
+        self.get(index)
+            .unwrap_or_else(|| panic!("Invalid subgraph ID: {index}"))
     }
 }

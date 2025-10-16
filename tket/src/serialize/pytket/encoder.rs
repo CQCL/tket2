@@ -204,9 +204,13 @@ impl<H: HugrView> PytketEncoderContext<H> {
         Ok(())
     }
 
-    /// Finish building and return the final [`SerialCircuit`],
-    /// any parameter expressions at the circuit's output,
-    /// and the set of unsupported subgraphs encoded as pytket barriers.
+    /// Finish building the pytket circuit
+    ///
+    /// # Returns
+    ///
+    /// * the final [`SerialCircuit`]
+    /// * any parameter expressions at the circuit's output
+    /// * the set of unsupported subgraphs that were referenced (from/inside) pytket barriers.
     #[allow(clippy::type_complexity)]
     pub(super) fn finish(
         mut self,

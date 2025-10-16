@@ -19,8 +19,8 @@ pub const OPGROUP_STANDALONE_UNSUPPORTED_HUGR: &str = "UNSUPPORTED_HUGR";
 /// See [`UnsupportedSubgraphPayloadType::External`].
 pub const OPGROUP_EXTERNAL_UNSUPPORTED_HUGR: &str = "EXTERNAL_UNSUPPORTED_HUGR";
 
-/// Identifier for a hyper edge in the Hugr, encoded as a 64-bit hash that is
-/// independent of the original Hugr representation.
+/// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
+/// detached from the node IDs of the in-memory Hugr.
 ///
 /// These are used to identify edges in the [`UnsupportedSubgraphPayload`]
 /// payloads encoded in opaque barriers on the encoded pytket circuits.
@@ -80,7 +80,7 @@ pub struct UnsupportedSubgraphPayload {
     /// the connections that are not encoded in the pytket circuit.
     ///
     /// The types can also be inferred from the encoded hugr or linked
-    /// subcircuit, but we store them here to be robust.
+    /// subcircuit, but we store them here for robustness.
     outputs: Vec<(Type, EncodedEdgeID)>,
 }
 
@@ -131,7 +131,7 @@ impl UnsupportedSubgraphPayload {
     ) -> Self {
         let signature = subgraph.signature(hugr);
 
-        let mut inputs = Vec::new();
+        let mut inputs = Vec::with_capacity(subgraph.incoming_ports().iter().map(Vec::len).sum());
         for subgraph_inputs in subgraph.incoming_ports() {
             let Some((inp_node, inp_port0)) = subgraph_inputs.first() else {
                 continue;
