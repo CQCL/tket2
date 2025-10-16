@@ -1,16 +1,17 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, inputs, ... }:
 let
+  pkgs-stable = import inputs.nixpkgs-2505 { system = pkgs.stdenv.system; };
   llvmVersion = "14";
-  llvmPackages = pkgs."llvmPackages_${llvmVersion}";
-
+  llvmPackages = pkgs-stable."llvmPackages_${llvmVersion}";
 in
 {
   # https://devenv.sh/packages/
   # on macos frameworks have to be explicitly specified
-  # otherwise a linker error ocurs on rust packages
+  # otherwise a linker error occurs on rust packages
   packages = [
     pkgs.just
     pkgs.cargo-insta
+    pkgs.cargo-nextest
 
     # These are required to be able to link to llvm.
     pkgs.libffi
@@ -31,6 +32,11 @@ in
 
   env = {
     "LLVM_SYS_${llvmVersion}0_PREFIX" = "${llvmPackages.libllvm.dev}";
+    "LIBCLANG_PATH" = "${pkgs.libclang.lib}/lib";
+    # hardening removed due its impact on tikv-jemalloc-sys build,
+    # as depended upon by tikv-jemalloc-sys
+    # See https://github.com/tikv/jemallocator/issues/108
+    "NIX_HARDENING_ENABLE" = "";
   };
 
   # https://devenv.sh/languages/

@@ -29,6 +29,7 @@ class QSystemRandomExtension(TketExtension):
             self.random_float.op_def(),
             self.random_int.op_def(),
             self.random_int_bounded.op_def(),
+            self.random_advance.op_def(),
         ]
 
     @functools.cached_property
@@ -60,3 +61,8 @@ class QSystemRandomExtension(TketExtension):
     def random_int_bounded(self) -> ExtOp:
         """Generate a random 32-bit unsigned integer less than bound."""
         return self().get_op("RandomIntBounded").instantiate()
+
+    @functools.cached_property
+    def random_advance(self) -> ExtOp:
+        """Advance the RNG state by the given delta."""
+        return self().get_op("RandomAdvance").instantiate()

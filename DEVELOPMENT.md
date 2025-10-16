@@ -30,6 +30,7 @@ To setup the environment manually you will need:
 
 - Just: <https://just.systems/>
 - Rust `>=1.85`: <https://www.rust-lang.org/tools/install>
+- cargo-nextest: <https://nexte.st/docs/installation/pre-built-binaries/>
 - uv `>=0.3`: docs.astral.sh/uv/getting-started/installation
 
 Once you have these installed, install the required python dependencies and setup pre-commit hooks with:
@@ -63,8 +64,8 @@ To compile and test the code, run:
 ```bash
 just test
 # or, to test only the rust code or the python code
-just test rust
-just test python
+just test-rust
+just test-python
 ```
 
 Run `just` to see all available commands.
@@ -90,8 +91,8 @@ To quickly fix common issues, run:
 ```bash
 just fix
 # or, to fix only the rust code or the python code
-just fix rust
-just fix python
+just fix-rust
+just fix-python
 ```
 
 ## 📈 Code Coverage
@@ -126,7 +127,7 @@ your PR mark it with a 'run-ci-checks' label and push new commits to it.
 
 The general format of a contribution title should be:
 
-```
+```text
 <type>(<scope>)!: <description>
 ```
 

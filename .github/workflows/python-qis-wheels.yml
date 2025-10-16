@@ -42,7 +42,7 @@ jobs:
 
       - name: Set up UV
         if: ${{ matrix.os != 'ubuntu-latest' }}
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
@@ -67,7 +67,7 @@ jobs:
 
       # if the hugr_qis compiler has changed, we build it.
       - name: Build selene-hugr-qis-compiler wheel
-        uses: pypa/cibuildwheel@v3.2.0
+        uses: pypa/cibuildwheel@v3.2.1
         with:
           package-dir: qis-compiler
 
