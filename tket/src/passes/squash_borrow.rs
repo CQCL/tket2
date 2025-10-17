@@ -87,17 +87,17 @@ pub enum BorrowSquashError {}
 /// The ports by which the container array reaches and leaves a
 /// particular borrow or return node.
 #[derive(Clone, Debug)]
-pub struct BorrowFromPorts {
+struct BorrowFromPorts {
     /// The port receiving the array before the borrow/return.
-    pub inc: IncomingPort,
+    inc: IncomingPort,
     /// The port returning the array after the borrow/return.
-    pub out: OutgoingPort,
+    out: OutgoingPort,
 }
 
 /// Whether a node is a borrow or return, along with the port for
 /// the borrowed value.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BRAction {
+enum BRAction {
     /// A borrow action, containing the port on which the borrowed value is output.
     Borrow(OutgoingPort),
     /// A return action, containing the port on which the value to return is input.
@@ -106,13 +106,13 @@ pub enum BRAction {
 
 /// Ports common to a borrow or return op
 #[derive(Debug, Clone)]
-pub struct BorrowReturnPorts {
+struct BorrowReturnPorts {
     /// Whether this is a borrow or return, and the port for the borrowed value.
-    pub action: BRAction,
+    action: BRAction,
     /// Port on which the index (of the element to borrow or return) is passed in
-    pub elem_index: IncomingPort,
+    elem_index: IncomingPort,
     /// The ports by which the container array reaches and leaves this node.
-    pub borrow_from: BorrowFromPorts,
+    borrow_from: BorrowFromPorts,
 }
 
 /// Determine if the given node is a borrow or return node, and if so, return
