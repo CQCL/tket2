@@ -6,8 +6,8 @@ pub mod decoder;
 pub mod encoder;
 mod error;
 pub mod extension;
+pub mod opaque;
 mod options;
-pub mod unsupported;
 
 pub use circuit::EncodedCircuit;
 pub use config::{
