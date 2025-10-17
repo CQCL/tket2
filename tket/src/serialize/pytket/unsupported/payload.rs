@@ -9,15 +9,10 @@ use hugr::{HugrView, Wire};
 
 use super::SubgraphId;
 
-/// Pytket opgroup used to identify opaque barrier operations that encode standalone unsupported HUGR subgraphs.
+/// Pytket opgroup used to identify opaque barrier operations that encode opaque HUGR subgraphs.
 ///
-/// See [`UnsupportedSubgraphPayloadType::Standalone`].
-pub const OPGROUP_STANDALONE_UNSUPPORTED_HUGR: &str = "UNSUPPORTED_HUGR";
-
-/// Pytket opgroup used to identify opaque barrier operations that encode external unsupported HUGR subgraphs.
-///
-/// See [`UnsupportedSubgraphPayloadType::External`].
-pub const OPGROUP_EXTERNAL_UNSUPPORTED_HUGR: &str = "EXTERNAL_UNSUPPORTED_HUGR";
+/// See [`UnsupportedSubgraphPayload`].
+pub const OPGROUP_OPAQUE_HUGR: &str = "UNSUPPORTED_HUGR";
 
 /// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
 /// detached from the node IDs of the in-memory Hugr.
@@ -65,6 +60,7 @@ pub struct UnsupportedSubgraphPayload {
     ///
     /// Either a standalone hugr envelope or a reference to a subgraph tracked
     /// inside a [`UnsupportedSubgraphs`][super::UnsupportedSubgraphs] structure.
+    #[serde(flatten)]
     pub(super) typ: UnsupportedSubgraphPayloadType,
     /// Input types of the subgraph.
     ///
@@ -91,6 +87,7 @@ pub struct UnsupportedSubgraphPayload {
 /// reference to a subgraph tracked inside a
 /// [`EncodedCircuit`][super::super::circuit::EncodedCircuit] structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "typ", content = "subgraph")]
 pub enum UnsupportedSubgraphPayloadType {
     /// A standalone payload, carrying the encoded HUGR subgraph.
     Standalone {

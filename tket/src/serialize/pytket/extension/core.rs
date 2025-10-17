@@ -10,10 +10,7 @@ use crate::serialize::pytket::decoder::{
     DecodeStatus, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
 use crate::serialize::pytket::extension::PytketDecoder;
-use crate::serialize::pytket::unsupported::{
-    UnsupportedSubgraphPayload, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
-    OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
-};
+use crate::serialize::pytket::unsupported::{UnsupportedSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeError};
 use crate::serialize::TKETDecode;
 use hugr::builder::Container;
@@ -47,12 +44,7 @@ impl PytketDecoder for CoreDecoder {
                 op_type: PytketOptype::Barrier,
                 data: Some(payload),
                 ..
-            } if [
-                Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR),
-                Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR),
-            ]
-            .contains(&opgroup) =>
-            {
+            } if opgroup == Some(OPGROUP_OPAQUE_HUGR) => {
                 let Ok(payload): Result<UnsupportedSubgraphPayload, _> =
                     serde_json::from_str(payload)
                 else {

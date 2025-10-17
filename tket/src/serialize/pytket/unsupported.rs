@@ -4,8 +4,7 @@
 mod payload;
 
 pub use payload::{
-    EncodedEdgeID, UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType,
-    OPGROUP_EXTERNAL_UNSUPPORTED_HUGR, OPGROUP_STANDALONE_UNSUPPORTED_HUGR,
+    EncodedEdgeID, UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
 };
 
 use std::collections::BTreeMap;
@@ -105,36 +104,36 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     ///
     /// # Errors
     ///
-    /// Returns an error if a barrier operation with the [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`] opgroup has an invalid payload.
+    /// Returns an error if a barrier operation with the [`OPGROUP_OPAQUE_HUGR`] opgroup has an invalid payload.
     pub(super) fn replace_external_with_standalone(
         &self,
         command: &mut tket_json_rs::circuit_json::Command,
         hugr: &impl HugrView<Node = N>,
     ) -> Result<(), PytketEncodeError<N>> {
         if command.op.op_type != tket_json_rs::OpType::Barrier
-            || command.opgroup.as_deref() != Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR)
+            || command.opgroup.as_deref() != Some(OPGROUP_OPAQUE_HUGR)
         {
             return Ok(());
         }
-
         let Some(payload) = command.op.data.take() else {
-            return Err(PytketEncodeError::custom(
-                    format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has no data payload.")
-                ));
+            return Err(PytketEncodeError::custom(format!(
+                "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has no data payload."
+            )));
         };
-        let mut payload: UnsupportedSubgraphPayload = serde_json::from_str(&payload).map_err(|e|
-                PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has corrupt data payload: {e}"))
-            )?;
+
+        let Some(mut payload) = parse_external_payload(&payload)? else {
+            // Standalone payload, nothing to do.
+            return Ok(());
+        };
         let UnsupportedSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
-            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} has an invalid data payload variant: {payload:?}")));
+            unreachable!("Checked by `parse_external_payload`");
         };
         if !self.contains(subgraph_id) {
-            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_EXTERNAL_UNSUPPORTED_HUGR} points to an unknown subgraph: {subgraph_id}")));
+            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
         }
 
         payload.typ = UnsupportedSubgraphPayloadType::standalone(&self[subgraph_id], hugr);
         command.op.data = Some(serde_json::to_string(&payload).unwrap());
-        command.opgroup = Some(OPGROUP_STANDALONE_UNSUPPORTED_HUGR.to_string());
 
         Ok(())
     }
@@ -147,4 +146,37 @@ impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
         self.get(index)
             .unwrap_or_else(|| panic!("Invalid subgraph ID: {index}"))
     }
+}
+
+/// Parse an external payload from a string payload.
+///
+/// Returns `None` if the payload is a standalone payload. We avoid fully
+/// decoding the payload in this case to avoid allocating a new String for the
+/// encoded envelope.
+///
+/// # Errors
+///
+/// Returns an error if the payload is invalid.
+fn parse_external_payload<N>(
+    payload: &str,
+) -> Result<Option<UnsupportedSubgraphPayload>, PytketEncodeError<N>> {
+    let mk_serde_error = |e: serde_json::Error| {
+        PytketEncodeError::custom(format!(
+            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has corrupt data payload: {e}"
+        ))
+    };
+
+    // Check if the payload is a standalone payload, without fully copying it to memory.
+    #[derive(serde::Deserialize)]
+    struct PartialPayload {
+        pub typ: String,
+    }
+    let partial_payload: PartialPayload = serde_json::from_str(payload).map_err(mk_serde_error)?;
+    if partial_payload.typ == "Standalone" {
+        return Ok(None);
+    }
+
+    let payload: UnsupportedSubgraphPayload =
+        serde_json::from_str(payload).map_err(mk_serde_error)?;
+    Ok(Some(payload))
 }
