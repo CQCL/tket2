@@ -51,14 +51,15 @@ impl EncodedEdgeID {
 /// Payload for a pytket barrier metadata that indicates the barrier represents
 /// an unsupported HUGR subgraph.
 ///
-/// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked inside a
-/// [`EncodedCircuit`][super::super::circuit::EncodedCircuit] structure.
+/// The payload may be encoded inline, embedding the HUGR subgraph as an
+/// envelope in the operation's date, or be a reference to a subgraph tracked
+/// inside a [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
+/// structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct UnsupportedSubgraphPayload {
     /// The type of payload.
     ///
-    /// Either a standalone hugr envelope or a reference to a subgraph tracked
+    /// Either an inline hugr envelope or a reference to a subgraph tracked
     /// inside a [`UnsupportedSubgraphs`][super::UnsupportedSubgraphs] structure.
     #[serde(flatten)]
     pub(super) typ: UnsupportedSubgraphPayloadType,
@@ -83,14 +84,15 @@ pub struct UnsupportedSubgraphPayload {
 /// Payload for a pytket barrier metadata that indicates the barrier represents
 /// an unsupported HUGR subgraph.
 ///
-/// The payload may be standalone, carrying the encoded HUGR subgraph, or be a
-/// reference to a subgraph tracked inside a
-/// [`EncodedCircuit`][super::super::circuit::EncodedCircuit] structure.
+/// The payload may be encoded inline, embedding the HUGR subgraph as an
+/// envelope in the operation's date, or be a reference to a subgraph tracked
+/// inside a [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
+/// structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "typ", content = "subgraph")]
 pub enum UnsupportedSubgraphPayloadType {
-    /// A standalone payload, carrying the encoded HUGR subgraph.
-    Standalone {
+    /// An inline payload, carrying the encoded envelope for the HUGR subgraph.
+    Inline {
         /// A string envelope containing the encoded HUGR subgraph.
         hugr_envelope: String,
     },
@@ -104,8 +106,13 @@ pub enum UnsupportedSubgraphPayloadType {
 }
 
 impl UnsupportedSubgraphPayloadType {
-    /// Create a standalone payload by encoding a subgraph.
-    pub fn standalone<N: HugrNode>(
+    /// Create an inline payload by encoding the subgraph as an envelope.
+    //
+    // TODO: Detect and deal with non-local edges. Include global fn/const
+    // definitions, and reject other non-local edges.
+    //
+    // TODO: This should include descendants of the subgraph. It doesn't.
+    pub(super) fn inline<N: HugrNode>(
         subgraph: &SiblingSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
     ) -> Self {
@@ -113,7 +120,7 @@ impl UnsupportedSubgraphPayloadType {
         let payload = Package::from_hugr(unsupported_hugr)
             .store_str(EnvelopeConfig::text())
             .unwrap();
-        Self::Standalone {
+        Self::Inline {
             hugr_envelope: payload,
         }
     }
@@ -150,24 +157,6 @@ impl UnsupportedSubgraphPayload {
         }
     }
 
-    /// Create a new standalone payload, by extracting a sibling subgraph from a
-    /// HUGR and encoding it.
-    ///
-    /// Note that this will produce incomplete hugrs when external function
-    /// calls or  non-local edges are present.
-    //
-    // TODO: Detect and deal with non-local edges? What to do there is not
-    // clear, we need further discussion.
-    //
-    // TODO: This should include descendants of the subgraph. Test that.
-    pub fn standalone<N: HugrNode>(
-        subgraph: &SiblingSubgraph<N>,
-        hugr: &impl HugrView<Node = N>,
-    ) -> Self {
-        let payload = UnsupportedSubgraphPayloadType::standalone(subgraph, hugr);
-        Self::new(subgraph, hugr, payload)
-    }
-
     /// Returns the inputs types and internal edge IDs of the payload.
     pub fn inputs(&self) -> impl Iterator<Item = (&Type, EncodedEdgeID)> + '_ {
         self.inputs.iter().map(|(t, e)| (t, *e))
@@ -183,9 +172,9 @@ impl UnsupportedSubgraphPayload {
         &self.typ
     }
 
-    /// Returns `true` if the payload is a standalone payload.
-    pub fn is_standalone(&self) -> bool {
-        matches!(self.typ, UnsupportedSubgraphPayloadType::Standalone { .. })
+    /// Returns `true` if the payload is an inline payload.
+    pub fn is_inline(&self) -> bool {
+        matches!(self.typ, UnsupportedSubgraphPayloadType::Inline { .. })
     }
 
     /// Returns `true` if the payload is an external payload.

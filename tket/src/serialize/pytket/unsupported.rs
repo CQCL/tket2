@@ -100,12 +100,12 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     }
 
     /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`UnsupportedSubgraphPayload::External`] pointer
-    /// if present with a [`UnsupportedSubgraphPayload::Standalone`] payload.
+    /// if present with a [`UnsupportedSubgraphPayload::Inline`] payload.
     ///
     /// # Errors
     ///
     /// Returns an error if a barrier operation with the [`OPGROUP_OPAQUE_HUGR`] opgroup has an invalid payload.
-    pub(super) fn replace_external_with_standalone(
+    pub(super) fn inline_payload(
         &self,
         command: &mut tket_json_rs::circuit_json::Command,
         hugr: &impl HugrView<Node = N>,
@@ -122,7 +122,7 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
         };
 
         let Some(mut payload) = parse_external_payload(&payload)? else {
-            // Standalone payload, nothing to do.
+            // Inline payload, nothing to do.
             return Ok(());
         };
         let UnsupportedSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
@@ -132,7 +132,7 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
             return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
         }
 
-        payload.typ = UnsupportedSubgraphPayloadType::standalone(&self[subgraph_id], hugr);
+        payload.typ = UnsupportedSubgraphPayloadType::inline(&self[subgraph_id], hugr);
         command.op.data = Some(serde_json::to_string(&payload).unwrap());
 
         Ok(())
@@ -150,9 +150,8 @@ impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
 
 /// Parse an external payload from a string payload.
 ///
-/// Returns `None` if the payload is a standalone payload. We avoid fully
-/// decoding the payload in this case to avoid allocating a new String for the
-/// encoded envelope.
+/// Returns `None` if the payload is inline. We avoid fully decoding the payload
+/// in this case to avoid allocating a new String for the encoded envelope.
 ///
 /// # Errors
 ///
@@ -166,13 +165,13 @@ fn parse_external_payload<N>(
         ))
     };
 
-    // Check if the payload is a standalone payload, without fully copying it to memory.
+    // Check if the payload is inline, without fully copying it to memory.
     #[derive(serde::Deserialize)]
     struct PartialPayload {
         pub typ: String,
     }
     let partial_payload: PartialPayload = serde_json::from_str(payload).map_err(mk_serde_error)?;
-    if partial_payload.typ == "Standalone" {
+    if partial_payload.typ == "Inline" {
         return Ok(None);
     }
 
