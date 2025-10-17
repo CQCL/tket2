@@ -11,18 +11,18 @@ use super::SubgraphId;
 
 /// Pytket opgroup used to identify opaque barrier operations that encode opaque HUGR subgraphs.
 ///
-/// See [`UnsupportedSubgraphPayload`].
-pub const OPGROUP_OPAQUE_HUGR: &str = "UNSUPPORTED_HUGR";
+/// See [`OpaqueSubgraphPayload`].
+pub const OPGROUP_OPAQUE_HUGR: &str = "OPAQUE_HUGR";
 
 /// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
 /// detached from the node IDs of the in-memory Hugr.
 ///
-/// These are used to identify edges in the [`UnsupportedSubgraphPayload`]
+/// These are used to identify edges in the [`OpaqueSubgraphPayload`]
 /// payloads encoded in opaque barriers on the encoded pytket circuits.
 ///
 /// We require them to reconstruct the edges of the hugr that are not reflected
 /// as pytket register/parameter dependencies. This is the case for edges with
-/// unsupported types between unsupported subgraphs, or between an unsupported
+/// unsupported types between opaque subgraphs, or between an opaque
 /// subgraph and a HUGR input/output node.
 #[derive(
     Debug,
@@ -49,20 +49,20 @@ impl EncodedEdgeID {
 }
 
 /// Payload for a pytket barrier metadata that indicates the barrier represents
-/// an unsupported HUGR subgraph.
+/// an opaque HUGR subgraph.
 ///
 /// The payload may be encoded inline, embedding the HUGR subgraph as an
 /// envelope in the operation's date, or be a reference to a subgraph tracked
 /// inside a [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
 /// structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct UnsupportedSubgraphPayload {
+pub struct OpaqueSubgraphPayload {
     /// The type of payload.
     ///
     /// Either an inline hugr envelope or a reference to a subgraph tracked
-    /// inside a [`UnsupportedSubgraphs`][super::UnsupportedSubgraphs] structure.
+    /// inside a [`OpaqueSubgraphs`][super::OpaqueSubgraphs] structure.
     #[serde(flatten)]
-    pub(super) typ: UnsupportedSubgraphPayloadType,
+    pub(super) typ: OpaqueSubgraphPayloadType,
     /// Input types of the subgraph.
     ///
     /// Each input is assigned a unique edge identifier, so we can reconstruct
@@ -82,7 +82,7 @@ pub struct UnsupportedSubgraphPayload {
 }
 
 /// Payload for a pytket barrier metadata that indicates the barrier represents
-/// an unsupported HUGR subgraph.
+/// an opaque HUGR subgraph.
 ///
 /// The payload may be encoded inline, embedding the HUGR subgraph as an
 /// envelope in the operation's date, or be a reference to a subgraph tracked
@@ -90,22 +90,22 @@ pub struct UnsupportedSubgraphPayload {
 /// structure.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "typ", content = "subgraph")]
-pub enum UnsupportedSubgraphPayloadType {
+pub enum OpaqueSubgraphPayloadType {
     /// An inline payload, carrying the encoded envelope for the HUGR subgraph.
     Inline {
         /// A string envelope containing the encoded HUGR subgraph.
         hugr_envelope: String,
     },
-    /// A reference to a subgraph tracked by an `UnsupportedSubgraphs` registry
+    /// A reference to a subgraph tracked by an `OpaqueSubgraphs` registry
     /// in an [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
     /// structure.
     External {
-        /// The ID of the subgraph in the `UnsupportedSubgraphs` registry.
+        /// The ID of the subgraph in the `OpaqueSubgraphs` registry.
         id: SubgraphId,
     },
 }
 
-impl UnsupportedSubgraphPayloadType {
+impl OpaqueSubgraphPayloadType {
     /// Create an inline payload by encoding the subgraph as an envelope.
     //
     // TODO: Detect and deal with non-local edges. Include global fn/const
@@ -116,8 +116,8 @@ impl UnsupportedSubgraphPayloadType {
         subgraph: &SiblingSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
     ) -> Self {
-        let unsupported_hugr = subgraph.extract_subgraph(hugr, "");
-        let payload = Package::from_hugr(unsupported_hugr)
+        let opaque_hugr = subgraph.extract_subgraph(hugr, "");
+        let payload = Package::from_hugr(opaque_hugr)
             .store_str(EnvelopeConfig::text())
             .unwrap();
         Self::Inline {
@@ -126,12 +126,12 @@ impl UnsupportedSubgraphPayloadType {
     }
 }
 
-impl UnsupportedSubgraphPayload {
-    /// Create a new payload for an unsupported subgraph in the Hugr.
+impl OpaqueSubgraphPayload {
+    /// Create a new payload for an opaque subgraph in the Hugr.
     pub fn new<N: HugrNode>(
         subgraph: &SiblingSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
-        typ: UnsupportedSubgraphPayloadType,
+        typ: OpaqueSubgraphPayloadType,
     ) -> Self {
         let signature = subgraph.signature(hugr);
 
@@ -168,17 +168,17 @@ impl UnsupportedSubgraphPayload {
     }
 
     /// Returns the type of the payload.
-    pub fn typ(&self) -> &UnsupportedSubgraphPayloadType {
+    pub fn typ(&self) -> &OpaqueSubgraphPayloadType {
         &self.typ
     }
 
     /// Returns `true` if the payload is an inline payload.
     pub fn is_inline(&self) -> bool {
-        matches!(self.typ, UnsupportedSubgraphPayloadType::Inline { .. })
+        matches!(self.typ, OpaqueSubgraphPayloadType::Inline { .. })
     }
 
     /// Returns `true` if the payload is an external payload.
     pub fn is_external(&self) -> bool {
-        matches!(self.typ, UnsupportedSubgraphPayloadType::External { .. })
+        matches!(self.typ, OpaqueSubgraphPayloadType::External { .. })
     }
 }

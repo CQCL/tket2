@@ -14,7 +14,7 @@ use crate::serialize::pytket::{
 };
 use crate::Circuit;
 
-use super::unsupported::UnsupportedSubgraphs;
+use super::opaque::OpaqueSubgraphs;
 
 /// An encoded pytket circuit that may be linked to an existing HUGR.
 ///
@@ -46,7 +46,7 @@ pub struct EncodedCircuit<'a, H: HugrView = Hugr> {
     ///
     /// Subcircuits are identified in the barrier metadata by their ID in this
     /// vector. See [`SubgraphId`].
-    opaque_subgraphs: UnsupportedSubgraphs<H::Node>,
+    opaque_subgraphs: OpaqueSubgraphs<H::Node>,
     /// The HUGR from where the pytket circuits were encoded.
     hugr: &'a H,
 }
@@ -70,7 +70,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         let mut enc = Self {
             head_region: circuit.parent(),
             circuits: HashMap::new(),
-            opaque_subgraphs: UnsupportedSubgraphs::new(0),
+            opaque_subgraphs: OpaqueSubgraphs::new(0),
             hugr: circuit.hugr(),
         };
 
@@ -114,7 +114,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         // Add all container nodes from the new opaque subgraphs to the list of
         // candidates.
         let add_subgraph_candidates =
-            |subgraphs: &UnsupportedSubgraphs<H::Node>, queue: &mut VecDeque<H::Node>| {
+            |subgraphs: &OpaqueSubgraphs<H::Node>, queue: &mut VecDeque<H::Node>| {
                 for subgraph_id in subgraphs.ids() {
                     for &node in subgraphs[subgraph_id].nodes() {
                         add_candidate(node, queue);
@@ -132,9 +132,9 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
                 continue;
             }
             encoder_count += 1;
-            let unsupported_subgraphs = UnsupportedSubgraphs::new(encoder_count);
+            let opaque_subgraphs = OpaqueSubgraphs::new(encoder_count);
             let mut encoder: PytketEncoderContext<H> =
-                PytketEncoderContext::new(circuit, node, unsupported_subgraphs, config.clone())?;
+                PytketEncoderContext::new(circuit, node, opaque_subgraphs, config.clone())?;
             encoder.run_encoder(circuit, node)?;
             let (serial, _, opaque_subgraphs) = encoder.finish(circuit, node)?;
 
@@ -153,7 +153,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// containing the whole original HUGR.
     ///
     /// Traverses the commands in `head_circuit` and replaces
-    /// [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+    /// [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
     /// pointers in opaque barriers with inline payloads.
     ///
     /// Discards any changes to the internal subcircuits, as they are not part
@@ -165,7 +165,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// [`Self::head_region`] is not a dataflow container in the hugr.
     ///
     /// Returns an error if a barrier operation with the
-    /// [`OPGROUP_OPAQUE_HUGR`][super::unsupported::OPGROUP_OPAQUE_HUGR]
+    /// [`OPGROUP_OPAQUE_HUGR`][super::opaque::OPGROUP_OPAQUE_HUGR]
     /// opgroup has an invalid payload.
     //
     // TODO: We'll need to handle non-local edges and function definitions in this step.
@@ -178,11 +178,11 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
 
         /// Replace references to the `EncodedCircuit` context from the circuit commands.
         ///
-        /// Replaces [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+        /// Replaces [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
         /// pointers in opaque barriers with inline payloads.
         fn make_commands_standalone<N: HugrNode>(
             commands: &mut [PytketCommand],
-            subgraphs: &UnsupportedSubgraphs<N>,
+            subgraphs: &OpaqueSubgraphs<N>,
             hugr: &impl HugrView<Node = N>,
         ) -> Result<(), PytketEncodeError<N>> {
             for command in commands.iter_mut() {
@@ -230,7 +230,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// references.
     ///
     /// The circuits may be modified arbitrarily, as long as
-    /// [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+    /// [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
     /// pointers to HUGR subgraphs in opaque barriers remain valid and
     /// topologically consistent with the original circuit.
     pub fn circuits_mut(&mut self) -> impl Iterator<Item = (H::Node, &mut SerialCircuit)> {

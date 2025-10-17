@@ -4,7 +4,7 @@
 mod payload;
 
 pub use payload::{
-    EncodedEdgeID, UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
+    EncodedEdgeID, OpaqueSubgraphPayload, OpaqueSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
 };
 
 use std::collections::BTreeMap;
@@ -19,17 +19,17 @@ use hugr::HugrView;
 #[derive(Debug, derive_more::Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[display("{local_id}.{tracker_id}")]
 pub struct SubgraphId {
-    /// A locally unique ID in the [`UnsupportedSubgraphs`] instance.
+    /// A locally unique ID in the [`OpaqueSubgraphs`] instance.
     local_id: usize,
-    /// The unique ID of the [`UnsupportedTracker`] instance that generated this ID.
+    /// The unique ID of the [`OpaqueSubgraphs`] instance that generated this ID.
     tracker_id: usize,
 }
 
 /// A set of subgraphs a HUGR that have been marked as _unsupported_ during a
 /// pytket encoding.
 #[derive(Debug, Clone)]
-pub(super) struct UnsupportedSubgraphs<N> {
-    /// A unique ID for this instance of [`UnsupportedSubgraphs`].
+pub(super) struct OpaqueSubgraphs<N> {
+    /// A unique ID for this instance of [`OpaqueSubgraphs`].
     ///
     /// New subgraphs encoded by this instance will have a globally unique ID
     /// composed of this index and a sequential ID.
@@ -60,12 +60,12 @@ impl<'de> serde::Deserialize<'de> for SubgraphId {
     }
 }
 
-impl<N: HugrNode> UnsupportedSubgraphs<N> {
-    /// Create a new [`UnsupportedSubgraphs`].
+impl<N: HugrNode> OpaqueSubgraphs<N> {
+    /// Create a new [`OpaqueSubgraphs`].
     ///
     /// # Arguments
     ///
-    /// - `id`: A unique ID for this instance of [`UnsupportedSubgraphs`], used
+    /// - `id`: A unique ID for this instance of [`OpaqueSubgraphs`], used
     ///   to generate new globally unique subgraph IDs.
     pub fn new(id: usize) -> Self {
         Self {
@@ -74,10 +74,10 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
         }
     }
 
-    /// Register a new unsupported subgraph in the Hugr.
+    /// Register a new opaque subgraph in the Hugr.
     ///
     /// Returns and ID that can be used to identify the subgraph in the pytket circuit.
-    pub fn register_unsupported_subgraph(&mut self, subgraph: SiblingSubgraph<N>) -> SubgraphId {
+    pub fn register_opaque_subgraph(&mut self, subgraph: SiblingSubgraph<N>) -> SubgraphId {
         let id = SubgraphId {
             local_id: self.opaque_subgraphs.len(),
             tracker_id: self.id,
@@ -95,23 +95,23 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
         self.opaque_subgraphs.get(&id)
     }
 
-    /// Returns `true` if the unsupported subgraph with the given ID exists.
+    /// Returns `true` if the opaque subgraph with the given ID exists.
     pub fn contains(&self, id: SubgraphId) -> bool {
         self.opaque_subgraphs.contains_key(&id)
     }
 
-    /// Returns an iterator over the IDs of the unsupported subgraphs.
+    /// Returns an iterator over the IDs of the opaque subgraphs.
     pub fn ids(&self) -> impl Iterator<Item = SubgraphId> + '_ {
         self.opaque_subgraphs.keys().copied()
     }
 
-    /// Merge another [`UnsupportedSubgraphs`] into this one.
+    /// Merge another [`OpaqueSubgraphs`] into this one.
     pub fn merge(&mut self, other: Self) {
         self.opaque_subgraphs.extend(other.opaque_subgraphs);
     }
 
-    /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`UnsupportedSubgraphPayload::External`] pointer
-    /// if present with a [`UnsupportedSubgraphPayload::Inline`] payload.
+    /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`OpaqueSubgraphPayload::External`] pointer
+    /// if present with a [`OpaqueSubgraphPayload::Inline`] payload.
     ///
     /// # Errors
     ///
@@ -136,21 +136,21 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
             // Inline payload, nothing to do.
             return Ok(());
         };
-        let UnsupportedSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
+        let OpaqueSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
             unreachable!("Checked by `parse_external_payload`");
         };
         if !self.contains(subgraph_id) {
             return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
         }
 
-        payload.typ = UnsupportedSubgraphPayloadType::inline(&self[subgraph_id], hugr);
+        payload.typ = OpaqueSubgraphPayloadType::inline(&self[subgraph_id], hugr);
         command.op.data = Some(serde_json::to_string(&payload).unwrap());
 
         Ok(())
     }
 }
 
-impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
+impl<N: HugrNode> Index<SubgraphId> for OpaqueSubgraphs<N> {
     type Output = SiblingSubgraph<N>;
 
     fn index(&self, index: SubgraphId) -> &Self::Output {
@@ -159,7 +159,7 @@ impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
     }
 }
 
-impl<N> Default for UnsupportedSubgraphs<N> {
+impl<N> Default for OpaqueSubgraphs<N> {
     fn default() -> Self {
         Self {
             id: 0,
@@ -178,7 +178,7 @@ impl<N> Default for UnsupportedSubgraphs<N> {
 /// Returns an error if the payload is invalid.
 fn parse_external_payload<N>(
     payload: &str,
-) -> Result<Option<UnsupportedSubgraphPayload>, PytketEncodeError<N>> {
+) -> Result<Option<OpaqueSubgraphPayload>, PytketEncodeError<N>> {
     let mk_serde_error = |e: serde_json::Error| {
         PytketEncodeError::custom(format!(
             "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has corrupt data payload: {e}"
@@ -195,7 +195,6 @@ fn parse_external_payload<N>(
         return Ok(None);
     }
 
-    let payload: UnsupportedSubgraphPayload =
-        serde_json::from_str(payload).map_err(mk_serde_error)?;
+    let payload: OpaqueSubgraphPayload = serde_json::from_str(payload).map_err(mk_serde_error)?;
     Ok(Some(payload))
 }
