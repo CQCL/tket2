@@ -33,7 +33,7 @@ use crate::circuit::Circuit;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::unsupported::{
-    UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_EXTERNAL_UNSUPPORTED_HUGR,
+    UnsupportedSubgraphPayload, UnsupportedSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
 };
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
@@ -641,7 +641,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         pytket_op.data = Some(serde_json::to_string(&payload).unwrap());
 
-        let opgroup = Some(OPGROUP_EXTERNAL_UNSUPPORTED_HUGR.to_string());
+        let opgroup = Some(OPGROUP_OPAQUE_HUGR.to_string());
         self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }

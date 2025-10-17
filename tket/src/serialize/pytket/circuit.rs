@@ -162,7 +162,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// [`Self::head_region`] is not a dataflow container in the hugr.
     ///
     /// Returns an error if a barrier operation with the
-    /// [`OPGROUP_EXTERNAL_UNSUPPORTED_HUGR`][super::unsupported::OPGROUP_EXTERNAL_UNSUPPORTED_HUGR]
+    /// [`OPGROUP_OPAQUE_HUGR`][super::unsupported::OPGROUP_OPAQUE_HUGR]
     /// opgroup has an invalid payload.
     //
     // TODO: We'll need to handle non-local edges and function definitions in this step.
