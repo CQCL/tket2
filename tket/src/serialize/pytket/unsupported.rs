@@ -16,27 +16,27 @@ use hugr::hugr::views::SiblingSubgraph;
 use hugr::HugrView;
 
 /// The ID of a subgraph in the Hugr.
-#[derive(
-    Debug,
-    derive_more::Display,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-)]
-#[serde(transparent)]
-#[display("Subgraph#{id}", id = self.0)]
-pub struct SubgraphId(usize);
+#[derive(Debug, derive_more::Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[display("{local_id}.{tracker_id}")]
+pub struct SubgraphId {
+    /// A locally unique ID in the [`UnsupportedSubgraphs`] instance.
+    local_id: usize,
+    /// The unique ID of the [`UnsupportedTracker`] instance that generated this ID.
+    tracker_id: usize,
+}
 
 /// A set of subgraphs a HUGR that have been marked as _unsupported_ during a
 /// pytket encoding.
 #[derive(Debug, Clone)]
 pub(super) struct UnsupportedSubgraphs<N> {
+    /// A unique ID for this instance of [`UnsupportedSubgraphs`].
+    ///
+    /// New subgraphs encoded by this instance will have a globally unique ID
+    /// composed of this index and a sequential ID.
+    ///
+    /// Note that the IDs in `opaque_subgraphs` may include instances with
+    /// different tracker IDs if `merge` has been called.
+    id: usize,
     /// Sets of subgraphs in the HUGR that have been encoded as opaque barriers
     /// in the pytket circuit.
     ///
@@ -44,24 +44,32 @@ pub(super) struct UnsupportedSubgraphs<N> {
     opaque_subgraphs: BTreeMap<SubgraphId, SiblingSubgraph<N>>,
 }
 
-impl SubgraphId {
-    /// Create a new [`SubgraphId`] from a [`SiblingSubgraph`].
-    pub fn from_subgraph(subgraph: &SiblingSubgraph<impl HugrNode>) -> Self {
-        // The encoder running on a hugr will only generate disjoint subgraphs
-        // of unsupported nodes, so it's safe to identify them by their list of
-        // nodes ids.
-        //
-        // It would even be safe to just pick a single node ID for the
-        // identifier, but we compute the hash of the node set instead to be
-        // more robust.
-        Self(fxhash::hash(subgraph.nodes()))
+impl serde::Serialize for SubgraphId {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        (&self.local_id, &self.tracker_id).serialize(s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SubgraphId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let (local_id, tracker_id) = serde::Deserialize::deserialize(d)?;
+        Ok(Self {
+            local_id,
+            tracker_id,
+        })
     }
 }
 
 impl<N: HugrNode> UnsupportedSubgraphs<N> {
     /// Create a new [`UnsupportedSubgraphs`].
-    pub fn new() -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// - `id`: A unique ID for this instance of [`UnsupportedSubgraphs`], used
+    ///   to generate new globally unique subgraph IDs.
+    pub fn new(id: usize) -> Self {
         Self {
+            id,
             opaque_subgraphs: BTreeMap::new(),
         }
     }
@@ -70,7 +78,10 @@ impl<N: HugrNode> UnsupportedSubgraphs<N> {
     ///
     /// Returns and ID that can be used to identify the subgraph in the pytket circuit.
     pub fn register_unsupported_subgraph(&mut self, subgraph: SiblingSubgraph<N>) -> SubgraphId {
-        let id = SubgraphId::from_subgraph(&subgraph);
+        let id = SubgraphId {
+            local_id: self.opaque_subgraphs.len(),
+            tracker_id: self.id,
+        };
         self.opaque_subgraphs.insert(id, subgraph);
         id
     }
@@ -145,6 +156,15 @@ impl<N: HugrNode> Index<SubgraphId> for UnsupportedSubgraphs<N> {
     fn index(&self, index: SubgraphId) -> &Self::Output {
         self.get(index)
             .unwrap_or_else(|| panic!("Invalid subgraph ID: {index}"))
+    }
+}
+
+impl<N> Default for UnsupportedSubgraphs<N> {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            opaque_subgraphs: BTreeMap::new(),
+        }
     }
 }
 

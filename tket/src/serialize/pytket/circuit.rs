@@ -70,7 +70,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         let mut enc = Self {
             head_region: circuit.parent(),
             circuits: HashMap::new(),
-            opaque_subgraphs: UnsupportedSubgraphs::new(),
+            opaque_subgraphs: UnsupportedSubgraphs::new(0),
             hugr: circuit.hugr(),
         };
 
@@ -122,6 +122,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
                 }
             };
 
+        let mut encoder_count = 0;
         while let Some(node) = candidate_nodes.pop_front() {
             let node_op = circuit.hugr().get_optype(node);
             if !OpTag::DataflowParent.is_superset(node_op.tag()) {
@@ -130,8 +131,10 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
                 }
                 continue;
             }
+            encoder_count += 1;
+            let unsupported_subgraphs = UnsupportedSubgraphs::new(encoder_count);
             let mut encoder: PytketEncoderContext<H> =
-                PytketEncoderContext::new(circuit, node, config.clone())?;
+                PytketEncoderContext::new(circuit, node, unsupported_subgraphs, config.clone())?;
             encoder.run_encoder(circuit, node)?;
             let (serial, _, opaque_subgraphs) = encoder.finish(circuit, node)?;
 

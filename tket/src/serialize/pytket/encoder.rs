@@ -143,9 +143,17 @@ impl<'a> EmitCommandOptions<'a> {
 
 impl<H: HugrView> PytketEncoderContext<H> {
     /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
+    ///
+    /// # Arguments
+    ///
+    /// - `circ`: The circuit to encode.
+    /// - `region`: The region of the circuit to encode.
+    /// - `unsupported_subgraphs`: The unsupported subgraphs registry to use.
+    /// - `config`: The configuration for the encoder.
     pub(super) fn new(
         circ: &Circuit<H>,
         region: H::Node,
+        unsupported_subgraphs: UnsupportedSubgraphs<H::Node>,
         config: impl Into<Arc<PytketEncoderConfig<H>>>,
     ) -> Result<Self, PytketEncodeError<H::Node>> {
         let config: Arc<PytketEncoderConfig<H>> = config.into();
@@ -168,7 +176,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             commands: vec![],
             values: ValueTracker::new(circ, region, &config)?,
             unsupported: UnsupportedTracker::new(circ),
-            unsupported_subgraphs: UnsupportedSubgraphs::new(),
+            unsupported_subgraphs,
             config,
             function_cache: Arc::new(RwLock::new(HashMap::new())),
         })
@@ -707,7 +715,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new(circ, node, config)?;
+        let unsupported_subgraphs = std::mem::take(&mut self.unsupported_subgraphs);
+        let mut subencoder = PytketEncoderContext::new(circ, node, unsupported_subgraphs, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, node)?;
 
@@ -716,7 +725,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         if !output_params.is_empty() {
             return Ok(EncodeStatus::Unsupported);
         }
-        self.unsupported_subgraphs.merge(unsupported_subgraphs);
+        self.unsupported_subgraphs = unsupported_subgraphs;
 
         self.emit_circ_box(node, serial_subcirc, circ)?;
         Ok(EncodeStatus::Success)
@@ -756,13 +765,15 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
         // If the function is not cached, we need to encode it.
         let config = Arc::clone(&self.config);
+        let unsupported_subgraphs = std::mem::take(&mut self.unsupported_subgraphs);
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new(circ, function, config)?;
+        let mut subencoder =
+            PytketEncoderContext::new(circ, function, unsupported_subgraphs, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, function)?;
         let (serial_subcirc, output_params, unsupported_subgraphs) =
             subencoder.finish(circ, function)?;
-        self.unsupported_subgraphs.merge(unsupported_subgraphs);
+        self.unsupported_subgraphs = unsupported_subgraphs;
 
         let (result, cached_fn) = match output_params.is_empty() {
             true => (
