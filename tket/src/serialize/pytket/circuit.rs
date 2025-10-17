@@ -151,7 +151,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     ///
     /// Traverses the commands in `head_circuit` and replaces
     /// [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
-    /// pointers in opaque barriers with standalone payloads.
+    /// pointers in opaque barriers with inline payloads.
     ///
     /// Discards any changes to the internal subcircuits, as they are not part
     /// of the top-level circuit.
@@ -173,13 +173,17 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
         };
         let mut serial_circuit = self.circuits.remove(&self.head_region).unwrap();
 
+        /// Replace references to the `EncodedCircuit` context from the circuit commands.
+        ///
+        /// Replaces [`UnsupportedSubgraphPayloadType::External`][super::unsupported::UnsupportedSubgraphPayloadType::External]
+        /// pointers in opaque barriers with inline payloads.
         fn make_commands_standalone<N: HugrNode>(
             commands: &mut [PytketCommand],
             subgraphs: &UnsupportedSubgraphs<N>,
             hugr: &impl HugrView<Node = N>,
         ) -> Result<(), PytketEncodeError<N>> {
             for command in commands.iter_mut() {
-                subgraphs.replace_external_with_standalone(command, hugr)?;
+                subgraphs.inline_payload(command, hugr)?;
 
                 if let Some(tket_json_rs::opbox::OpBox::CircBox { circuit, .. }) =
                     &mut command.op.op_box

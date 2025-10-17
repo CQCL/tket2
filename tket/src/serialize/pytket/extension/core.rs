@@ -55,7 +55,7 @@ impl PytketDecoder for CoreDecoder {
                 if payload.is_external() {
                     unimplemented!("Extract external unsupported hugr subgraphs.");
                 }
-                // TODO: Extract standalone unsupported hugr subgraphs.
+                // TODO: Extract inline unsupported hugr subgraphs.
                 //
                 // For now we keep the old behaviour of producing opaque TKET1.tk1op operations.
                 Ok(DecodeStatus::Unsupported)
