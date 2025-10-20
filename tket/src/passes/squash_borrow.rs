@@ -8,7 +8,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::{OpTag, OpTrait, Value};
 use hugr::std_extensions::arithmetic::int_types::ConstInt;
 use hugr::std_extensions::collections::borrow_array::{BArrayUnsafeOpDef, BORROW_ARRAY_TYPENAME};
-use hugr::types::Type;
+use hugr::types::{EdgeKind, Type};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Wire};
 
 use std::collections::hash_map::Entry;
@@ -328,10 +328,10 @@ fn next_array_op(
 }
 
 fn wire_type(h: &impl HugrView<Node = Node>, w: Wire) -> Type {
-    h.out_value_types(w.node())
-        .find(|(p, _)| *p == w.source())
-        .unwrap()
-        .1
+    let Some(EdgeKind::Value(ty)) = h.get_optype(w.node()).port_kind(w.source()) else {
+        panic!("Invalid wire {w}")
+    };
+    ty.clone()
 }
 
 fn all_outs(h: &impl HugrView<Node = Node>, n: Node) -> impl Iterator<Item = Wire> + '_ {
