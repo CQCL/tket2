@@ -83,7 +83,7 @@ cache-keys = [
 
 [tool.uv.sources]
 tket = { workspace = true }
-
+guppylang = { git = "https://github.com/cqcl/guppylang.git", branch = "ts/borrow-arrays", subdirectory = "guppylang" }
 
 [tool.cibuildwheel]
 build = "cp310-*"
@@ -93,7 +93,7 @@ manylinux-aarch64-image = "manylinux_2_28"
 test-requires = [
     "pytest",
     "pytest-snapshot",
-    "guppylang~=0.21.0",
+    "guppylang @ git+https://github.com/cqcl/guppylang.git#subdirectory=guppylang@ts/borrow-arrays",
     "pytket~=2.9.1",
     "tket~=0.12.7",
 ]

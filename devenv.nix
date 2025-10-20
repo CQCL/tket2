@@ -18,8 +18,6 @@ in
     pkgs.libxml2
     pkgs.zlib
     pkgs.ncurses
-  ]
-  ++ lib.optionals pkgs.stdenv.isLinux [
     pkgs.stdenv.cc.cc.lib
   ];
 
