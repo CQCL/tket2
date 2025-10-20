@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.7](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.6...qis-compiler-v0.2.7) (2025-10-20)
+
+
+### Features
+
+* Port selene-hugr-qis-compiler to tket2 repository ([#1146](https://github.com/CQCL/tket2/issues/1146)) ([970f3b1](https://github.com/CQCL/tket2/commit/970f3b1dc8909c7b38071221624564d91b1168cd))
+* Switch borrow array lowering from type replacement to llvm ([ab3e020](https://github.com/CQCL/tket2/commit/ab3e02063ad8794a93c255f7c9198a16e73c572b))
+
 ## [0.2.6](https://github.com/CQCL/selene/compare/selene-hugr-qis-compiler-v0.2.5...selene-hugr-qis-compiler-v0.2.6) (2025-09-22)
 
 
