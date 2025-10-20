@@ -615,7 +615,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [
@@ -738,7 +738,7 @@ wheels = [
 [[package]]
 name = "guppylang"
 version = "0.21.5"
-source = { git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&branch=ts%2Fborrow-arrays#dda274277f342fa9bf47fad6b213cb0e3dce5ba7" }
+source = { git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&rev=025880d648d3#025880d648d3a22776514ad4403b4c46f29bd818" }
 dependencies = [
     { name = "guppylang-internals" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -752,7 +752,7 @@ dependencies = [
 [[package]]
 name = "guppylang-internals"
 version = "0.24.0"
-source = { git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang-internals&branch=ts%2Fborrow-arrays#dda274277f342fa9bf47fad6b213cb0e3dce5ba7" }
+source = { git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang-internals&rev=025880d648d3#025880d648d3a22776514ad4403b4c46f29bd818" }
 dependencies = [
     { name = "hugr" },
     { name = "tket-exts" },
@@ -2614,7 +2614,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "cibuildwheel", specifier = ">=2.23.2" },
-    { name = "guppylang", git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&branch=ts%2Fborrow-arrays" },
+    { name = "guppylang", git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&rev=025880d648d3" },
     { name = "pytest-snapshot", specifier = "~=0.9.0" },
     { name = "pytket", specifier = "~=2.9" },
     { name = "tket", editable = "tket-py" },
@@ -2962,7 +2962,7 @@ source = { editable = "tket-eccs" }
 
 [[package]]
 name = "tket-exts"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "tket-exts" }
 dependencies = [
     { name = "hugr" },

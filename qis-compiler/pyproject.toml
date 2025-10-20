@@ -83,7 +83,7 @@ cache-keys = [
 
 [tool.uv.sources]
 tket = { workspace = true }
-guppylang = { git = "https://github.com/cqcl/guppylang.git", branch = "ts/borrow-arrays", subdirectory = "guppylang" }
+guppylang = { git = "https://github.com/cqcl/guppylang.git", rev = "025880d648d3", subdirectory = "guppylang" }
 
 [tool.cibuildwheel]
 build = "cp310-*"
