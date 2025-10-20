@@ -6,7 +6,6 @@
 ### New Features
 
 - [**breaking**] SerialCircuit::decode_inplace and explicit option structs ([#1120](https://github.com/CQCL/tket2/pull/1120))
-- [**breaking**] update to hugr 0.23 ([#1132](https://github.com/CQCL/tket2/pull/1132))
 - *(pytket-decoder)* [**breaking**] Allow specifying qubit/bit reuse ([#1127](https://github.com/CQCL/tket2/pull/1127))
 - pull out unpack functionality from barrier handling ([#1144](https://github.com/CQCL/tket2/pull/1144))
 - Definition of extension ops for modifiers and global phases ([#1137](https://github.com/CQCL/tket2/pull/1137))
