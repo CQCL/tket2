@@ -5,14 +5,13 @@
 
 ### ⚠ BREAKING CHANGES
 
-* `ReplaceBorrowArrayPass` is removed from `QSystemPass`
-* **tket-qsystem:** add `RandomOp:RandomAdvance` and make `RandomOp` non-exhaustive.
+* Require hugr>=0.14 to support borrow arrays
+
 
 ### Features
 
 * Definition of extension ops for modifiers and global phases ([#1137](https://github.com/CQCL/tket2/issues/1137)) ([ffc507b](https://github.com/CQCL/tket2/commit/ffc507b22c462aab3d5ddf837b86e5ac3325e731))
-* Switch borrow array lowering from type replacement to llvm ([#1161](https://github.com/CQCL/tket2/issues/1161)) ([ab3e020](https://github.com/CQCL/tket2/commit/ab3e02063ad8794a93c255f7c9198a16e73c572b))
-* **tket-qsystem:** Support `random_advance` platform call ([#1170](https://github.com/CQCL/tket2/issues/1170)) ([eed16e8](https://github.com/CQCL/tket2/commit/eed16e8c57541ea23af6241290aa47d37583cfc4))
+* Add `random_advance` to random extensions ([#1170](https://github.com/CQCL/tket2/issues/1170)) ([eed16e8](https://github.com/CQCL/tket2/commit/eed16e8c57541ea23af6241290aa47d37583cfc4))
 
 ## [0.11.0](https://github.com/CQCL/tket2/compare/tket-exts-v0.10.1...tket-exts-v0.11.0) (2025-09-12)
 
