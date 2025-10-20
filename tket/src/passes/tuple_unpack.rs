@@ -16,6 +16,7 @@ use crate::Circuit;
 
 /// Find tuple pack operations followed by tuple unpack operations
 /// and generate rewrites to remove them.
+#[deprecated(since = "0.15.1", note = "Use hugr::algorithms::UntuplePass instead")]
 pub fn find_tuple_unpack_rewrites(
     circ: &Circuit<impl HugrView<Node = Node>>,
 ) -> impl Iterator<Item = CircuitRewrite> + '_ {
@@ -239,6 +240,7 @@ mod test {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut num_rewrites = 0;
         loop {
+            #[allow(deprecated)]
             let Some(rewrite) = find_tuple_unpack_rewrites(&circ).next() else {
                 break;
             };
