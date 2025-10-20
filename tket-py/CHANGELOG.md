@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.12.8](https://github.com/CQCL/tket2/compare/tket-py-v0.12.7...tket-py-v0.12.8) (2025-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* `ReplaceBorrowArrayPass` is removed from `QSystemPass`
+
+### Features
+
+* Port selene-hugr-qis-compiler to tket2 repository ([970f3b1](https://github.com/CQCL/tket2/commit/970f3b1dc8909c7b38071221624564d91b1168cd))
+* Switch borrow array lowering from type replacement to llvm ([#1161](https://github.com/CQCL/tket2/issues/1161)) ([ab3e020](https://github.com/CQCL/tket2/commit/ab3e02063ad8794a93c255f7c9198a16e73c572b))
+
+
+### Documentation
+
+* Tket-py notebook cleanup ([9d6f241](https://github.com/CQCL/tket2/commit/9d6f241382f40643150836a2dcc9bdc7cd9eeb96))
+
 ## [0.12.7](https://github.com/CQCL/tket2/compare/tket-py-v0.12.6...tket-py-v0.12.7) (2025-09-12)
 
 
