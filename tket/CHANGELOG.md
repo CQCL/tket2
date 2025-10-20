@@ -1,6 +1,31 @@
 # Changelog
 
 
+## [0.16.0](https://github.com/CQCL/tket2/compare/tket-v0.15.0...tket-v0.16.0) - 2025-10-20
+
+### Bug Fixes
+
+- *(pytket-encoder)* Correctly encode I/O nodes in nested containers ([#1117](https://github.com/CQCL/tket2/pull/1117))
+- Ensure decoded circuits have the required signature ([#1123](https://github.com/CQCL/tket2/pull/1123))
+- Avoid loops when encoding recursive fns ([#1143](https://github.com/CQCL/tket2/pull/1143))
+- Badger performance improvements ([#1139](https://github.com/CQCL/tket2/pull/1139))
+
+### New Features
+
+- [**breaking**] SerialCircuit::decode_inplace and explicit option structs ([#1120](https://github.com/CQCL/tket2/pull/1120))
+- Decode pytket circs into DFGs ([#1121](https://github.com/CQCL/tket2/pull/1121))
+- Decode CircBoxes as DFG nodes ([#1122](https://github.com/CQCL/tket2/pull/1122))
+- *(pytket-decoder)* [**breaking**] Allow specifying qubit/bit reuse ([#1127](https://github.com/CQCL/tket2/pull/1127))
+- pull out unpack functionality from barrier handling ([#1144](https://github.com/CQCL/tket2/pull/1144))
+- Deal with non-local edges in pytket encoder ([#1145](https://github.com/CQCL/tket2/pull/1145))
+- Definition of extension ops for modifiers and global phases ([#1137](https://github.com/CQCL/tket2/pull/1137))
+- modifier resolver for various `OpTypes` ([#1162](https://github.com/CQCL/tket2/pull/1162))
+- Modifier for TketOps and global phases ([#1168](https://github.com/CQCL/tket2/pull/1168))
+
+### Refactor
+
+- Create backtracking optimiser, refactor badger to use it ([#977](https://github.com/CQCL/tket2/pull/977))
+
 ## [0.15.0](https://github.com/CQCL/tket2/compare/tket-v0.14.0...tket-v0.15.0) - 2025-09-15
 
 ### Bug Fixes
