@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.12.8](https://github.com/CQCL/tket2/compare/tket-py-v0.12.7...tket-py-v0.12.8) (2025-10-20)
+
+### Documentation
+
+* Tket-py notebook cleanup ([9d6f241](https://github.com/CQCL/tket2/commit/9d6f241382f40643150836a2dcc9bdc7cd9eeb96))
+
 ## [0.12.7](https://github.com/CQCL/tket2/compare/tket-py-v0.12.6...tket-py-v0.12.7) (2025-09-12)
 
 
