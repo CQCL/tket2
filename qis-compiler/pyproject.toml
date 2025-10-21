@@ -9,6 +9,8 @@ dev = [
     "cibuildwheel>=2.23.2",
     "pytket~=2.9",
     "tket",
+    "tket-exts",
+    "pytest>=8.4.2",
 ]
 
 [project]
@@ -83,20 +85,17 @@ cache-keys = [
 
 [tool.uv.sources]
 tket = { workspace = true }
-guppylang = { git = "https://github.com/cqcl/guppylang.git", rev = "025880d648d3", subdirectory = "guppylang" }
+tket-exts = { workspace = true }
+guppylang = { git = "https://github.com/cqcl/guppylang.git", rev = "d5b4ca6", subdirectory = "guppylang" }
 
 [tool.cibuildwheel]
 build = "cp310-*"
+build-frontend = "build[uv]"
 skip = "*-win32 *-manylinux_i686 *-musllinux*"
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
-test-requires = [
-    "pytest",
-    "pytest-snapshot",
-    "git+https://github.com/cqcl/guppylang@ts/borrow-arrays#subdirectory=guppylang",
-    "pytket~=2.9.1",
-    "tket~=0.12.7",
-]
+
+before-test = "uv sync --only-dev --active"
 test-command = "pytest -vv {package}"
 
 [tool.cibuildwheel.linux.environment]
@@ -151,10 +150,11 @@ before-test = '''
         # make sure the cache is readable by the host
         chmod -R a+rX /host/tmp/ci-cache/hugr-qis
     fi
+    uv sync --only-dev --active
 '''
 repair-wheel-command = [
     'auditwheel repair -w {dest_dir} {wheel}',
-    'pipx run abi3audit --strict --report {wheel}',
+    'uvx abi3audit --strict --report {wheel}',
 ]
 
 [tool.cibuildwheel.macos.environment]
@@ -171,7 +171,7 @@ before-all = [
 ]
 repair-wheel-command = [
     'DYLD_LIBRARY_PATH=/tmp/llvm/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}',
-    'pipx run abi3audit --strict --report {wheel}',
+    'uvx abi3audit --strict --report {wheel}',
 ]
 
 [tool.cibuildwheel.windows.environment]
@@ -183,8 +183,7 @@ before-all = [
     'curl -LO https://github.com/PLC-lang/llvm-package-windows/releases/download/v14.0.6/LLVM-14.0.6-win64.7z',
     '7z x LLVM-14.0.6-win64.7z "-oC:\LLVM" -y',
 ]
-before-build = ['pip install delvewheel']
 repair-wheel-command = [
-    'delvewheel repair -w {dest_dir} {wheel}',
-    'pipx run abi3audit --strict --report {wheel}',
+    'uvx delvewheel repair -w {dest_dir} {wheel}',
+    'uvx abi3audit --strict --report {wheel}',
 ]
