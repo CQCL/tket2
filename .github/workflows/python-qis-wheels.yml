@@ -7,6 +7,10 @@ on:
   release:
     types:
       - published
+  pull_request:
+    # check builds work if qis-compiler build config changes
+    paths:
+      - 'qis-compiler/pyproject.toml'
   workflow_dispatch:
 
 permissions:
@@ -95,6 +99,7 @@ jobs:
       contents: write
       # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
+    if: ${{ github.event_name != 'pull_request' }}
     steps:
       # note: we can't use if: on the entire job, as if statements are evaluated
       # before matrix expansion, so we follow the convention of guppylang and
