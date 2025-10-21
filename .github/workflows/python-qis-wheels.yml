@@ -87,7 +87,7 @@ jobs:
     strategy:
       matrix:
         target:
-          - name: selene-hugr-qis-compiler
+          - name: qis-compiler
             upload: wheelhouse/selene_hugr_qis_compiler-*.whl
 
     name: Release ${{ matrix.target.name }}
@@ -135,7 +135,7 @@ jobs:
           TWINE_REPOSITORY_URL: ${{ secrets.JFROG_URL }}
           TWINE_USERNAME: ${{ secrets.JFROG_USER }}
 
-      - name: Publish package distributions to PyPIz
+      - name: Publish package distributions to PyPI
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
