@@ -1,3 +1,6 @@
+import importlib
+import importlib.util
+
 import pytest
 from guppylang import guppy
 from guppylang.std.builtins import array, exit, panic, result
@@ -18,7 +21,6 @@ from guppylang.std.quantum import (
 )
 from hugr.ops import CFG
 from pytest_snapshot.plugin import Snapshot
-from pytket._tket.circuit import Circuit
 from selene_hugr_qis_compiler import HugrReadError, check_hugr, compile_to_llvm_ir
 
 triples = [
@@ -58,6 +60,9 @@ def test_check() -> None:
 
 def test_unsupported_pytket_ops() -> None:
     """Test the check_hugr function to ensure it flags unsupported pytket ops."""
+    if importlib.util.find_spec("tket") is None:
+        pytest.skip("tket not installed; skipping test of unsupported pytket ops")
+    from pytket._tket.circuit import Circuit
 
     # A pytket circuit with an unsupported op.
     circ = Circuit(2).CSXdg(0, 1)
