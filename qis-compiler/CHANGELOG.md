@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.8](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.7...qis-compiler-v0.2.8) (2025-10-21)
+
+
+### Bug Fixes
+
+* clean-up test dependency in qis compiler release workflow ([#1191](https://github.com/CQCL/tket2/issues/1191)) ([61bc472](https://github.com/CQCL/tket2/commit/61bc472dfa6a88f5bd7735cd6129aa95e4bd575d))
+
 ## [0.2.7](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.6...qis-compiler-v0.2.7) (2025-10-20)
 
 
