@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.9](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.8...qis-compiler-v0.2.9) (2025-10-22)
+
+
+### Bug Fixes
+
+* **qis-compiler:** undo accidental breakage from removing value array ([#1194](https://github.com/CQCL/tket2/issues/1194)) ([5319856](https://github.com/CQCL/tket2/commit/53198562dae962d340e53ab07b798510896da01f))
+
 ## [0.2.8](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.7...qis-compiler-v0.2.8) (2025-10-21)
 
 
