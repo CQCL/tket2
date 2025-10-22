@@ -157,8 +157,7 @@ repair-wheel-command = [
 [tool.cibuildwheel.macos.environment]
 PATH = '/tmp/llvm:$PATH'
 LLVM_SYS_140_PREFIX = '/tmp/llvm'
-MACOSX_DEPLOYMENT_TARGET = "13.2" # set in CI depending on architecture
-
+MACOSX_DEPLOYMENT_TARGET = "13.2"
 [tool.cibuildwheel.macos]
 before-all = [
     'curl -sSf https://sh.rustup.rs | sh -s -- -y',
