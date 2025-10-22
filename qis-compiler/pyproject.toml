@@ -8,7 +8,7 @@ dev = [
     "pytest>=8.4.2",
     "pytest-snapshot~=0.9.0",
     "cibuildwheel>=2.23.2",
-    "tket-exts", # remove after next guppy-internals release
+    "tket-exts",              # remove after next guppy-internals release
 ]
 
 [project]
@@ -87,7 +87,7 @@ tket-exts = { workspace = true }
 
 [tool.cibuildwheel]
 build = "cp310-*"
-build-frontend = "build[uv]"
+build-frontend = "build[uv]; args: -C--profile=release"
 skip = "*-win32 *-manylinux_i686 *-musllinux*"
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
