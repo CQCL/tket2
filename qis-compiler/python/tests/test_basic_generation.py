@@ -1,5 +1,6 @@
 import importlib
 import importlib.util
+from pathlib import Path
 
 import pytest
 from guppylang import guppy
@@ -22,6 +23,8 @@ from guppylang.std.quantum import (
 from hugr.ops import CFG
 from pytest_snapshot.plugin import Snapshot
 from selene_hugr_qis_compiler import HugrReadError, check_hugr, compile_to_llvm_ir
+
+resources_dir = Path(__file__).parent / "resources"
 
 triples = [
     "x86_64-unknown-linux-gnu",
@@ -302,3 +305,37 @@ def test_entry_args() -> None:
         match="Entry point function must have no input parameters",
     ):
         _ = compile_to_llvm_ir(foo.compile_function().to_bytes())
+
+
+@pytest.mark.parametrize("target_triple", triples)
+def test_gpu(snapshot: Snapshot, target_triple: str) -> None:
+    # when we get GPU support in guppy, we might write something like:
+    #
+    # @gpu_module("example_module.so", None)
+    # class Decoder:
+    #     @gpu
+    #     @no_type_check
+    #     def fn_returning_int(
+    #         self: "Decoder", a: int, b: float
+    #     ) -> int: ...
+    #
+    #     @gpu
+    #     def fn_returning_float(self: "Decoder", x: int) -> float: ...
+    #
+    # @guppy
+    # def main() -> None:
+    #     decoder = Decoder()
+    #     a = decoder.fn_returning_int(42, 2.71828)
+    #     b = decoder.fn_returning_float(a)
+    #     result("a", a)
+    #     result("b", b)
+    #     decoder.discard()
+    #
+    # hugr_envelope = main.compile().to_bytes()
+
+    # resources/example_gpu.hugr contains the equivalent HUGR to the
+    # above, using the tket_qsystem::extension::gpu entitites.
+    hugr_file = resources_dir / "example_gpu.hugr"
+    hugr_envelope = hugr_file.read_bytes()
+    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
+    snapshot.assert_match(ir, f"gpu_{target_triple}")

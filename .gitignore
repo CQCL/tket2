@@ -38,3 +38,6 @@ jupyter_execute/
 
 # binaries
 *.so
+
+# a reserved working dir for local experimentation
+/scratch
