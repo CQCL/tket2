@@ -5,9 +5,7 @@ mod unsupported_tracker;
 mod value_tracker;
 
 use hugr::core::HugrNode;
-use hugr::envelope::EnvelopeConfig;
 use hugr::hugr::views::SiblingSubgraph;
-use hugr::package::Package;
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use tket_json_rs::clexpr::InputClRegister;
 use tket_json_rs::opbox::BoxID;
@@ -27,12 +25,16 @@ use itertools::Itertools;
 use tket_json_rs::circuit_json::{self, SerialCircuit};
 use unsupported_tracker::UnsupportedTracker;
 
+use super::opaque::OpaqueSubgraphs;
 use super::{
     OpConvertError, PytketEncodeError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
+use crate::serialize::pytket::opaque::{
+    OpaqueSubgraphPayload, OpaqueSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
+};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
@@ -53,6 +55,8 @@ pub struct PytketEncoderContext<H: HugrView> {
     pub values: ValueTracker<H::Node>,
     /// A tracker for unsupported regions of the circuit.
     unsupported: UnsupportedTracker<H::Node>,
+    /// A registry of already-encoded opaque subgraphs.
+    opaque_subgraphs: OpaqueSubgraphs<H::Node>,
     /// Configuration for the encoding.
     ///
     /// Contains custom operation/type/const emitters.
@@ -139,12 +143,21 @@ impl<'a> EmitCommandOptions<'a> {
 
 impl<H: HugrView> PytketEncoderContext<H> {
     /// Create a new [`PytketEncoderContext`] from a [`Circuit`].
+    ///
+    /// # Arguments
+    ///
+    /// - `circ`: The circuit to encode.
+    /// - `region`: The region of the circuit to encode.
+    /// - `opaque_subgraphs`: The opaque subgraphs registry to use.
+    /// - `config`: The configuration for the encoder.
     pub(super) fn new(
         circ: &Circuit<H>,
         region: H::Node,
+        opaque_subgraphs: OpaqueSubgraphs<H::Node>,
         config: impl Into<Arc<PytketEncoderConfig<H>>>,
     ) -> Result<Self, PytketEncodeError<H::Node>> {
         let config: Arc<PytketEncoderConfig<H>> = config.into();
+
         let hugr = circ.hugr();
         let name = Circuit::new(hugr.with_entrypoint(region))
             .name()
@@ -163,6 +176,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             commands: vec![],
             values: ValueTracker::new(circ, region, &config)?,
             unsupported: UnsupportedTracker::new(circ),
+            opaque_subgraphs,
             config,
             function_cache: Arc::new(RwLock::new(HashMap::new())),
         })
@@ -198,21 +212,28 @@ impl<H: HugrView> PytketEncoderContext<H> {
         Ok(())
     }
 
-    /// Finish building and return the final [`SerialCircuit`],
-    /// as well as any parameter expressions at the circuit's output.
+    /// Finish building the pytket circuit
+    ///
+    /// # Returns
+    ///
+    /// * the final [`SerialCircuit`]
+    /// * any parameter expressions at the circuit's output
+    /// * the set of unsupported subgraphs that were referenced (from/inside) pytket barriers.
+    #[allow(clippy::type_complexity)]
     pub(super) fn finish(
         mut self,
         circ: &Circuit<H>,
         region: H::Node,
-    ) -> Result<(SerialCircuit, Vec<String>), PytketEncodeError<H::Node>> {
+    ) -> Result<(SerialCircuit, Vec<String>, OpaqueSubgraphs<H::Node>), PytketEncodeError<H::Node>>
+    {
         // Add any remaining unsupported nodes
         //
         // TODO: Test that unsupported subgraphs that don't affect any qubit/bit registers
         // are correctly encoded in pytket commands.
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
-            let unsupported_subgraph = self.unsupported.extract_component(node);
-            self.emit_unsupported(unsupported_subgraph, circ)?;
+            let opaque_subgraphs = self.unsupported.extract_component(node);
+            self.emit_unsupported(opaque_subgraphs, circ)?;
         }
 
         let final_values = self.values.finish(circ, region)?;
@@ -224,7 +245,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         ser.bits = final_values.bits.into_iter().map_into().collect();
         ser.implicit_permutation = final_values.qubit_permutation;
         ser.number_of_ws = None;
-        Ok((ser, final_values.params))
+        Ok((ser, final_values.params, self.opaque_subgraphs))
     }
 
     /// Returns a reference to this encoder's configuration.
@@ -264,8 +285,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
         //
         // We need to emit the unsupported node here before returning the values.
         if self.unsupported.is_unsupported(wire.node()) {
-            let unsupported_subgraph = self.unsupported.extract_component(wire.node());
-            self.emit_unsupported(unsupported_subgraph, circ)?;
+            let unsupported_nodes = self.unsupported.extract_component(wire.node());
+            self.emit_unsupported(unsupported_nodes, circ)?;
             debug_assert!(!self.unsupported.is_unsupported(wire.node()));
             return self.get_wire_values(wire, circ);
         }
@@ -561,10 +582,14 @@ impl<H: HugrView> PytketEncoderContext<H> {
             .collect();
         let output_nodes: HashSet<_> = subgraph.outgoing_ports().iter().map(|(n, _)| *n).collect();
 
-        let unsupported_hugr = subgraph.extract_subgraph(circ.hugr(), &subcircuit_id);
-        let payload = Package::from_hugr(unsupported_hugr)
-            .store_str(EnvelopeConfig::text())
-            .unwrap();
+        // Encode a payload referencing the subgraph in the Hugr.
+        let subgraph_id = self.opaque_subgraphs.register_opaque_subgraph(subgraph);
+        let subgraph = &self.opaque_subgraphs[subgraph_id];
+        let payload = OpaqueSubgraphPayload::new(
+            subgraph,
+            circ.hugr(),
+            OpaqueSubgraphPayloadType::External { id: subgraph_id },
+        );
 
         // Collects the input values for the subgraph.
         //
@@ -573,9 +598,6 @@ impl<H: HugrView> PytketEncoderContext<H> {
         //
         // Non-local incoming edges (e.g. function references) must be marked so they can be recovered when
         // decoding the circuit.
-        //
-        // TODO: We must encode additional metadata for external function calls.
-        // For now we just ignore them.
         let mut op_values = TrackedValues::default();
         let mut external_edges = Vec::new();
         for node in &input_nodes {
@@ -621,9 +643,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
             params: Cow::Borrowed(&input_param_exprs),
         };
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
-        pytket_op.data = Some(payload);
+        pytket_op.data = Some(serde_json::to_string(&payload).unwrap());
 
-        let opgroup = Some("UNSUPPORTED_HUGR".to_string());
+        let opgroup = Some(OPGROUP_OPAQUE_HUGR.to_string());
         self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
         Ok(())
     }
@@ -689,14 +711,16 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let config = Arc::clone(&self.config);
 
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new(circ, node, config)?;
+        let opaque_subgraphs = std::mem::take(&mut self.opaque_subgraphs);
+        let mut subencoder = PytketEncoderContext::new(circ, node, opaque_subgraphs, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, node)?;
 
-        let (serial_subcirc, output_params) = subencoder.finish(circ, node)?;
+        let (serial_subcirc, output_params, opaque_subgraphs) = subencoder.finish(circ, node)?;
         if !output_params.is_empty() {
             return Ok(EncodeStatus::Unsupported);
         }
+        self.opaque_subgraphs = opaque_subgraphs;
 
         self.emit_circ_box(node, serial_subcirc, circ)?;
         Ok(EncodeStatus::Success)
@@ -736,12 +760,14 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
         // If the function is not cached, we need to encode it.
         let config = Arc::clone(&self.config);
-
+        let opaque_subgraphs = std::mem::take(&mut self.opaque_subgraphs);
         // Recursively encode the sub-graph.
-        let mut subencoder = PytketEncoderContext::new(circ, function, config)?;
+        let mut subencoder = PytketEncoderContext::new(circ, function, opaque_subgraphs, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, function)?;
-        let (serial_subcirc, output_params) = subencoder.finish(circ, function)?;
+        let (serial_subcirc, output_params, opaque_subgraphs) =
+            subencoder.finish(circ, function)?;
+        self.opaque_subgraphs = opaque_subgraphs;
 
         let (result, cached_fn) = match output_params.is_empty() {
             true => (

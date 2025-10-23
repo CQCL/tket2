@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use hugr::types::Signature;
-use hugr::{Hugr, Node};
+use hugr::{Hugr, HugrView, Node};
 
 use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
 
@@ -104,25 +104,50 @@ pub enum DecodeInsertionTarget {
 ///
 /// In contrast to [PytketEncoderConfig] which is normally statically defined by
 /// a library, these options may vary between calls.
-#[derive(Default, Clone)]
+#[derive(Clone)]
 #[non_exhaustive]
-pub struct EncodeOptions {
+pub struct EncodeOptions<H: HugrView = Hugr> {
     /// The configuration for the decoder, containing custom
     /// operation decoders.
     ///
     /// When `None`, we will use [`default_encoder_config`][super::default_encoder_config].
-    pub config: Option<Arc<PytketEncoderConfig<Hugr>>>,
+    pub config: Option<Arc<PytketEncoderConfig<H>>>,
+    /// Whether to encode independent subcircuits for subregions of the HUGR
+    /// that are descendants of unsupported operations.
+    pub encode_subcircuits: bool,
 }
 
-impl EncodeOptions {
+impl<H: HugrView> EncodeOptions<H> {
     /// Create a new [`EncodeOptions`] with the default values.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create a new [`EncodeOptions`] that will encode subcircuits for subregions of the HUGR
+    /// that are descendants of unsupported operations.
+    pub fn new_with_subcircuits() -> Self {
+        Self::new().encode_subcircuits(true)
+    }
+
     /// Set a encoder configuration.
-    pub fn with_config(mut self, config: impl Into<Arc<PytketEncoderConfig<Hugr>>>) -> Self {
+    pub fn with_config(mut self, config: impl Into<Arc<PytketEncoderConfig<H>>>) -> Self {
         self.config = Some(config.into());
         self
+    }
+
+    /// Set whether to encode independent subcircuits for subregions of the HUGR
+    /// that are descendants of unsupported operations.
+    pub fn encode_subcircuits(mut self, encode_subcircuits: bool) -> Self {
+        self.encode_subcircuits = encode_subcircuits;
+        self
+    }
+}
+
+impl<H: HugrView> Default for EncodeOptions<H> {
+    fn default() -> Self {
+        Self {
+            config: Default::default(),
+            encode_subcircuits: Default::default(),
+        }
     }
 }

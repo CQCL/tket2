@@ -83,6 +83,14 @@ pub enum PytketEncodeError<N = hugr::Node> {
         /// The custom error message
         msg: String,
     },
+    /// Tried to extract an standalone circuit from an
+    /// [`EncodedCircuit`][super::circuit::EncodedCircuit] whose head region is
+    /// not a dataflow container in the original hugr.
+    #[display("Tried to extract an standalone circuit from an `EncodedCircuit` whose head region is not a dataflow container in the original hugr. Head operation {head_op}")]
+    InvalidStandaloneHeadRegion {
+        /// The head region operation that is not a dataflow container.
+        head_op: String,
+    },
 }
 
 impl<N> PytketEncodeError<N> {
@@ -375,6 +383,12 @@ pub enum PytketDecodeErrorInner {
     OutdatedBit {
         /// The bit that was marked as outdated.
         bit: String,
+    },
+    /// Tried to reassemble an [`EncodedCircuit`][super::circuit::EncodedCircuit] whose head region is not a dataflow container in the original hugr.
+    #[display("Tried to reassemble an `EncodedCircuit` whose head region is not a dataflow container in the original hugr. Head operation {head_op}")]
+    NonDataflowHeadRegion {
+        /// The head region operation that is not a dataflow container.
+        head_op: String,
     },
 }
 
