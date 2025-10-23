@@ -1,6 +1,12 @@
 # Changelog
 
 
+## [0.16.1](https://github.com/CQCL/tket2/compare/tket-v0.16.0...tket-v0.16.1) - 2025-10-23
+
+### New Features
+
+- Deprecate local find_tuple_unpack rewrite ([#1188](https://github.com/CQCL/tket2/pull/1188))
+
 ## [0.16.0](https://github.com/CQCL/tket2/compare/tket-v0.15.0...tket-v0.16.0) - 2025-10-20
 
 ### Bug Fixes
