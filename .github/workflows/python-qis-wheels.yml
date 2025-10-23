@@ -45,7 +45,6 @@ jobs:
           submodules: recursive
 
       - name: Set up UV
-        if: ${{ matrix.os != 'ubuntu-latest' }}
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -75,6 +74,8 @@ jobs:
         with:
           package-dir: qis-compiler
 
+      - name: Check built wheels
+        run: uvx twine check --strict wheelhouse/*.whl
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -123,3 +124,4 @@ jobs:
         with:
           verbose: true
           skip-existing: true
+          packages-dir: wheelhouse
