@@ -196,7 +196,7 @@ impl<'c, PartialMatchInfo, H: HugrView> MatchContext<'c, PartialMatchInfo, H> {
     /// on the given resource.
     pub fn op_position(&self, resource: ResourceId) -> Option<cmp::Ordering> {
         let interval = self.subcircuit.get_interval(resource)?;
-        Some(interval.position_in_interval(self.circuit.get_position(self.op_node)?))
+        Some(interval.position_in_interval(self.circuit.get_position(self.op_node)?, self.circuit))
     }
 }
 

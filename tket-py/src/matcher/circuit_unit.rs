@@ -151,7 +151,7 @@ fn get_pos<N: HugrNode>(
 ) -> Option<CircuitUnitPos> {
     let interval = subcircuit.get_interval(resource_id)?;
     let pos = circuit.get_position(node)?;
-    match interval.position_in_interval(pos) {
+    match interval.position_in_interval(pos, circuit) {
         Ordering::Less => CircuitUnitPos::Before,
         Ordering::Equal => CircuitUnitPos::Within,
         Ordering::Greater => CircuitUnitPos::After,

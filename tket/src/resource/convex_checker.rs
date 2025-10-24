@@ -16,7 +16,7 @@ impl<H: HugrView> ResourceScope<H> {
     pub fn is_convex(&self, subcircuit: &Subcircuit<H::Node>) -> bool {
         let Some(max_start_pos) = subcircuit
             .intervals_iter()
-            .map(|interval| interval.start_pos())
+            .map(|interval| interval.start_pos(self))
             .max()
         else {
             // An empty subcircuit is convex
@@ -46,10 +46,10 @@ impl<H: HugrView> ResourceScope<H> {
             for resource_id in self.get_all_resources(node) {
                 if let Some(interval) = subcircuit.get_interval(resource_id) {
                     debug_assert!(
-                        pos < interval.start_pos() || pos > interval.end_pos(),
+                        pos < interval.start_pos(self) || pos > interval.end_pos(self),
                         "node cannot be in interval [min, max]"
                     );
-                    if pos < interval.start_pos() {
+                    if pos < interval.start_pos(self) {
                         // we are in the past of min, so there is a path from
                         // an output to an input! -> not convex
                         return false;

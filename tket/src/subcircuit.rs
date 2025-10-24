@@ -341,10 +341,10 @@ impl<N: HugrNode> Subcircuit<N> {
             let node = interval.start_node();
             assert_eq!(
                 circuit.get_position(node),
-                Some(interval.start_pos()),
+                Some(interval.start_pos(circuit)),
                 "start node has position {:?}, expected {:?}",
                 circuit.get_position(node),
-                interval.start_pos()
+                interval.start_pos(circuit)
             );
             assert!(
                 circuit
@@ -355,10 +355,10 @@ impl<N: HugrNode> Subcircuit<N> {
             let end_node = interval.end_node();
             assert_eq!(
                 circuit.get_position(end_node),
-                Some(interval.end_pos()),
+                Some(interval.end_pos(circuit)),
                 "end node has position {:?}, expected {:?}",
                 circuit.get_position(end_node),
-                interval.end_pos()
+                interval.end_pos(circuit)
             );
         }
     }
@@ -442,11 +442,11 @@ fn extend_intervals<N: HugrNode>(
     for res in circuit.get_all_resources(node) {
         let (interval, num_nodes) = intervals
             .entry(res)
-            .or_insert_with(|| (Interval::singleton(res, node, circuit), 0));
+            .or_insert_with(|| (Interval::singleton(res, node), 0));
         let Some(pos) = circuit.get_position(node) else {
             panic!("node {node:?} is not on resource path {res:?}");
         };
-        interval.add_node_unchecked(node, pos);
+        interval.add_node_unchecked(node, pos, circuit);
         *num_nodes += 1;
     }
 }
@@ -487,8 +487,7 @@ impl<N: HugrNode> Subcircuit<N> {
                 }
             } else {
                 was_changed = true;
-                self.intervals
-                    .push(Interval::singleton(resource_id, node, circuit));
+                self.intervals.push(Interval::singleton(resource_id, node));
                 self.update_input(resource_id, circuit);
                 self.update_output(resource_id, circuit);
             }

@@ -13,26 +13,15 @@ use super::{Position, ResourceId, ResourceScope};
 pub struct Interval<N> {
     /// Resource ID of the resource path.
     resource_id: ResourceId,
-    /// Start and end positions of the interval (inclusive).
-    positions: [Position; 2],
     /// Start and end nodes of the interval (inclusive).
     nodes: [N; 2],
 }
 
 impl<N: HugrNode> Interval<N> {
     /// Create an interval for a single node.
-    pub fn singleton(
-        resource_id: ResourceId,
-        node: N,
-        scope: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Self {
-        let pos = scope
-            .get_position(node)
-            .expect("node is not on resource path");
-
+    pub fn singleton(resource_id: ResourceId, node: N) -> Self {
         Self {
             resource_id,
-            positions: [pos, pos],
             nodes: [node, node],
         }
     }
@@ -78,7 +67,6 @@ impl<N: HugrNode> Interval<N> {
 
         Ok(Self {
             resource_id,
-            positions: [start_pos, end_pos],
             nodes: [start_node, end_node],
         })
     }
@@ -93,12 +81,16 @@ impl<N: HugrNode> Interval<N> {
         self.nodes[0]
     }
 
-    pub(crate) fn start_pos(&self) -> Position {
-        self.positions[0]
+    pub(crate) fn start_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
+        scope
+            .get_position(self.nodes[0])
+            .expect("start node must be on resource path")
     }
 
-    pub(crate) fn end_pos(&self) -> Position {
-        self.positions[1]
+    pub(crate) fn end_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
+        scope
+            .get_position(self.nodes[1])
+            .expect("end node must be on resource path")
     }
 
     /// Get the end node of the interval.
@@ -124,7 +116,7 @@ impl<N: HugrNode> Interval<N> {
             return Err(InvalidInterval::NotOnResourcePath(node));
         };
 
-        match self.position_in_interval(pos) {
+        match self.position_in_interval(pos, scope) {
             // pos is already within the interval
             Ordering::Equal => Ok(None),
             // pos is before the interval
@@ -135,7 +127,6 @@ impl<N: HugrNode> Interval<N> {
                     .expect("same resource ID with larger position exists");
                 if next_node == self.nodes[0] {
                     // Success! extend the interval to the left by one node
-                    self.positions[0] = pos;
                     self.nodes[0] = node;
                     Ok(Some(Direction::Incoming))
                 } else {
@@ -150,7 +141,6 @@ impl<N: HugrNode> Interval<N> {
                     .expect("same resource ID with smaller position exists");
                 if prev_node == self.nodes[1] {
                     // Success! extend the interval to the right by one node
-                    self.positions[1] = pos;
                     self.nodes[1] = node;
                     Ok(Some(Direction::Outgoing))
                 } else {
@@ -165,13 +155,16 @@ impl<N: HugrNode> Interval<N> {
     /// Does not check if the node is contiguous with the interval. Use
     /// [`Interval::try_extend`] instead for a safe way to extend an interval.
     #[allow(dead_code)]
-    pub(crate) fn add_node_unchecked(&mut self, node: N, pos: Position) {
-        if pos < self.positions[0] {
-            self.positions[0] = pos;
+    pub(crate) fn add_node_unchecked(
+        &mut self,
+        node: N,
+        pos: Position,
+        scope: &ResourceScope<impl HugrView<Node = N>>,
+    ) {
+        if pos < self.start_pos(scope) {
             self.nodes[0] = node;
         }
-        if pos > self.positions[1] {
-            self.positions[1] = pos;
+        if pos > self.end_pos(scope) {
             self.nodes[1] = node;
         }
     }
@@ -183,10 +176,14 @@ impl<N: HugrNode> Interval<N> {
     /// - [`Ordering::Less`] if `pos` is before the interval,
     /// - [`Ordering::Greater`] if `pos` is after the interval, and
     /// - [`Ordering::Equal`] if `pos` is within the interval.
-    pub fn position_in_interval(&self, pos: Position) -> Ordering {
-        if pos < self.positions[0] {
+    pub fn position_in_interval(
+        &self,
+        pos: Position,
+        scope: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Ordering {
+        if pos < self.start_pos(scope) {
             Ordering::Less
-        } else if pos > self.positions[1] {
+        } else if pos > self.end_pos(scope) {
             Ordering::Greater
         } else {
             Ordering::Equal
@@ -227,7 +224,7 @@ mod tests {
 
     use crate::{
         resource::tests::cx_circuit,
-        resource::{Interval, Position, ResourceId},
+        resource::{Interval, ResourceId},
         Circuit,
     };
 
@@ -248,10 +245,6 @@ mod tests {
         for resource_id in [0, 1].map(ResourceId::new) {
             let interval = Interval {
                 resource_id,
-                positions: [
-                    Position::new_integer(pos_interval.start as i64),
-                    Position::new_integer((pos_interval.end - 1) as i64),
-                ],
                 nodes: [cx_nodes[pos_interval.start], cx_nodes[pos_interval.end - 1]],
             };
 
