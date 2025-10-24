@@ -2,10 +2,13 @@
 
 use std::sync::Arc;
 
+use hugr::extension::ExtensionRegistry;
 use hugr::types::Signature;
 use hugr::{Hugr, HugrView, Node};
 
 use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
+
+use super::default_decoder_config;
 
 /// Options used when decoding a pytket
 /// [`SerialCircuit`][tket_json_rs::circuit_json::SerialCircuit] into a HUGR.
@@ -14,7 +17,14 @@ use crate::serialize::pytket::{PytketDecoderConfig, PytketEncoderConfig};
 ///
 /// In contrast to [PytketDecoderConfig] which is normally statically defined by
 /// a library, these options may vary between calls.
-#[derive(Default, Clone)]
+///
+/// The generic parameter `H` is the HugrView type of the Hugr that was encoded
+/// into the pytket circuit, if any. This is required when the encoded pytket
+/// circuit contains opaque barriers that reference subgraphs in the original
+/// HUGR. See
+/// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]
+/// for more details.
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct DecodeOptions {
     /// The configuration for the decoder, containing custom
@@ -22,11 +32,6 @@ pub struct DecodeOptions {
     ///
     /// When `None`, we will use [`default_decoder_config`][super::default_decoder_config].
     pub config: Option<Arc<PytketDecoderConfig>>,
-    /// The name of the function to create.
-    ///
-    /// If `None`, we will use the name of the circuit, or "main" if the circuit
-    /// has no name.
-    pub fn_name: Option<String>,
     /// The signature of the function to create.
     ///
     /// The number of qubits in the input types must be less than or equal to the
@@ -49,6 +54,10 @@ pub struct DecodeOptions {
     /// If additional parameters are found in the circuit, they will be added
     /// after these using generic names.
     pub input_params: Vec<String>,
+    /// The extensions to use when loading the HUGR envelope.
+    ///
+    /// When `None`, we will use [`crate::extension::REGISTRY`].
+    pub extensions: Option<ExtensionRegistry>,
 }
 
 impl DecodeOptions {
@@ -63,10 +72,9 @@ impl DecodeOptions {
         self
     }
 
-    /// Set the name of the function to create.
-    pub fn with_fn_name(mut self, fn_name: impl ToString) -> Self {
-        self.fn_name = Some(fn_name.to_string());
-        self
+    /// Set `DecodeOptions::config` to use [`default_decoder_config`].
+    pub fn with_default_config(&mut self) {
+        self.config = Some(Arc::new(default_decoder_config()));
     }
 
     /// Set the signature of the function to create.
@@ -80,21 +88,74 @@ impl DecodeOptions {
         self.input_params = input_params.into_iter().collect();
         self
     }
+
+    /// Set the extensions to use when loading the HUGR envelope.
+    pub fn with_extensions(mut self, extensions: ExtensionRegistry) -> Self {
+        self.extensions = Some(extensions);
+        self
+    }
+
+    /// Returns the extensions to use when loading the HUGR envelope.
+    ///
+    /// If the option is `None`, we will use [`crate::extension::REGISTRY`].
+    pub fn extension_registry(&self) -> &ExtensionRegistry {
+        self.extensions
+            .as_ref()
+            .unwrap_or(&crate::extension::REGISTRY)
+    }
+
+    /// Returns the [`PytketDecoderConfig`] to use when decoding the circuit.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the option is `None`. Use [`DecodeOptions::with_config`] or
+    /// [`DecodeOptions::with_default_config`] to set it.
+    pub(super) fn get_config(&self) -> &Arc<PytketDecoderConfig> {
+        self.config
+            .as_ref()
+            .expect("DecodeOptions::config is not set")
+    }
 }
 
 /// Where to insert the decoded circuit when calling
 /// [`TKETDecode::decode_inplace`][super::TKETDecode::decode_inplace].
-#[derive(Debug, derive_more::Display, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, derive_more::Display, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum DecodeInsertionTarget {
     /// Insert the decoded circuit as a new function in the HUGR.
-    #[default]
-    Function,
+    #[display("{}",
+        match fn_name {
+            Some(fn_name) => format!("Function({fn_name})"),
+            None => "Function".to_string(),
+        }
+    )]
+    Function {
+        /// The name of the function to create.
+        ///
+        /// If `None`, we will use the encoded circuit's name, or "main" if the circuit has no name.
+        fn_name: Option<String>,
+    },
     /// Insert the decoded circuit as a dataflow region in the HUGR under the given parent.
+    #[display("Region({parent})")]
     Region {
         /// The parent node that will contain the circuit's decoded DFG.
         parent: Node,
     },
+}
+
+impl DecodeInsertionTarget {
+    /// Create a new [`DecodeInsertionTarget::Function`] with the default values.
+    pub fn function(fn_name: impl ToString) -> Self {
+        Self::Function {
+            fn_name: Some(fn_name.to_string()),
+        }
+    }
+}
+
+impl Default for DecodeInsertionTarget {
+    fn default() -> Self {
+        Self::Function { fn_name: None }
+    }
 }
 
 /// Options used when encoding a HUGR into a pytket

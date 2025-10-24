@@ -115,7 +115,11 @@ impl TKETDecode for SerialCircuit {
 
     fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
-        let main_func = self.decode_inplace(&mut hugr, DecodeInsertionTarget::Function, options)?;
+        let main_func = self.decode_inplace(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name: None },
+            options,
+        )?;
         hugr.set_entrypoint(main_func);
         Ok(hugr.into())
     }
@@ -126,25 +130,14 @@ impl TKETDecode for SerialCircuit {
         target: DecodeInsertionTarget,
         options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError> {
-        let config = options
-            .config
-            .unwrap_or_else(|| default_decoder_config().into());
-
-        let mut decoder = PytketDecoderContext::new(
-            self,
-            hugr,
-            target,
-            options.fn_name,
-            options.signature,
-            options.input_params,
-            config,
-        )?;
+        let mut decoder = PytketDecoderContext::new(self, hugr, target, options)?;
         decoder.run_decoder(&self.commands)?;
         Ok(decoder.finish()?.node())
     }
 
     fn encode(circuit: &Circuit, options: EncodeOptions) -> Result<Self, Self::EncodeError> {
-        EncodedCircuit::from_hugr(circuit, options)?.extract_standalone()
+        let mut encoded = EncodedCircuit::new_standalone(circuit, options)?;
+        Ok(std::mem::take(&mut encoded[circuit.parent()]))
     }
 }
 

@@ -218,7 +218,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// * the final [`SerialCircuit`]
     /// * any parameter expressions at the circuit's output
-    /// * the set of unsupported subgraphs that were referenced (from/inside) pytket barriers.
+    /// * the set of opaque subgraphs that were referenced (from/inside) pytket barriers.
     #[allow(clippy::type_complexity)]
     pub(super) fn finish(
         mut self,
@@ -228,7 +228,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     {
         // Add any remaining unsupported nodes
         //
-        // TODO: Test that unsupported subgraphs that don't affect any qubit/bit registers
+        // TODO: Test that opaque subgraphs that don't affect any qubit/bit registers
         // are correctly encoded in pytket commands.
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
@@ -554,7 +554,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `unsupported_nodes`: The list of nodes to encode as an unsupported subgraph.
+    /// - `unsupported_nodes`: The list of nodes to encode as an opaque subgraph.
     fn emit_unsupported(
         &mut self,
         unsupported_nodes: BTreeSet<H::Node>,

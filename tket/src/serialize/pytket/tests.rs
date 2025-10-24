@@ -608,16 +608,13 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let circ_signature = circ.circuit_signature().into_owned();
 
-    let encoded: EncodedCircuit =
-        EncodedCircuit::from_hugr(&circ, EncodeOptions::new_with_subcircuits())
-            .unwrap_or_else(|e| panic!("{e}"));
+    let encoded = EncodedCircuit::new_standalone(&circ, EncodeOptions::new_with_subcircuits())
+        .unwrap_or_else(|e| panic!("{e}"));
 
     assert!(encoded.contains_circuit(circ.parent()));
     assert_eq!(encoded.len(), num_circuits);
 
-    let ser: SerialCircuit = encoded
-        .extract_standalone()
-        .unwrap_or_else(|e| panic!("{e}"));
+    let ser: &SerialCircuit = &encoded[circ.parent()];
     let deser: Circuit = ser
         .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
         .unwrap_or_else(|e| panic!("{e}"));
@@ -636,7 +633,7 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
 
     let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
     validate_serial_circ(&reser);
-    compare_serial_circs(&ser, &reser);
+    compare_serial_circs(ser, &reser);
 }
 
 /// Test serialisation of circuits with a symbolic expression.
@@ -672,7 +669,7 @@ fn test_inplace_decoding() {
     let func1 = serial
         .decode_inplace(
             builder.hugr_mut(),
-            DecodeInsertionTarget::Function,
+            DecodeInsertionTarget::Function { fn_name: None },
             DecodeOptions::new(),
         )
         .unwrap();

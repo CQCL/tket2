@@ -1,11 +1,15 @@
 //! Definitions of the payloads for opaque barrier metadata in pytket circuits.
 
 use hugr::core::HugrNode;
-use hugr::envelope::EnvelopeConfig;
+use hugr::envelope::{EnvelopeConfig, EnvelopeError};
+use hugr::extension::resolution::{resolve_type_extensions, WeakExtensionRegistry};
+use hugr::extension::{ExtensionRegistry, ExtensionRegistryLoadError};
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
+
+use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner};
 
 use super::SubgraphId;
 
@@ -46,6 +50,21 @@ impl EncodedEdgeID {
         let hash = fxhash::hash64(&wire);
         Self(hash)
     }
+}
+
+/// Payload for an optional barrier added at the end of the pytket circuit,
+/// encoding additional circuit information required to decode the unsupported bits
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtraCircuitDataPayload {
+    /// Types at the circuit's inputs, with their [`SubgraphHyperEdge`] IDs.
+    inputs: Vec<(Type, EncodedEdgeID)>,
+    /// Types at the circuit's outputs, with their [`SubgraphHyperEdge`] IDs.
+    outputs: Vec<(Type, EncodedEdgeID)>,
+    /// An additional unsupported subgraph that connects the input of the hugr
+    /// directly to the output, without ever interacting with qubit/bit
+    /// registers (and hence, not encoded as a pytket barrier on relevant
+    /// registers).
+    extra_subgraph: Option<OpaqueSubgraphPayload>,
 }
 
 /// Payload for a pytket barrier metadata that indicates the barrier represents
@@ -155,6 +174,33 @@ impl OpaqueSubgraphPayload {
             inputs: signature.input().iter().cloned().zip(inputs).collect(),
             outputs: signature.output().iter().cloned().zip(outputs).collect(),
         }
+    }
+
+    /// Load a payload encoded in a json string.
+    ///
+    /// Updates weak extension references inside the definition after loading.
+    pub fn load_str(json: &str, extensions: &ExtensionRegistry) -> Result<Self, PytketDecodeError> {
+        let mut payload: Self = serde_json::from_str(json).map_err(|e| {
+            PytketDecodeErrorInner::UnsupportedSubgraphPayload {
+                source: EnvelopeError::SerdeError { source: e },
+            }
+            .wrap()
+        })?;
+        let extensions: WeakExtensionRegistry = extensions.into();
+
+        // Resolve the cached input/output types.
+        for (ty, _) in payload.inputs.iter_mut().chain(payload.outputs.iter_mut()) {
+            resolve_type_extensions(ty, &extensions).map_err(|e| {
+                let registry_load_e =
+                    ExtensionRegistryLoadError::ExtensionResolutionError(Box::new(e));
+                let envelope_e = EnvelopeError::ExtensionLoad {
+                    source: registry_load_e,
+                };
+                PytketDecodeErrorInner::UnsupportedSubgraphPayload { source: envelope_e }.wrap()
+            })?;
+        }
+
+        Ok(payload)
     }
 
     /// Returns the inputs types and internal edge IDs of the payload.
