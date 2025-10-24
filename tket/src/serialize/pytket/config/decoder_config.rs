@@ -5,7 +5,6 @@
 //! translations of legacy tket primitives into HUGR operations.
 
 use hugr::types::Type;
-use hugr::HugrView;
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -23,10 +22,10 @@ use super::TypeTranslatorSet;
 /// Contains custom decoders that define translations for HUGR operations,
 /// types, and consts into pytket primitives.
 #[derive(Default, derive_more::Debug)]
-pub struct PytketDecoderConfig<H: HugrView> {
+pub struct PytketDecoderConfig {
     /// Operation emitters
     #[debug(skip)]
-    pub(super) decoders: Vec<Box<dyn PytketDecoder<H> + Send + Sync>>,
+    pub(super) decoders: Vec<Box<dyn PytketDecoder + Send + Sync>>,
     /// Pre-computed map from pytket optypes to corresponding decoders in
     /// `decoders`, identified by their index.
     #[debug("{:?}", optype_decoders.keys().collect_vec())]
@@ -35,7 +34,7 @@ pub struct PytketDecoderConfig<H: HugrView> {
     type_translators: TypeTranslatorSet,
 }
 
-impl<H: HugrView> PytketDecoderConfig<H> {
+impl PytketDecoderConfig {
     /// Create a new [`PytketDecoderConfig`] with no decoders.
     pub fn new() -> Self {
         Self {
@@ -46,7 +45,7 @@ impl<H: HugrView> PytketDecoderConfig<H> {
     }
 
     /// Add a decoder to the configuration.
-    pub fn add_decoder(&mut self, decoder: impl PytketDecoder<H> + Send + Sync + 'static) {
+    pub fn add_decoder(&mut self, decoder: impl PytketDecoder + Send + Sync + 'static) {
         let idx = self.decoders.len();
 
         for optype in decoder.op_types() {
@@ -75,7 +74,7 @@ impl<H: HugrView> PytketDecoderConfig<H> {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         opgroup: &Option<String>,
-        decoder: &mut PytketDecoderContext<'a, H>,
+        decoder: &mut PytketDecoderContext<'a>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let mut result = DecodeStatus::Unsupported;
         let opgroup = opgroup.as_deref();
@@ -92,7 +91,7 @@ impl<H: HugrView> PytketDecoderConfig<H> {
     fn decoders_for_optype(
         &self,
         optype: &tket_json_rs::OpType,
-    ) -> impl Iterator<Item = &Box<dyn PytketDecoder<H> + Send + Sync>> {
+    ) -> impl Iterator<Item = &Box<dyn PytketDecoder + Send + Sync>> {
         self.optype_decoders
             .get(optype)
             .into_iter()

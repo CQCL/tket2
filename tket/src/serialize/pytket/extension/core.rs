@@ -35,7 +35,7 @@ use tket_json_rs::optype::OpType as PytketOptype;
 #[derive(Debug, Clone, Default)]
 pub struct CoreDecoder;
 
-impl<H: HugrView> PytketDecoder<H> for CoreDecoder {
+impl PytketDecoder for CoreDecoder {
     fn op_types(&self) -> Vec<PytketOptype> {
         vec![PytketOptype::Barrier, PytketOptype::CircBox]
     }
@@ -47,7 +47,7 @@ impl<H: HugrView> PytketDecoder<H> for CoreDecoder {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h, H>,
+        decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         match &op {
             PytketOperation {
@@ -108,11 +108,11 @@ impl<H: HugrView> PytketDecoder<H> for CoreDecoder {
 ///
 /// This function involves accessing various internal definitions of `decoder`
 /// to deal with wires between unsupported subgraphs.
-fn insert_opaque_subgraph<H: HugrView>(
+fn insert_opaque_subgraph(
     qubits: &[TrackedQubit],
     bits: &[TrackedBit],
     params: &[LoadedParameter],
-    decoder: &mut PytketDecoderContext<'_, H>,
+    decoder: &mut PytketDecoderContext<'_>,
     payload: &OpaqueSubgraphPayload,
 ) -> Result<DecodeStatus, PytketDecodeError> {
     let opaque_hugr = decoder.get_opaque_subgraph(payload.typ())?;
@@ -276,7 +276,7 @@ fn split_off<'a, T>(slice: &mut &'a [T], range: RangeTo<usize>) -> Option<&'a [T
 /// Helper to compute the expected register counts before generating a [`PytketDecodeErrorInner::UnexpectedNodeOutput`] error
 /// when registering the outputs of an unsupported subgraph.
 fn make_unexpected_node_out_error<'ty>(
-    config: &PytketDecoderConfig<impl HugrView>,
+    config: &PytketDecoderConfig,
     output_types: impl IntoIterator<Item = &'ty Type>,
     available_qubits: usize,
     available_bits: usize,

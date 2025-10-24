@@ -4,7 +4,6 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 
 use hugr::core::HugrNode;
-use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpTag, OpTrait};
 use hugr::{Hugr, HugrView, Node};
@@ -29,7 +28,7 @@ use super::opaque::OpaqueSubgraphs;
 /// while this structure is in memory.
 /// To obtain a fully standalone pytket circuit that can be used independently,
 /// and stored permanently, use [`EncodedCircuit::extract_standalone`].
-pub struct EncodedCircuit<'a, H: HugrView = Hugr> {
+pub struct EncodedCircuit<Node: HugrNode> {
     /// Region in the HUGR that was encoded as the main circuit.
     ///
     /// If [`EncodeOptions::encode_subcircuits`] was set during the encoding
@@ -39,24 +38,22 @@ pub struct EncodedCircuit<'a, H: HugrView = Hugr> {
     /// If [`EncodeOptions::encode_subcircuits`] was not set, `circuits` will
     /// only contain an entry for this region if it was a dataflow container, or
     /// no entries if it was not.
-    head_region: H::Node,
+    head_region: Node,
     /// Circuits encoded from independent dataflow regions in the HUGR.
     ///
     /// These correspond to sections of the HUGR that can be optimized
     /// independently.
-    circuits: HashMap<H::Node, SerialCircuit>,
+    circuits: HashMap<Node, SerialCircuit>,
     /// Sets of subgraphs in the HUGR that have been encoded as opaque barriers
     /// in the pytket circuit.
     ///
     /// Subcircuits are identified in the barrier metadata by their ID in this
     /// vector. See [`SubgraphId`].
-    opaque_subgraphs: OpaqueSubgraphs<H::Node>,
-    /// The HUGR from where the pytket circuits were encoded.
-    hugr: &'a H,
+    opaque_subgraphs: OpaqueSubgraphs<Node>,
 }
 
-impl<'a, H: HugrView> EncodedCircuit<'a, H> {
-    /// Encode a Hugr into a [`EncodedCircuit`].
+impl EncodedCircuit<Node> {
+    /// Encode a HugrView into a [`EncodedCircuit`].
     ///
     /// The HUGR's entrypoint must be a dataflow region that will be encoded as
     /// the main circuit. Additional circuits may be encoded if
@@ -67,15 +64,87 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// used independently, use [`EncodedCircuit::extract_standalone`].
     ///
     /// See [`EncodeOptions`] for the options used by the encoder.
-    pub fn from_hugr(
-        circuit: &'a Circuit<H>,
+    pub fn new<H: AsRef<Hugr> + AsMut<Hugr> + HugrView<Node = Node>>(
+        circuit: &Circuit<H>,
         options: EncodeOptions<H>,
     ) -> Result<Self, PytketEncodeError<H::Node>> {
         let mut enc = Self {
             head_region: circuit.parent(),
             circuits: HashMap::new(),
             opaque_subgraphs: OpaqueSubgraphs::new(0),
-            hugr: circuit.hugr(),
+        };
+
+        enc.encode_circuits(circuit, options)?;
+        enc.ensure_standalone(circuit.hugr())?;
+
+        Ok(enc)
+    }
+
+    /// Reassemble the encoded circuits inside an existing [`Hugr`], containing
+    /// the [`Self::head_region`] at the given insertion target.
+    ///
+    /// Functions called by the internal hugrs may be added to the hugr module
+    /// as well.
+    ///
+    /// # Arguments
+    ///
+    /// - `hugr`: The [`Hugr`] to reassemble the circuits in.
+    /// - `target`: The target to insert the function at.
+    /// - `options`: The options for the decoder.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    ///
+    /// Returns an error if a circuit being decoded is invalid. See
+    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
+    /// more details.
+    pub fn reassemble_inline<H: AsRef<Hugr> + AsMut<Hugr> + HugrView<Node = Node>>(
+        &self,
+        hugr: &mut Hugr,
+        target: DecodeInsertionTarget,
+        options: DecodeOptions,
+    ) -> Result<hugr::Node, PytketDecodeError> {
+        self.check_dataflow_head_region(self.head_region, Some(hugr))?;
+        let serial_circuit = &self[self.head_region];
+
+        if self.len() > 1 {
+            unimplemented!(
+                "Reassembling an `EncodedCircuit` with nested subcircuits is not yet implemented."
+            );
+        };
+
+        let mut decoder = PytketDecoderContext::new(serial_circuit, hugr, target, options)?;
+        decoder.register_opaque_subgraphs(&self.opaque_subgraphs);
+        decoder.run_decoder(&serial_circuit.commands)?;
+        Ok(decoder.finish()?.node())
+    }
+}
+
+impl<Node: HugrNode> EncodedCircuit<Node> {
+    /// Encode a HugrView into a [`EncodedCircuit`].
+    ///
+    /// The HUGR's entrypoint must be a dataflow region that will be encoded as
+    /// the main circuit. Additional circuits may be encoded if
+    /// [`EncodeOptions::encode_subcircuits`] is set.
+    ///
+    /// The circuit may contain opaque barriers encoding opaque subgraphs in the
+    /// original HUGR. These are encoded completely as Hugr envelopes in the
+    /// barrier operations metadata.
+    ///
+    /// When encoding a `Hugr` or a `AsMut<Hugr>` object, prefer using [`EncodedCircuit::new_inplace`] instead,
+    /// to avoid unnecessary copying of the opaque subgraphs.
+    ///
+    /// See [`EncodeOptions`] for the options used by the encoder.
+    pub fn new_standalone<H: HugrView<Node = Node>>(
+        circuit: &Circuit<H>,
+        options: EncodeOptions<H>,
+    ) -> Result<Self, PytketEncodeError<H::Node>> {
+        let mut enc = Self {
+            head_region: circuit.parent(),
+            circuits: HashMap::new(),
+            opaque_subgraphs: OpaqueSubgraphs::new(0),
         };
 
         enc.encode_circuits(circuit, options)?;
@@ -89,7 +158,7 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// Auxiliary method for [`Self::from_hugr`].
     ///
     /// TODO: Add an option in [EncodeOptions] to run the subcircuit encoders in parallel.
-    fn encode_circuits(
+    fn encode_circuits<H: HugrView<Node = Node>>(
         &mut self,
         // This is already in [`self.hugr`], but we pass it since wrapping it
         // again results in a `Circuit<&H>`, which doesn't play well with
@@ -177,48 +246,9 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     pub fn reassemble(
         &self,
         fn_name: Option<String>,
-        options: DecodeOptions<H>,
+        options: DecodeOptions,
     ) -> Result<Hugr, PytketDecodeError> {
-        let mut hugr = Hugr::new();
-        let main_func = self.reassemble_inline(
-            &mut hugr,
-            DecodeInsertionTarget::Function { fn_name },
-            options,
-        )?;
-        hugr.set_entrypoint(main_func);
-        Ok(hugr)
-    }
-
-    /// Reassemble the encoded circuits inside an existing [`Hugr`], containing
-    /// the [`Self::head_region`] at the given insertion target.
-    ///
-    /// Functions called by the internal hugrs may be added to the hugr module
-    /// as well.
-    ///
-    /// # Arguments
-    ///
-    /// - `hugr`: The [`Hugr`] to reassemble the circuits in.
-    /// - `target`: The target to insert the function at.
-    /// - `options`: The options for the decoder.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
-    /// [`Self::head_region`] is not a dataflow container in the hugr.
-    ///
-    /// Returns an error if a circuit being decoded is invalid. See
-    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
-    /// more details.
-    pub fn reassemble_inline(
-        &self,
-        hugr: &mut Hugr,
-        target: DecodeInsertionTarget,
-        options: DecodeOptions<H>,
-    ) -> Result<Node, PytketDecodeError> {
-        if !self.check_dataflow_head_region() {
-            let head_op = self.hugr.get_optype(self.head_region).to_string();
-            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op }.wrap());
-        };
+        self.check_dataflow_head_region(self.head_region, None)?;
         let serial_circuit = &self[self.head_region];
 
         if self.len() > 1 {
@@ -227,39 +257,30 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
             );
         };
 
-        let mut decoder = PytketDecoderContext::<H>::new(serial_circuit, hugr, target, options)?;
-        decoder.register_opaque_subgraphs(&self.opaque_subgraphs, self.hugr);
+        let mut hugr = Hugr::new();
+        let target = DecodeInsertionTarget::Function { fn_name };
+
+        let mut decoder = PytketDecoderContext::new(serial_circuit, &mut hugr, target, options)?;
         decoder.run_decoder(&serial_circuit.commands)?;
-        Ok(decoder.finish()?.node())
+        decoder.finish()?;
+        Ok(hugr)
     }
 
-    /// Extract the top-level pytket circuit as a standalone definition
-    /// containing the whole original HUGR.
+    /// Ensure that none of the encoded circuits contain references to opaque subgraphs in the original HUGR.
     ///
-    /// Traverses the commands in `head_circuit` and replaces
+    /// Traverses the commands in the encoded circuits and replaces
     /// [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
     /// pointers in opaque barriers with inline payloads.
     ///
-    /// Discards any changes to the internal subcircuits, as they are not part
-    /// of the top-level circuit.
-    ///
     /// # Errors
-    ///
-    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if
-    /// [`Self::head_region`] is not a dataflow container in the hugr.
     ///
     /// Returns an error if a barrier operation with the
     /// [`OPGROUP_OPAQUE_HUGR`][super::opaque::OPGROUP_OPAQUE_HUGR]
     /// opgroup has an invalid payload.
-    //
-    // TODO: We'll need to handle non-local edges and function definitions in this step.
-    pub fn extract_standalone(mut self) -> Result<SerialCircuit, PytketEncodeError<H::Node>> {
-        if !self.check_dataflow_head_region() {
-            let head_op = self.hugr.get_optype(self.head_region).to_string();
-            return Err(PytketEncodeError::InvalidStandaloneHeadRegion { head_op });
-        };
-        let mut serial_circuit = self.circuits.remove(&self.head_region).unwrap();
-
+    fn ensure_standalone(
+        &mut self,
+        hugr: &impl HugrView<Node = Node>,
+    ) -> Result<(), PytketEncodeError<Node>> {
         /// Replace references to the `EncodedCircuit` context from the circuit commands.
         ///
         /// Replaces [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
@@ -280,33 +301,41 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
             }
             Ok(())
         }
-        make_commands_standalone(
-            &mut serial_circuit.commands,
-            &self.opaque_subgraphs,
-            self.hugr,
-        )?;
 
-        Ok(serial_circuit)
+        for serial_circuit in self.circuits.values_mut() {
+            make_commands_standalone(&mut serial_circuit.commands, &self.opaque_subgraphs, hugr)?;
+        }
+        Ok(())
     }
 
     /// Checks if [`Self::head_region`] was a dataflow container in the original hugr,
     /// and therefore has an encoded circuit in this structure.
-    fn check_dataflow_head_region(&self) -> bool {
-        self.circuits.contains_key(&self.head_region)
-    }
-
-    /// Returns the HUGR from where the circuit was encoded.
-    pub fn hugr(&self) -> &H {
-        self.hugr
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PytketEncodeError::InvalidStandaloneHeadRegion`] error if
+    /// [`Self::head_region`] is not a dataflow container encoded from the original hugr.
+    ///
+    /// If `hugr` is provided, the error will include the operation type of the head region.
+    fn check_dataflow_head_region(
+        &self,
+        head_region: Node,
+        hugr: Option<&impl HugrView<Node = Node>>,
+    ) -> Result<(), PytketDecodeError> {
+        if !self.circuits.contains_key(&head_region) {
+            let head_op = hugr.map(|hugr| hugr.get_optype(head_region).to_string());
+            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op }.wrap());
+        }
+        Ok(())
     }
 
     /// Returns the region node from which the main circuit was encoded.
-    pub fn head_region(&self) -> H::Node {
+    pub fn head_region(&self) -> Node {
         self.head_region
     }
 
     /// Returns an iterator over all the encoded pytket circuits.
-    pub fn circuits(&self) -> impl Iterator<Item = (H::Node, &SerialCircuit)> {
+    pub fn circuits(&self) -> impl Iterator<Item = (Node, &SerialCircuit)> {
         self.into_iter().map(|(&n, circ)| (n, circ))
     }
 
@@ -317,12 +346,12 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     /// [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
     /// pointers to HUGR subgraphs in opaque barriers remain valid and
     /// topologically consistent with the original circuit.
-    pub fn circuits_mut(&mut self) -> impl Iterator<Item = (H::Node, &mut SerialCircuit)> {
+    pub fn circuits_mut(&mut self) -> impl Iterator<Item = (Node, &mut SerialCircuit)> {
         self.into_iter().map(|(&n, circ)| (n, circ))
     }
 
     /// Returns `true` if there is an encoded pytket circuit for the given region.
-    pub fn contains_circuit(&self, region: H::Node) -> bool {
+    pub fn contains_circuit(&self, region: Node) -> bool {
         self.circuits.contains_key(&region)
     }
 
@@ -337,60 +366,58 @@ impl<'a, H: HugrView> EncodedCircuit<'a, H> {
     }
 }
 
-impl<'a, H: HugrView> Index<H::Node> for EncodedCircuit<'a, H> {
+impl<Node: HugrNode> Index<Node> for EncodedCircuit<Node> {
     type Output = SerialCircuit;
 
-    fn index(&self, index: H::Node) -> &Self::Output {
+    fn index(&self, index: Node) -> &Self::Output {
         &self.circuits[&index]
     }
 }
 
-impl<'a, H: HugrView> IndexMut<H::Node> for EncodedCircuit<'a, H> {
-    fn index_mut(&mut self, index: H::Node) -> &mut Self::Output {
+impl<Node: HugrNode> IndexMut<Node> for EncodedCircuit<Node> {
+    fn index_mut(&mut self, index: Node) -> &mut Self::Output {
         self.circuits
             .get_mut(&index)
             .unwrap_or_else(|| panic!("Indexing into a circuit that was not encoded: {index}"))
     }
 }
 
-impl<'c, 'a, H: HugrView> IntoIterator for &'c EncodedCircuit<'a, H> {
-    type Item = (&'c H::Node, &'c SerialCircuit);
-    type IntoIter = <&'c HashMap<H::Node, SerialCircuit> as IntoIterator>::IntoIter;
+impl<'c, Node: HugrNode> IntoIterator for &'c EncodedCircuit<Node> {
+    type Item = (&'c Node, &'c SerialCircuit);
+    type IntoIter = <&'c HashMap<Node, SerialCircuit> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.circuits.iter()
     }
 }
 
-impl<'c, 'a, H: HugrView> IntoIterator for &'c mut EncodedCircuit<'a, H> {
-    type Item = (&'c H::Node, &'c mut SerialCircuit);
-    type IntoIter = <&'c mut HashMap<H::Node, SerialCircuit> as IntoIterator>::IntoIter;
+impl<'c, Node: HugrNode> IntoIterator for &'c mut EncodedCircuit<Node> {
+    type Item = (&'c Node, &'c mut SerialCircuit);
+    type IntoIter = <&'c mut HashMap<Node, SerialCircuit> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.circuits.iter_mut()
     }
 }
 
-impl<'c, 'a, H> IntoParallelIterator for &'c EncodedCircuit<'a, H>
+impl<'c, Node: HugrNode> IntoParallelIterator for &'c EncodedCircuit<Node>
 where
-    H: HugrView,
-    H::Node: Send + Sync,
+    Node: Send + Sync,
 {
-    type Item = (&'c H::Node, &'c SerialCircuit);
-    type Iter = <&'c HashMap<H::Node, SerialCircuit> as IntoParallelIterator>::Iter;
+    type Item = (&'c Node, &'c SerialCircuit);
+    type Iter = <&'c HashMap<Node, SerialCircuit> as IntoParallelIterator>::Iter;
 
     fn into_par_iter(self) -> Self::Iter {
         self.circuits.par_iter()
     }
 }
 
-impl<'c, 'a, H> IntoParallelIterator for &'c mut EncodedCircuit<'a, H>
+impl<'c, Node: HugrNode> IntoParallelIterator for &'c mut EncodedCircuit<Node>
 where
-    H: HugrView,
-    H::Node: Send + Sync,
+    Node: Send + Sync,
 {
-    type Item = (&'c H::Node, &'c mut SerialCircuit);
-    type Iter = <&'c mut HashMap<H::Node, SerialCircuit> as IntoParallelIterator>::Iter;
+    type Item = (&'c Node, &'c mut SerialCircuit);
+    type Iter = <&'c mut HashMap<Node, SerialCircuit> as IntoParallelIterator>::Iter;
 
     fn into_par_iter(self) -> Self::Iter {
         self.circuits.par_iter_mut()
