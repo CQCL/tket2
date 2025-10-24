@@ -18,7 +18,7 @@ use hugr::HugrView;
 ///
 /// Contains a list of custom decoders that define translations of legacy tket
 /// primitives into HUGR operations.
-pub fn default_decoder_config<H: HugrView>() -> PytketDecoderConfig<H> {
+pub fn default_decoder_config() -> PytketDecoderConfig {
     let mut config = PytketDecoderConfig::new();
     config.add_decoder(CoreDecoder);
     config.add_decoder(PreludeEmitter);

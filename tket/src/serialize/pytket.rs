@@ -21,7 +21,7 @@ pub use options::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
-use hugr::{Hugr, HugrView, Node};
+use hugr::{Hugr, Node};
 #[cfg(test)]
 mod tests;
 
@@ -70,7 +70,7 @@ pub trait TKETDecode: Sized {
     /// # Returns
     ///
     /// The encoded circuit.
-    fn decode(&self, options: DecodeOptions<impl HugrView>) -> Result<Circuit, Self::DecodeError>;
+    fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError>;
     /// Convert the serialized circuit into a function definition in an existing HUGR.
     ///
     /// Does **not** modify the HUGR's entrypoint.
@@ -92,7 +92,7 @@ pub trait TKETDecode: Sized {
         // (so that the extension decoder traits are dyn-compatible).
         hugr: &mut Hugr,
         target: DecodeInsertionTarget,
-        options: DecodeOptions<impl HugrView>,
+        options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError>;
     /// Convert a circuit to a serialized pytket circuit.
     ///
@@ -113,7 +113,7 @@ impl TKETDecode for SerialCircuit {
     type DecodeError = PytketDecodeError;
     type EncodeError = PytketEncodeError;
 
-    fn decode(&self, options: DecodeOptions<impl HugrView>) -> Result<Circuit, Self::DecodeError> {
+    fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
         let main_func = self.decode_inplace(
             &mut hugr,
@@ -128,7 +128,7 @@ impl TKETDecode for SerialCircuit {
         &self,
         hugr: &mut Hugr,
         target: DecodeInsertionTarget,
-        options: DecodeOptions<impl HugrView>,
+        options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError> {
         let mut decoder = PytketDecoderContext::new(self, hugr, target, options)?;
         decoder.run_decoder(&self.commands)?;
@@ -136,7 +136,8 @@ impl TKETDecode for SerialCircuit {
     }
 
     fn encode(circuit: &Circuit, options: EncodeOptions) -> Result<Self, Self::EncodeError> {
-        EncodedCircuit::from_hugr(circuit, options)?.extract_standalone()
+        let mut encoded = EncodedCircuit::new_standalone(circuit, options)?;
+        Ok(std::mem::take(&mut encoded[circuit.parent()]))
     }
 }
 

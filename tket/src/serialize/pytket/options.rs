@@ -24,14 +24,14 @@ use super::default_decoder_config;
 /// HUGR. See
 /// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]
 /// for more details.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
-pub struct DecodeOptions<H: HugrView = Hugr> {
+pub struct DecodeOptions {
     /// The configuration for the decoder, containing custom
     /// operation decoders.
     ///
     /// When `None`, we will use [`default_decoder_config`][super::default_decoder_config].
-    pub config: Option<Arc<PytketDecoderConfig<H>>>,
+    pub config: Option<Arc<PytketDecoderConfig>>,
     /// The signature of the function to create.
     ///
     /// The number of qubits in the input types must be less than or equal to the
@@ -60,14 +60,14 @@ pub struct DecodeOptions<H: HugrView = Hugr> {
     pub extensions: Option<ExtensionRegistry>,
 }
 
-impl<H: HugrView> DecodeOptions<H> {
+impl DecodeOptions {
     /// Create a new [`DecodeOptions`] with the default values.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set a decoder configuration.
-    pub fn with_config(mut self, config: impl Into<Arc<PytketDecoderConfig<H>>>) -> Self {
+    pub fn with_config(mut self, config: impl Into<Arc<PytketDecoderConfig>>) -> Self {
         self.config = Some(config.into());
         self
     }
@@ -110,31 +110,10 @@ impl<H: HugrView> DecodeOptions<H> {
     ///
     /// Panics if the option is `None`. Use [`DecodeOptions::with_config`] or
     /// [`DecodeOptions::with_default_config`] to set it.
-    pub(super) fn get_config(&self) -> &Arc<PytketDecoderConfig<H>> {
+    pub(super) fn get_config(&self) -> &Arc<PytketDecoderConfig> {
         self.config
             .as_ref()
             .expect("DecodeOptions::config is not set")
-    }
-}
-impl DecodeOptions<Hugr> {
-    /// Create a new [`DecodeOptions`] with the default values.
-    ///
-    /// Fixes the generic type to `Hugr`. This is useful when decoding a circuit
-    /// not linked to an existing HUGR, to avoid having to specify the generic
-    /// type.
-    pub fn new_any() -> Self {
-        Self::default()
-    }
-}
-
-impl<H: HugrView> Default for DecodeOptions<H> {
-    fn default() -> Self {
-        Self {
-            config: Default::default(),
-            signature: Default::default(),
-            input_params: Default::default(),
-            extensions: None,
-        }
     }
 }
 

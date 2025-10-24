@@ -393,10 +393,15 @@ pub enum PytketDecodeErrorInner {
         bit: String,
     },
     /// Tried to reassemble an [`EncodedCircuit`][super::circuit::EncodedCircuit] whose head region is not a dataflow container in the original hugr.
-    #[display("Tried to reassemble an `EncodedCircuit` whose head region is not a dataflow container in the original hugr. Head operation {head_op}")]
+    #[display("Tried to reassemble an `EncodedCircuit` whose head region is not a dataflow container in the original hugr.{head_op}",
+        head_op = match head_op {
+            Some(op) => format!(" Head operation {op}"),
+            None => String::new(),
+        },
+    )]
     NonDataflowHeadRegion {
         /// The head region operation that is not a dataflow container.
-        head_op: String,
+        head_op: Option<String>,
     },
     /// The pytket circuit contains an opaque barrier representing a unsupported subgraph in the original HUGR,
     /// but the corresponding subgraph is not present in the [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
