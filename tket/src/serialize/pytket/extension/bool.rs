@@ -109,7 +109,7 @@ impl PytketTypeTranslator for BoolEmitter {
     }
 }
 
-impl<H: HugrView> PytketDecoder<H> for BoolEmitter {
+impl PytketDecoder for BoolEmitter {
     fn op_types(&self) -> Vec<tket_json_rs::OpType> {
         vec![tket_json_rs::OpType::ClExpr]
     }
@@ -121,7 +121,7 @@ impl<H: HugrView> PytketDecoder<H> for BoolEmitter {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         _opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h, H>,
+        decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let Some(clexpr) = &op.classical_expr else {
             return Ok(DecodeStatus::Unsupported);

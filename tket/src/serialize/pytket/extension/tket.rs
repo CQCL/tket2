@@ -116,7 +116,7 @@ impl TketOpEmitter {
     }
 }
 
-impl<H: HugrView> PytketDecoder<H> for TketOpEmitter {
+impl PytketDecoder for TketOpEmitter {
     fn op_types(&self) -> Vec<PytketOptype> {
         vec![
             PytketOptype::H,
@@ -149,7 +149,7 @@ impl<H: HugrView> PytketDecoder<H> for TketOpEmitter {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         _opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h, H>,
+        decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let mut num_input_bits = 0;
         let op = match op.op_type {

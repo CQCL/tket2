@@ -198,7 +198,7 @@ fn json_roundtrip(
     assert_eq!(ser.commands.len(), num_commands);
 
     let circ: Circuit = ser
-        .decode(DecodeOptions::new_any().with_config(qsystem_decoder_config()))
+        .decode(DecodeOptions::new().with_config(qsystem_decoder_config()))
         .unwrap();
     assert_eq!(circ.qubit_count(), num_qubits);
 
@@ -229,7 +229,7 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] decoded_sig: Signature) {
     )
     .unwrap();
     let deser: Circuit = ser
-        .decode(DecodeOptions::new_any().with_config(qsystem_decoder_config()))
+        .decode(DecodeOptions::new().with_config(qsystem_decoder_config()))
         .unwrap();
 
     let deser_sig = deser.circuit_signature();

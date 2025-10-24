@@ -113,7 +113,7 @@ impl PreludeEmitter {
     }
 }
 
-impl<H: HugrView> PytketDecoder<H> for PreludeEmitter {
+impl PytketDecoder for PreludeEmitter {
     fn op_types(&self) -> Vec<PytketOptype> {
         vec![PytketOptype::noop, PytketOptype::Barrier]
     }
@@ -125,7 +125,7 @@ impl<H: HugrView> PytketDecoder<H> for PreludeEmitter {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
         opgroup: Option<&str>,
-        decoder: &mut PytketDecoderContext<'h, H>,
+        decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let op: OpType = match op.op_type {
             PytketOptype::noop => Noop::new(qb_t()).into(),
