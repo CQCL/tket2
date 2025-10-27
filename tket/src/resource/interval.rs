@@ -547,6 +547,54 @@ mod tests {
     }
 
     #[rstest]
+    #[case::extend_left(
+        1,
+        Some(Direction::Incoming),
+        1..=2,
+    )]
+    #[case::extend_right(
+        3,
+        Some(Direction::Outgoing),
+        2..=3,
+    )]
+    #[case::node_already_in_interval_start(
+        2,
+        None,
+        2..=2,
+    )]
+    fn test_try_extend_singleton(
+        cx_circuit_scope: ResourceScope,
+
+        #[case] node_to_extend: usize,
+        #[case] expected_direction: Option<Direction>,
+        #[case] expected_range: RangeInclusive<usize>,
+    ) {
+        let cx_nodes = cx_circuit_scope.nodes();
+
+        // Create a singleton interval
+        let mut interval = Interval::new(
+            ResourceId::new(0),
+            cx_nodes[2],
+            cx_nodes[2],
+            &cx_circuit_scope,
+        );
+
+        assert_eq!(
+            interval,
+            Interval::new_singleton(ResourceId::new(0), cx_nodes[2], &cx_circuit_scope).unwrap()
+        );
+
+        // Apply the test case
+        let result = interval
+            .try_extend(cx_nodes[node_to_extend], &cx_circuit_scope)
+            .unwrap();
+
+        assert_eq!(result, expected_direction);
+        assert_eq!(interval.start_node(), cx_nodes[*expected_range.start()]);
+        assert_eq!(interval.end_node(), cx_nodes[*expected_range.end()]);
+    }
+
+    #[rstest]
     fn test_try_extend_error(cx_circuit_scope: ResourceScope) {
         let cx_nodes = cx_circuit_scope.nodes();
 
