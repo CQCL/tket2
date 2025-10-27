@@ -164,10 +164,10 @@ impl<N: HugrNode> Interval<N> {
     /// Get the resource ID of the interval.
     pub fn resource_id(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> ResourceId {
         let (node, port) = self.any_port();
-        let resource_id = scope
+
+        scope
             .get_resource_id(node, port)
-            .expect("interval port is a resource port in scope");
-        resource_id
+            .expect("interval port is a resource port in scope")
     }
 
     /// The first port on the resource path after the interval.
@@ -342,7 +342,7 @@ impl<N: HugrNode> Interval<N> {
 
         *self = Self::new_span([(new_extrema_node, new_extrema_port), existing_extrema]);
 
-        return Some(extension_dir);
+        Some(extension_dir)
     }
 
     /// Whether `pos` is smaller, larger or within the interval.
