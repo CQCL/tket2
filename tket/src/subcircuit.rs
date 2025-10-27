@@ -114,7 +114,7 @@ impl<N: HugrNode> Subcircuit<N> {
             output_resources: Vec::new(),
         };
 
-        for res in subcircuit.resources().collect_vec() {
+        for res in subcircuit.resources(circuit).collect_vec() {
             subcircuit.update_input(res, circuit);
             subcircuit.update_output(res, circuit);
         }
@@ -174,8 +174,13 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// Iterate over the resources in the subcircuit.
-    pub fn resources(&self) -> impl Iterator<Item = ResourceId> + '_ {
-        self.intervals.iter().map(|interval| interval.resource_id())
+    pub fn resources<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = ResourceId> + 'a {
+        self.intervals
+            .iter()
+            .map(|interval| interval.resource_id(circuit))
     }
 
     /// Nodes in the subcircuit.
@@ -205,17 +210,25 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// Get the interval for the given line.
-    pub fn get_interval(&self, resource: ResourceId) -> Option<Interval<N>> {
+    pub fn get_interval(
+        &self,
+        resource: ResourceId,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Option<Interval<N>> {
         self.intervals
             .iter()
-            .find(|interval| interval.resource_id() == resource)
+            .find(|interval| interval.resource_id(circuit) == resource)
             .copied()
     }
 
-    fn get_interval_mut(&mut self, resource: ResourceId) -> Option<&mut Interval<N>> {
+    fn get_interval_mut(
+        &mut self,
+        resource: ResourceId,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Option<&mut Interval<N>> {
         self.intervals
             .iter_mut()
-            .find(|interval| interval.resource_id() == resource)
+            .find(|interval| interval.resource_id(circuit) == resource)
     }
 
     /// Iterate over the line indices of the subcircuit and their intervals.
@@ -283,13 +296,13 @@ fn extend_intervals<N: HugrNode>(
     circuit: &ResourceScope<impl HugrView<Node = N>>,
 ) {
     for res in circuit.get_all_resources(node) {
-        let (interval, num_nodes) = intervals
-            .entry(res)
-            .or_insert_with(|| (Interval::new_singleton(res, node, circuit), 0));
-        let Some(pos) = circuit.get_position(node) else {
-            panic!("node {node:?} is not on resource path {res:?}");
-        };
-        interval.add_node_unchecked(node, pos);
+        let (interval, num_nodes) = intervals.entry(res).or_insert_with(|| {
+            (
+                Interval::new_singleton(res, node, circuit).expect("node on resource path"),
+                0,
+            )
+        });
+        interval.add_node_unchecked(node, circuit);
         *num_nodes += 1;
     }
 }
@@ -304,7 +317,7 @@ impl<N: HugrNode> Subcircuit<N> {
         let mut was_changed = false;
 
         for resource_id in circuit.get_all_resources(node) {
-            let interval = self.get_interval_mut(resource_id);
+            let interval = self.get_interval_mut(resource_id, circuit);
             if let Some(interval) = interval {
                 match interval.try_extend(node, circuit) {
                     Ok(None) => { /* nothing to do */ }
@@ -330,8 +343,10 @@ impl<N: HugrNode> Subcircuit<N> {
                 }
             } else {
                 was_changed = true;
-                self.intervals
-                    .push(Interval::new_singleton(resource_id, node, circuit));
+                self.intervals.push(
+                    Interval::new_singleton(resource_id, node, circuit)
+                        .expect("node on resource path"),
+                );
                 self.update_input(resource_id, circuit);
                 self.update_output(resource_id, circuit);
             }
@@ -366,7 +381,7 @@ impl<N: HugrNode> Subcircuit<N> {
         circuit: &ResourceScope<impl HugrView<Node = N>>,
         dir: Direction,
     ) -> bool {
-        let Some(interval) = self.get_interval(resource_id) else {
+        let Some(interval) = self.get_interval(resource_id, circuit) else {
             return false;
         };
         let node = match dir {
@@ -516,14 +531,14 @@ mod tests {
 
         // Add first a H gate
         assert_eq!(subcircuit.try_extend(node(7), &circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), [resources[0]]);
+        assert_eq!(subcircuit.resources(&circ).collect_vec(), [resources[0]]);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, [resources[0]]);
         assert_eq!(subcircuit.try_extend(node(7), &circ), Ok(false));
 
         // Now add a two-qubit CX gate
         assert_eq!(subcircuit.try_extend(node(9), &circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
@@ -539,7 +554,7 @@ mod tests {
 
         // Now add a contiguous rotation
         assert_eq!(subcircuit.try_extend(node(10), &circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 1);
@@ -547,7 +562,7 @@ mod tests {
 
         // One more rotation, same angle
         assert_eq!(subcircuit.try_extend(node(11), &circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 1);
@@ -556,7 +571,7 @@ mod tests {
         // Last rotation, different angle
         // now the previously non-contiguous rotation is contiguous
         assert_eq!(subcircuit.try_extend(node(16), &circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values.len(), 2);
@@ -595,21 +610,21 @@ mod tests {
 
         // Add a two-qubit CX gates, as usual => two inputs, two outputs
         assert_eq!(subcircuit.try_extend(node(5), &ancilla_circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, resources);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
 
         // Add the qalloc; now the second qubit is no more an input
         assert_eq!(subcircuit.try_extend(node(4), &ancilla_circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, resources);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
 
         // Add the qfree; the second qubit is no longer an output either
         assert_eq!(subcircuit.try_extend(node(6), &ancilla_circ), Ok(true));
-        assert_eq!(subcircuit.resources().collect_vec(), resources);
+        assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
         assert_eq!(subcircuit.input_resources, [resources[0]]);
         assert_eq!(subcircuit.output_resources, [resources[0]]);
         assert_eq!(subcircuit.input_copyable_values, vec![]);
