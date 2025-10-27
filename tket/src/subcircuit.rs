@@ -285,7 +285,7 @@ fn extend_intervals<N: HugrNode>(
     for res in circuit.get_all_resources(node) {
         let (interval, num_nodes) = intervals
             .entry(res)
-            .or_insert_with(|| (Interval::singleton(res, node, circuit), 0));
+            .or_insert_with(|| (Interval::new_singleton(res, node, circuit), 0));
         let Some(pos) = circuit.get_position(node) else {
             panic!("node {node:?} is not on resource path {res:?}");
         };
@@ -331,7 +331,7 @@ impl<N: HugrNode> Subcircuit<N> {
             } else {
                 was_changed = true;
                 self.intervals
-                    .push(Interval::singleton(resource_id, node, circuit));
+                    .push(Interval::new_singleton(resource_id, node, circuit));
                 self.update_input(resource_id, circuit);
                 self.update_output(resource_id, circuit);
             }
