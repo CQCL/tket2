@@ -78,7 +78,7 @@ pest_derive = { workspace = true }
 zstd = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 num-rational = { workspace = true }
-z3 = { workspace = true, optional = true }
+z3 = { workspace = true, optional = true, features = ["gh-release"] }
 slotmap_fork_lmondada = "1.0.8"
 
 [dev-dependencies]
