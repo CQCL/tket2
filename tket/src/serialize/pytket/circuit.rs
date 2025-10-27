@@ -106,7 +106,13 @@ impl EncodedCircuit<Node> {
         target: DecodeInsertionTarget,
         options: DecodeOptions,
     ) -> Result<hugr::Node, PytketDecodeError> {
-        self.check_dataflow_head_region(self.head_region, Some(hugr))?;
+        self.check_dataflow_head_region(self.head_region)
+            .map_err(|_| {
+                PytketDecodeErrorInner::NonDataflowHeadRegion {
+                    head_op: Some(hugr.get_optype(self.head_region).to_string()),
+                }
+                .wrap()
+            })?;
         let serial_circuit = &self[self.head_region];
 
         if self.len() > 1 {
@@ -248,7 +254,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
         fn_name: Option<String>,
         options: DecodeOptions,
     ) -> Result<Hugr, PytketDecodeError> {
-        self.check_dataflow_head_region(self.head_region, None)?;
+        self.check_dataflow_head_region(self.head_region)?;
         let serial_circuit = &self[self.head_region];
 
         if self.len() > 1 {
@@ -317,14 +323,9 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// [`Self::head_region`] is not a dataflow container encoded from the original hugr.
     ///
     /// If `hugr` is provided, the error will include the operation type of the head region.
-    fn check_dataflow_head_region(
-        &self,
-        head_region: Node,
-        hugr: Option<&impl HugrView<Node = Node>>,
-    ) -> Result<(), PytketDecodeError> {
+    fn check_dataflow_head_region(&self, head_region: Node) -> Result<(), PytketDecodeError> {
         if !self.circuits.contains_key(&head_region) {
-            let head_op = hugr.map(|hugr| hugr.get_optype(head_region).to_string());
-            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op }.wrap());
+            return Err(PytketDecodeErrorInner::NonDataflowHeadRegion { head_op: None }.wrap());
         }
         Ok(())
     }

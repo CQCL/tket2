@@ -9,7 +9,7 @@ pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
 
-pub(super) use wires::FindTypedWireResult;
+pub(super) use wires::FoundWire;
 
 use std::sync::Arc;
 
@@ -57,7 +57,8 @@ pub struct PytketDecoderContext<'h> {
     pub(super) wire_tracker: Box<WireTracker>,
     /// Options used when decoding the circuit.
     ///
-    /// `DecodeOptions::config` is
+    /// This contains the decoding parameters specific to the current circuit
+    /// being decoded.
     options: DecodeOptions,
     /// A registry of opaque subgraphs from `original_hugr`, that are referenced by opaque barriers in the pytket circuit
     /// via their [`SubgraphId`].
@@ -109,7 +110,7 @@ impl<'h> PytketDecoderContext<'h> {
     ) -> Result<Self, PytketDecodeError> {
         // Ensure that the set of decoders is present, use a default one if not.
         if options.config.is_none() {
-            options.with_default_config();
+            options = options.with_default_config();
         }
 
         // Compute the signature of the decoded region, if not provided, and
@@ -780,7 +781,12 @@ pub enum DecodeStatus {
     Unsupported,
 }
 
-/// Helper to continue exhausting the iterators in [`PytketDecoderContext::register_node_outputs`] until we have the total number of elements to report.
+/// Helper to continue exhausting the iterators in
+/// [`PytketDecoderContext::register_node_outputs`] until we have the total
+/// number of elements to report.
+///
+/// Processes remaining port types and adds them to the partial count of the
+/// number of qubits and bits we expected to have available.
 fn make_unexpected_node_out_error<'ty>(
     config: &PytketDecoderConfig,
     port_types: impl IntoIterator<Item = (OutgoingPort, &'ty Type)>,

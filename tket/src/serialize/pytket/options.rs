@@ -67,29 +67,35 @@ impl DecodeOptions {
     }
 
     /// Set a decoder configuration.
+    #[must_use]
     pub fn with_config(mut self, config: impl Into<Arc<PytketDecoderConfig>>) -> Self {
         self.config = Some(config.into());
         self
     }
 
     /// Set `DecodeOptions::config` to use [`default_decoder_config`].
-    pub fn with_default_config(&mut self) {
+    #[must_use]
+    pub fn with_default_config(mut self) -> Self {
         self.config = Some(Arc::new(default_decoder_config()));
+        self
     }
 
     /// Set the signature of the function to create.
+    #[must_use]
     pub fn with_signature(mut self, signature: Signature) -> Self {
         self.signature = Some(signature);
         self
     }
 
     /// Set the input parameter names.
+    #[must_use]
     pub fn with_input_params(mut self, input_params: impl IntoIterator<Item = String>) -> Self {
         self.input_params = input_params.into_iter().collect();
         self
     }
 
     /// Set the extensions to use when loading the HUGR envelope.
+    #[must_use]
     pub fn with_extensions(mut self, extensions: ExtensionRegistry) -> Self {
         self.extensions = Some(extensions);
         self
