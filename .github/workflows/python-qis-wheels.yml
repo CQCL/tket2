@@ -112,7 +112,7 @@ jobs:
         env:
           SHOULD_RUN: ${{ github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) }}
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         if: ${{ steps.check-tag.outputs.run == 'true' }}
         with:
           path: wheelhouse
