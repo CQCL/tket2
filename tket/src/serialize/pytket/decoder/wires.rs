@@ -1,7 +1,7 @@
 //! Structures to keep track of pytket [`ElementId`][tket_json_rs::register::ElementId]s and
 //! their correspondence to wires in the hugr being defined.
 use std::collections::{BTreeMap, VecDeque};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use hugr::builder::{DFGBuilder, Dataflow as _};
 use hugr::ops::Value;
@@ -578,22 +578,28 @@ impl WireTracker {
     ///
     /// # Arguments
     ///
-    /// * `config` - The configuration for the decoder, used to count the qubits and bits required by each type.
+    /// * `config` - The configuration for the decoder, used to count the qubits
+    ///   and bits required by each type.
     /// * `ty` - The type of the arguments we require in the wire.
-    /// * `qubit_args` - The list of tracked qubits we require in the wire. Values are consumed from the frond and removed from the slice.
+    /// * `qubit_args` - The list of tracked qubits we require in the wire.
+    ///   Values are consumed from the front and removed from the slice.
     /// * `bit_args` - The list of tracked bits we require in the wire.
     /// * `params` - The list of parameters to load to wire. See
-    ///   [`WireTracker::load_half_turns_parameter`] for more details.
-    ///   Values are consumed from the front and removed from the slice.
+    ///   [`WireTracker::load_half_turns_parameter`] for more details. Values
+    ///   are consumed from the front and removed from the slice.
     /// * `unsupported_wire` - The id of an unsupported wire, if known.
     ///
     /// # Errors
     ///
-    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubit_args` was marked as outdated.
-    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bit_args` was marked as outdated.
-    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`] and
-    ///   `unsupported_wire` was not provided.
-    /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
+    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubit_args`
+    ///   was marked as outdated.
+    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bit_args` was
+    ///   marked as outdated.
+    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types`
+    ///   cannot be mapped to a [`RegisterCount`] and `unsupported_wire` was not
+    ///   provided.
+    /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with
+    ///   the requested type for the given qubit/bit arguments.
     pub(in crate::serialize::pytket) fn find_typed_wire(
         &self,
         config: &PytketDecoderConfig,
@@ -602,10 +608,7 @@ impl WireTracker {
         bit_args: &mut &[TrackedBit],
         params: &mut &[LoadedParameter],
         unsupported_wire: Option<EncodedEdgeID>,
-    ) -> Result<FindTypedWireResult, PytketDecodeError> {
-        static PARAM_TYPES: OnceLock<[Type; 2]> = OnceLock::new();
-        let param_types = PARAM_TYPES.get_or_init(|| [float64_type(), rotation_type()]);
-
+    ) -> Result<FoundWire, PytketDecodeError> {
         // TODO: Use the slice `split_off_first` method once MSRV is ≥1.87
         fn split_off_first<'a, T>(slice: &mut &'a [T]) -> Option<&'a T> {
             let (first, rem) = slice.split_first()?;
@@ -614,30 +617,25 @@ impl WireTracker {
         }
 
         // Return a parameter input if the type is a float or rotation.
-        if param_types.contains(ty) {
+        if [float64_type(), rotation_type()].contains(ty) {
             let Some(param) = split_off_first(params) else {
                 return Err(
                     PytketDecodeErrorInner::NoMatchingParameter { ty: ty.to_string() }.wrap(),
                 );
             };
-            return Ok(FindTypedWireResult::Parameter(*param));
+            return Ok(FoundWire::Parameter(*param));
         }
 
-        // Return an unsupported wire if the type is not supported.
-        let Some(reg_count) = config.type_to_pytket(ty) else {
-            // Unsupported type. Find a registered unsupported wire, or return an error.
-            match unsupported_wire.and_then(|id| self.get_unsupported_wire(id)) {
-                Some(&wire) => {
-                    let id = unsupported_wire.unwrap();
-                    return Ok(FindTypedWireResult::Unsupported { id, wire });
-                }
-                None => {
-                    return Err(PytketDecodeErrorInner::UnexpectedInputType {
-                        unknown_type: ty.to_string(),
-                        all_types: vec![ty.to_string()],
-                    }
-                    .wrap())
-                }
+        // Translate the wire type to a pytket register count.
+        let reg_count = match (config.type_to_pytket(ty), unsupported_wire) {
+            (Some(reg_count), _) => reg_count,
+            (None, Some(id)) => return Ok(FoundWire::Unsupported { id }),
+            (None, None) => {
+                let err = PytketDecodeErrorInner::UnexpectedInputType {
+                    unknown_type: ty.to_string(),
+                    all_types: vec![ty.to_string()],
+                };
+                return Err(err.wrap());
             }
         };
 
@@ -652,14 +650,22 @@ impl WireTracker {
             .flat_map(|bit| self.bit_wires(bit));
         let mut candidate = qubit_candidates.chain(bit_candidates);
 
+        // The bits and qubits we expect the wire to contain.
+        let wire_qubits = qubit_args
+            .iter()
+            .take(reg_count.qubits)
+            .map(|q| q.id())
+            .collect_vec();
+        let wire_bits = bit_args
+            .iter()
+            .take(reg_count.bits)
+            .map(|bit| bit.id())
+            .collect_vec();
+
         // Find a wire that contains the correct type..
         let check_wire = |w: &Wire| {
             let wire_data = &self.wires[w];
-            let qubits = qubit_args.iter().take(reg_count.qubits).map(|q| q.id());
-            let bits = bit_args.iter().take(reg_count.bits).map(|bit| bit.id());
-            wire_data.ty() == ty
-                && itertools::equal(wire_data.qubits.iter().copied(), qubits)
-                && itertools::equal(wire_data.bits.iter().copied(), bits)
+            wire_data.ty() == ty && wire_data.qubits == wire_qubits && wire_data.bits == wire_bits
         };
         let Some(wire) = candidate.find(check_wire) else {
             return Err(PytketDecodeErrorInner::NoMatchingWire {
@@ -681,7 +687,7 @@ impl WireTracker {
         *qubit_args = &qubit_args[reg_count.qubits..];
         *bit_args = &bit_args[reg_count.bits..];
 
-        Ok(FindTypedWireResult::Register(self.wires[&wire].clone()))
+        Ok(FoundWire::Register(self.wires[&wire].clone()))
     }
 
     /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
@@ -738,7 +744,7 @@ impl WireTracker {
             parameter_wires: Vec::with_capacity(params.len()),
         };
         for ty in types {
-            let wire = match self.find_typed_wire(
+            match self.find_typed_wire(
                 config,
                 ty,
                 &mut qubit_args,
@@ -746,28 +752,29 @@ impl WireTracker {
                 &mut params,
                 None,
             ) {
-                // Add additional context to errors were required.
+                Ok(FoundWire::Register(wire)) => tracked_wires.value_wires.push(wire),
+                Ok(FoundWire::Parameter(param)) => tracked_wires.parameter_wires.push(param),
+                Ok(FoundWire::Unsupported { .. }) => {
+                    unreachable!("unsupported_wire was not defined")
+                }
+                // Add additional context to errors UnexpectedInputType errors.
                 Err(PytketDecodeError {
                     inner: PytketDecodeErrorInner::UnexpectedInputType { unknown_type, .. },
-                    ..
+                    pytket_op,
+                    hugr_op,
                 }) => {
-                    let e = PytketDecodeErrorInner::UnexpectedInputType {
+                    let inner = PytketDecodeErrorInner::UnexpectedInputType {
                         unknown_type,
                         all_types: types.iter().map(ToString::to_string).collect(),
                     };
-                    return Err(e.wrap());
+                    return Err(PytketDecodeError {
+                        inner,
+                        pytket_op,
+                        hugr_op,
+                    });
                 }
                 Err(e) => return Err(e),
-                Ok(wire) => wire,
             };
-
-            match wire {
-                FindTypedWireResult::Register(wire) => tracked_wires.value_wires.push(wire),
-                FindTypedWireResult::Parameter(param) => tracked_wires.parameter_wires.push(param),
-                FindTypedWireResult::Unsupported { .. } => {
-                    unreachable!("No EncodedEdgeID should be provided when finding typed wires");
-                }
-            }
         }
 
         Ok(tracked_wires)
@@ -1010,7 +1017,8 @@ fn check_register(register: &PytketRegister) -> Result<(), PytketDecodeError> {
 /// opaque pytket barriers. Users will see
 /// [`PytketDecodeErrorInner::UnexpectedInputType`] if they try to decode such a
 /// wire.
-pub(in crate::serialize::pytket) enum FindTypedWireResult {
+#[derive(Debug, Clone, PartialEq)]
+pub(in crate::serialize::pytket) enum FoundWire {
     /// Found a type carrying bit/qubit registers.
     Register(WireData),
     /// Found a parameter input.
@@ -1022,8 +1030,6 @@ pub(in crate::serialize::pytket) enum FindTypedWireResult {
     Unsupported {
         /// The id of the unsupported wire.
         id: EncodedEdgeID,
-        /// The HUGR wire corresponding to the EncodedEdgeID.
-        wire: Wire,
     },
 }
 

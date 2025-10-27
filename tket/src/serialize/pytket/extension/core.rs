@@ -5,16 +5,16 @@
 //! [`PytketEmitter`][crate::serialize::pytket::extension::PytketEmitter] for
 //! them.
 
+use std::collections::HashMap;
 use std::ops::RangeTo;
 use std::sync::Arc;
 
 use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::decoder::{
-    DecodeStatus, FindTypedWireResult, LoadedParameter, PytketDecoderContext, TrackedBit,
-    TrackedQubit,
+    DecodeStatus, FoundWire, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
 use crate::serialize::pytket::extension::{PytketDecoder, RegisterCount};
-use crate::serialize::pytket::opaque::{OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
+use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 use crate::serialize::pytket::{
     DecodeInsertionTarget, DecodeOptions, PytketDecodeError, PytketDecodeErrorInner,
     PytketDecoderConfig,
@@ -23,7 +23,6 @@ use crate::serialize::TKETDecode;
 use hugr::builder::Container;
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::hugr::hugrmut::HugrMut;
-use hugr::ops::{OpTag, OpTrait};
 use hugr::types::{Signature, Type};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
 use itertools::Itertools;
@@ -115,54 +114,57 @@ fn insert_opaque_subgraph(
     decoder: &mut PytketDecoderContext<'_>,
     payload: &OpaqueSubgraphPayload,
 ) -> Result<DecodeStatus, PytketDecodeError> {
-    let opaque_hugr = decoder.get_opaque_subgraph(payload.typ())?;
-    let opaque_signature = opaque_hugr.inner_function_type().unwrap();
+    let to_insert_hugr = decoder.get_opaque_subgraph(payload.typ())?;
+    let to_insert_signature = to_insert_hugr.inner_function_type().unwrap();
 
     let module = decoder.builder.hugr().module_root();
     let region = decoder.builder.container_node();
 
-    if !OpTag::DataflowParent.is_superset(opaque_hugr.entrypoint_optype().tag()) {
-        return Err(PytketDecodeError::custom(
-            "Opaque subgraph payload has a module root as entrypoint",
-        ));
-    }
-
     // Collect the non-IO nodes in the hugr we plan to insert.
-    let [opaque_input, opaque_output] = opaque_hugr.get_io(opaque_hugr.entrypoint()).unwrap();
-    let entrypoint_children = opaque_hugr
-        .children(opaque_hugr.entrypoint())
-        .filter(|c| *c != opaque_input && *c != opaque_output)
+    let Some([to_insert_input, to_insert_output]) =
+        to_insert_hugr.get_io(to_insert_hugr.entrypoint())
+    else {
+        return Err(PytketDecodeError::custom(
+            "Opaque subgraph payload has a non-dataflow parent as entrypoint",
+        ));
+    };
+    let entrypoint_children = to_insert_hugr
+        .children(to_insert_hugr.entrypoint())
+        .filter(|c| *c != to_insert_input && *c != to_insert_output)
         .map(|c| (c, region));
 
     // Compute the inputs and output ports of the subgraph.
     // Since we insert the nodes inside the region directly (without the I/O nodes),
     // we need to do some bookkeeping to match the ports.
     //
-    // `opaque_inputs` is a vector of vectors, where each first-level entry corresponds to
+    // `to_insert_inputs` is a vector of vectors, where each first-level entry corresponds to
     // an input to the subgraph / element in `payload.inputs`, and the second-level
     // list is all the target ports that connect to that input.
     //
-    // `opaque_outputs` is just a vector of node+outgoing ports.
-    let opaque_inputs: hugr::hugr::views::sibling_subgraph::IncomingPorts<Node> = opaque_signature
-        .input_ports()
-        .map(|p| {
-            let p = OutgoingPort::from(p.index());
-            opaque_hugr.linked_inputs(opaque_input, p).collect_vec()
-        })
-        .collect_vec();
-    let opaque_outputs: Vec<(Node, OutgoingPort)> = opaque_signature
+    // `to_insert_outputs` is just a vector of node+outgoing ports.
+    let to_insert_inputs: hugr::hugr::views::sibling_subgraph::IncomingPorts<Node> =
+        to_insert_signature
+            .input_ports()
+            .map(|p| {
+                to_insert_hugr
+                    .linked_inputs(to_insert_input, p.index())
+                    .collect_vec()
+            })
+            .collect_vec();
+    let to_insert_outputs: Vec<(Node, OutgoingPort)> = to_insert_signature
         .output_ports()
         .map(|p| {
-            let p = IncomingPort::from(p.index());
-            opaque_hugr.single_linked_output(opaque_output, p).unwrap()
+            to_insert_hugr
+                .single_linked_output(to_insert_output, p.index())
+                .unwrap()
         })
         .collect_vec();
 
     // Collect any module child that does not contain the entrypoint function.
     //
     // These are global functions or constant definitions.
-    let entrypoint_function = std::iter::successors(Some(opaque_hugr.entrypoint()), |&node| {
-        let parent = opaque_hugr.get_parent(node)?;
+    let entrypoint_function = std::iter::successors(Some(to_insert_hugr.entrypoint()), |&node| {
+        let parent = to_insert_hugr.get_parent(node)?;
         if parent == module {
             None
         } else {
@@ -171,8 +173,8 @@ fn insert_opaque_subgraph(
     })
     .last()
     .unwrap();
-    let module_children = opaque_hugr
-        .children(opaque_hugr.module_root())
+    let module_children = to_insert_hugr
+        .children(to_insert_hugr.module_root())
         .filter(|c| *c != entrypoint_function)
         .map(|c| (c, module));
 
@@ -182,7 +184,7 @@ fn insert_opaque_subgraph(
     let insertion_result = decoder
         .builder
         .hugr_mut()
-        .insert_forest(opaque_hugr, insertion_roots)
+        .insert_forest(to_insert_hugr, insertion_roots)
         .unwrap_or_else(|e| panic!("Invalid `insertion_roots`. {e}"));
 
     // Gather and connect the wires between the previously decoded nodes and the
@@ -190,7 +192,15 @@ fn insert_opaque_subgraph(
     let mut input_qubits = qubits;
     let mut input_bits = bits;
     let mut input_params = params;
-    for ((ty, edge_id), targets) in payload.inputs().zip_eq(opaque_inputs) {
+    // A list of incoming ports corresponding to [`EncodedEdgeID`]s that must be
+    // connected once the outgoing port is created.
+    //
+    // This handles the case where unsupported subgraphs in opaque barriers on
+    // the pytket circuit get reordered and input ports are seen before their
+    // outputs.
+    let mut pending_encoded_edge_connections: HashMap<EncodedEdgeID, Vec<(Node, IncomingPort)>> =
+        HashMap::new();
+    for ((ty, edge_id), targets) in payload.inputs().zip_eq(to_insert_inputs) {
         let found_wire = decoder.wire_tracker.find_typed_wire(
             decoder.config(),
             ty,
@@ -201,16 +211,24 @@ fn insert_opaque_subgraph(
         )?;
 
         let wire = match found_wire {
-            FindTypedWireResult::Register(wire_data) => wire_data.wire(),
-            FindTypedWireResult::Parameter(param) => param.wire(),
-            FindTypedWireResult::Unsupported { wire, id } => {
-                let _ = id;
-                wire
+            FoundWire::Register(wire_data) => wire_data.wire(),
+            FoundWire::Parameter(param) => param.wire(),
+            FoundWire::Unsupported { id } => {
+                let Some(wire) = decoder.wire_tracker.get_unsupported_wire(id) else {
+                    // The corresponding outgoing port has not been created yet, so we
+                    // register the edge id and the targets to be connected later.
+                    pending_encoded_edge_connections
+                        .entry(id)
+                        .or_default()
+                        .extend(targets);
+                    continue;
+                };
+                *wire
             }
         };
 
-        for (opaque_node, port) in targets {
-            let node = *insertion_result.node_map.get(&opaque_node).unwrap();
+        for (to_insert_node, port) in targets {
+            let node = *insertion_result.node_map.get(&to_insert_node).unwrap();
             decoder
                 .builder
                 .hugr_mut()
@@ -221,7 +239,7 @@ fn insert_opaque_subgraph(
     // Register the subgraph outputs in the wire tracker.
     let mut output_qubits = qubits;
     let mut output_bits = bits;
-    for ((ty, edge_id), (unsupported_node, port)) in payload.outputs().zip_eq(opaque_outputs) {
+    for ((ty, edge_id), (unsupported_node, port)) in payload.outputs().zip_eq(to_insert_outputs) {
         let wire = Wire::new(unsupported_node, port);
         match decoder.config().type_to_pytket(ty) {
             Some(counts) => {
@@ -247,6 +265,15 @@ fn insert_opaque_subgraph(
                 decoder
                     .wire_tracker
                     .register_unsupported_wire(edge_id, wire);
+                // If we've registered a pending connection for this edge id, connect it now.
+                if let Some(targets) = pending_encoded_edge_connections.remove(&edge_id) {
+                    for (node, port) in targets {
+                        decoder
+                            .builder
+                            .hugr_mut()
+                            .connect(wire.node(), wire.source(), node, port);
+                    }
+                }
             }
         }
     }
@@ -273,8 +300,12 @@ fn split_off<'a, T>(slice: &mut &'a [T], range: RangeTo<usize>) -> Option<&'a [T
     Some(front)
 }
 
-/// Helper to compute the expected register counts before generating a [`PytketDecodeErrorInner::UnexpectedNodeOutput`] error
-/// when registering the outputs of an unsupported subgraph.
+/// Helper to compute the expected register counts before generating a
+/// [`PytketDecodeErrorInner::UnexpectedNodeOutput`] error when registering the
+/// outputs of an unsupported subgraph.
+///
+/// Processes all the output types to compute the number of qubits and bits we
+/// required to have available.
 fn make_unexpected_node_out_error<'ty>(
     config: &PytketDecoderConfig,
     output_types: impl IntoIterator<Item = &'ty Type>,
