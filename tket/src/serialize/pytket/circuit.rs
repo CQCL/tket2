@@ -25,9 +25,10 @@ use super::opaque::OpaqueSubgraphs;
 /// circuit, so we can reconstruct the HUGR if needed.
 ///
 /// Serial circuits in this structure are intended to be transient, only alive
-/// while this structure is in memory.
-/// To obtain a fully standalone pytket circuit that can be used independently,
-/// and stored permanently, use [`EncodedCircuit::extract_standalone`].
+/// while this structure is in memory. To obtain a fully standalone pytket
+/// circuit that can be used independently, and stored permanently, use
+/// [`EncodedCircuit::new_standalone`] or call
+/// [`EncodedCircuit::ensure_standalone`].
 pub struct EncodedCircuit<Node: HugrNode> {
     /// Region in the HUGR that was encoded as the main circuit.
     ///
@@ -60,8 +61,10 @@ impl EncodedCircuit<Node> {
     /// [`EncodeOptions::encode_subcircuits`] is set.
     ///
     /// The circuit may contain opaque barriers referencing subgraphs in the
-    /// original HUGR. To extract a fully standalone pytket circuit that can be
-    /// used independently, use [`EncodedCircuit::extract_standalone`].
+    /// original HUGR. To obtain a fully standalone pytket circuit that can be
+    /// used independently, and stored permanently, use
+    /// [`EncodedCircuit::new_standalone`] or call
+    /// [`EncodedCircuit::ensure_standalone`].
     ///
     /// See [`EncodeOptions`] for the options used by the encoder.
     pub fn new<H: AsRef<Hugr> + AsMut<Hugr> + HugrView<Node = Node>>(
@@ -139,8 +142,8 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// original HUGR. These are encoded completely as Hugr envelopes in the
     /// barrier operations metadata.
     ///
-    /// When encoding a `Hugr` or a `AsMut<Hugr>` object, prefer using [`EncodedCircuit::new_inplace`] instead,
-    /// to avoid unnecessary copying of the opaque subgraphs.
+    /// When encoding a `Hugr`, prefer using [`EncodedCircuit::new`] instead to
+    /// avoid unnecessary copying of the opaque subgraphs.
     ///
     /// See [`EncodeOptions`] for the options used by the encoder.
     pub fn new_standalone<H: HugrView<Node = Node>>(
@@ -283,7 +286,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// Returns an error if a barrier operation with the
     /// [`OPGROUP_OPAQUE_HUGR`][super::opaque::OPGROUP_OPAQUE_HUGR]
     /// opgroup has an invalid payload.
-    fn ensure_standalone(
+    pub fn ensure_standalone(
         &mut self,
         hugr: &impl HugrView<Node = Node>,
     ) -> Result<(), PytketEncodeError<Node>> {

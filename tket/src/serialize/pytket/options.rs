@@ -56,7 +56,8 @@ pub struct DecodeOptions {
     pub input_params: Vec<String>,
     /// The extensions to use when loading the HUGR envelope.
     ///
-    /// When `None`, we will use [`crate::extension::REGISTRY`].
+    /// When `None`, we will use a default registry that includes the prelude,
+    /// std, TKET1, and TketOps extensions.
     pub extensions: Option<ExtensionRegistry>,
 }
 
@@ -103,7 +104,8 @@ impl DecodeOptions {
 
     /// Returns the extensions to use when loading the HUGR envelope.
     ///
-    /// If the option is `None`, we will use [`crate::extension::REGISTRY`].
+    /// If the option is `None`, we will use a default registry that includes
+    /// the prelude, std, TKET1, and TketOps extensions.
     pub fn extension_registry(&self) -> &ExtensionRegistry {
         self.extensions
             .as_ref()
