@@ -17,6 +17,9 @@ use crate::circuit::Circuit;
 use crate::resource::{Interval, InvalidInterval, ResourceId, ResourceScope};
 use crate::rewrite::CircuitRewrite;
 
+mod expression;
+pub use expression::CopyableExpressionAST;
+
 /// A subgraph within a [`ResourceScope`].
 ///
 /// Store subgraphs of [`ResourceScope`]s as intervals on the resource paths of
