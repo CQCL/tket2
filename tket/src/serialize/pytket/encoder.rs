@@ -30,6 +30,7 @@ use super::{
     OpConvertError, PytketEncodeError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
+use crate::serialize::pytket::circuit::EncodedCircuitInfo;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::opaque::{
@@ -216,25 +217,40 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// # Returns
     ///
-    /// * the final [`SerialCircuit`]
-    /// * any parameter expressions at the circuit's output
-    /// * the set of opaque subgraphs that were referenced (from/inside) pytket barriers.
+    /// * An [`EncodedCircuitInfo`] containing the final [`SerialCircuit`] and some additional metadata.
+    /// * The set of opaque subgraphs that were referenced (from/inside) pytket barriers.
     #[allow(clippy::type_complexity)]
     pub(super) fn finish(
         mut self,
         circ: &Circuit<H>,
         region: H::Node,
-    ) -> Result<(SerialCircuit, Vec<String>, OpaqueSubgraphs<H::Node>), PytketEncodeError<H::Node>>
-    {
+    ) -> Result<(EncodedCircuitInfo, OpaqueSubgraphs<H::Node>), PytketEncodeError<H::Node>> {
         // Add any remaining unsupported nodes
         //
         // TODO: Test that opaque subgraphs that don't affect any qubit/bit registers
         // are correctly encoded in pytket commands.
+        let mut extra_subgraph: Option<BTreeSet<H::Node>> = None;
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
             let opaque_subgraphs = self.unsupported.extract_component(node);
-            self.emit_unsupported(opaque_subgraphs, circ)?;
+            match self.emit_unsupported(opaque_subgraphs.clone(), circ) {
+                Ok(()) => (),
+                Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {}) => {
+                    // We'll store the nodes in the `extra_subgraph` field of the `EncodedCircuitInfo`.
+                    // So the decoder can reconstruct the original subgraph.
+                    extra_subgraph
+                        .get_or_insert_default()
+                        .extend(opaque_subgraphs);
+                }
+                Err(e) => return Err(e),
+            }
         }
+        let extra_subgraph = extra_subgraph.map(|nodes| {
+            let subgraph =
+                SiblingSubgraph::try_from_nodes(nodes.into_iter().collect_vec(), circ.hugr())
+                    .expect("Failed to create subgraph from unsupported nodes");
+            self.opaque_subgraphs.register_opaque_subgraph(subgraph)
+        });
 
         let final_values = self.values.finish(circ, region)?;
 
@@ -245,7 +261,15 @@ impl<H: HugrView> PytketEncoderContext<H> {
         ser.bits = final_values.bits.into_iter().map_into().collect();
         ser.implicit_permutation = final_values.qubit_permutation;
         ser.number_of_ws = None;
-        Ok((ser, final_values.params, self.opaque_subgraphs))
+
+        let info = EncodedCircuitInfo {
+            serial_circuit: ser,
+            input_params: final_values.params,
+            output_params: vec![],
+            extra_subgraph,
+        };
+
+        Ok((info, self.opaque_subgraphs))
     }
 
     /// Returns a reference to this encoder's configuration.
@@ -555,6 +579,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     /// ## Arguments
     ///
     /// - `unsupported_nodes`: The list of nodes to encode as an opaque subgraph.
+    /// - `circ`: The circuit containing the unsupported nodes.
     fn emit_unsupported(
         &mut self,
         unsupported_nodes: BTreeSet<H::Node>,
@@ -609,6 +634,13 @@ impl<H: HugrView> PytketEncoderContext<H> {
             op_values.append(tracked_values);
             external_edges.extend(unknown_values);
         }
+        // Check that we have qubits or bits to attach the barrier command to.
+        //
+        // This should only fail when looking at the "leftover" unsupported nodes at the end of the decoding process.
+        if op_values.qubits.is_empty() && op_values.bits.is_empty() {
+            return Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {});
+        }
+
         let input_param_exprs: Vec<String> = std::mem::take(&mut op_values.params)
             .into_iter()
             .map(|p| self.values.param_expression(p).to_owned())
@@ -716,13 +748,13 @@ impl<H: HugrView> PytketEncoderContext<H> {
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, node)?;
 
-        let (serial_subcirc, output_params, opaque_subgraphs) = subencoder.finish(circ, node)?;
-        if !output_params.is_empty() {
+        let (info, opaque_subgraphs) = subencoder.finish(circ, node)?;
+        if !info.output_params.is_empty() {
             return Ok(EncodeStatus::Unsupported);
         }
         self.opaque_subgraphs = opaque_subgraphs;
 
-        self.emit_circ_box(node, serial_subcirc, circ)?;
+        self.emit_circ_box(node, info.serial_circuit, circ)?;
         Ok(EncodeStatus::Success)
     }
 
@@ -765,15 +797,14 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut subencoder = PytketEncoderContext::new(circ, function, opaque_subgraphs, config)?;
         subencoder.function_cache = self.function_cache.clone();
         subencoder.run_encoder(circ, function)?;
-        let (serial_subcirc, output_params, opaque_subgraphs) =
-            subencoder.finish(circ, function)?;
+        let (info, opaque_subgraphs) = subencoder.finish(circ, function)?;
         self.opaque_subgraphs = opaque_subgraphs;
 
-        let (result, cached_fn) = match output_params.is_empty() {
+        let (result, cached_fn) = match info.output_params.is_empty() {
             true => (
                 EncodeStatus::Success,
                 CachedEncodedFunction::Encoded {
-                    serial_circuit: serial_subcirc.clone(),
+                    serial_circuit: info.serial_circuit.clone(),
                 },
             ),
             false => (
@@ -789,7 +820,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         }
 
         if result == EncodeStatus::Success {
-            self.emit_circ_box(node, serial_subcirc, circ)?;
+            self.emit_circ_box(node, info.serial_circuit, circ)?;
         }
         Ok(result)
     }

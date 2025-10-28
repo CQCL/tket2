@@ -93,6 +93,9 @@ pub enum PytketEncodeError<N = hugr::Node> {
         /// The head region operation that is not a dataflow container.
         head_op: String,
     },
+    /// No qubits or bits to attach the barrier command to for unsupported nodes.
+    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to.")]
+    UnsupportedSubgraphHasNoRegisters {},
 }
 
 impl<N> PytketEncodeError<N> {
@@ -392,16 +395,19 @@ pub enum PytketDecodeErrorInner {
         /// The bit that was marked as outdated.
         bit: String,
     },
-    /// Tried to reassemble an [`EncodedCircuit`][super::circuit::EncodedCircuit] whose head region is not a dataflow container in the original hugr.
-    #[display("Tried to reassemble an `EncodedCircuit` whose head region is not a dataflow container in the original hugr.{head_op}",
-        head_op = match head_op {
-            Some(op) => format!(" Head operation {op}"),
-            None => String::new(),
-        },
-    )]
-    NonDataflowHeadRegion {
-        /// The head region operation that is not a dataflow container.
-        head_op: Option<String>,
+    /// Tried to reassemble a circuit from a region that was not contained in the [`EncodedCircuit`][super::circuit::EncodedCircuit].
+    #[display("Tried to reassemble a circuit from region {region}, but the circuit was not found in the `EncodedCircuit`")]
+    NotAnEncodedRegion {
+        /// The region we tried to decode
+        region: String,
+    },
+    /// Tried to decode a circuit into an existing region, but the region was modified since creating the [`EncodedCircuit`][super::circuit::EncodedCircuit].
+    #[display("Tried to decode a circuit into region {region}, but the region was modified since creating the `EncodedCircuit`. New region optype: {new_optype}")]
+    IncompatibleTargetRegion {
+        /// The region we tried to decode
+        region: hugr::Node,
+        /// The new region optype
+        new_optype: OpType,
     },
     /// The pytket circuit contains an opaque barrier representing a unsupported subgraph in the original HUGR,
     /// but the corresponding subgraph is not present in the [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
