@@ -97,6 +97,14 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      # Temporarily required since we are using a source-based dependency for guppylang,
+      # which brings in `selene-hugr-qis-compiler` transitively.
+      #
+      # TODO: Remove this once we remove the `guppylang` dev-dependency.
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
         run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
