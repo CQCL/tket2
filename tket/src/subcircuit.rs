@@ -14,8 +14,11 @@ use hugr::{Direction, HugrView, Wire};
 use itertools::Itertools;
 
 use crate::circuit::Circuit;
-use crate::resource::{Interval, InvalidInterval, ResourceId, ResourceScope};
+use crate::resource::{ResourceId, ResourceScope};
 use crate::rewrite::CircuitRewrite;
+
+mod interval;
+pub use interval::{Interval, InvalidInterval};
 
 /// A subgraph within a [`ResourceScope`].
 ///
