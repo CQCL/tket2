@@ -16,10 +16,15 @@ dev = [
     "pip >=25",
     # Pyyaml 0.6.0 makes setuptools fail. This ensures we're using a newer version.
     "pyyaml >=6.0.2",
+    # Required for testing. We fix the upstream commit using uv.sources
+    "guppylang~=0.21.0",
 ]
 
 [tool.uv]
 prerelease = "explicit"
+
+[tool.uv.sources]
+guppylang = { git = "https://github.com/cqcl/guppylang.git", rev = "d5b4ca6", subdirectory = "guppylang" }
 
 [build-system]
 requires = ["hatchling"]

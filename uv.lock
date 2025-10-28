@@ -21,6 +21,7 @@ members = [
 dev = [
     { name = "conan", specifier = ">=2.0.0,<3" },
     { name = "graphviz", specifier = "~=0.20.0" },
+    { name = "guppylang", git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&rev=d5b4ca6" },
     { name = "hypothesis", specifier = ">=6.111.1,<7" },
     { name = "maturin", specifier = ">=1.7.0,<2" },
     { name = "mypy", specifier = ">=1.17.1,<2" },
@@ -2602,7 +2603,6 @@ source = { editable = "qis-compiler" }
 dev = [
     { name = "cibuildwheel", version = "2.23.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "cibuildwheel", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "guppylang" },
     { name = "pytest" },
     { name = "pytest-snapshot" },
     { name = "tket-exts" },
@@ -2613,7 +2613,6 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "cibuildwheel", specifier = ">=2.23.2" },
-    { name = "guppylang", git = "https://github.com/cqcl/guppylang.git?subdirectory=guppylang&rev=d5b4ca6" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-snapshot", specifier = "~=0.9.0" },
     { name = "tket-exts", editable = "tket-exts" },
