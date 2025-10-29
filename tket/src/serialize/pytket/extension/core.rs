@@ -12,9 +12,9 @@ use crate::serialize::pytket::decoder::{
 use crate::serialize::pytket::extension::PytketDecoder;
 use crate::serialize::pytket::opaque::{OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeError};
-use crate::serialize::TKETDecode;
 use hugr::builder::Container;
 use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::ops::handle::NodeHandle;
 use hugr::types::{Signature, Type};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::Operation as PytketOperation;
@@ -57,7 +57,11 @@ impl PytketDecoder for CoreDecoder {
             }
             PytketOperation {
                 op_type: PytketOptype::CircBox,
-                op_box: Some(OpBox::CircBox { id: _id, circuit }),
+                op_box:
+                    Some(OpBox::CircBox {
+                        id: _id,
+                        circuit: serial_circuit,
+                    }),
                 ..
             } => {
                 // We have no way to distinguish between input and output bits
@@ -79,8 +83,19 @@ impl PytketDecoder for CoreDecoder {
                 let target = DecodeInsertionTarget::Region {
                     parent: decoder.builder.container_node(),
                 };
-                let internal =
-                    circuit.decode_inplace(decoder.builder.hugr_mut(), target, options)?;
+
+                // Decode the circuit box into a DFG node in the region.
+                let mut nested_decoder = PytketDecoderContext::new(
+                    serial_circuit,
+                    decoder.builder.hugr_mut(),
+                    target,
+                    options,
+                )?;
+                if let Some(opaque_subgraphs) = decoder.opaque_subgraphs {
+                    nested_decoder.register_opaque_subgraphs(opaque_subgraphs);
+                }
+                nested_decoder.run_decoder(&serial_circuit.commands)?;
+                let internal = nested_decoder.finish()?.node();
 
                 decoder
                     .wire_up_node(internal, qubits, qubits, bits, bits, params)

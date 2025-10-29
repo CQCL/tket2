@@ -99,8 +99,8 @@ pub enum OpaqueSubgraphPayload {
 }
 
 impl OpaqueSubgraphPayload {
-    /// Create an external payload by referencing a subgraph in the
-    /// [`OpaqueSubgraphs`][super::OpaqueSubgraphs] registry.
+    /// Create an external payload by referencing a subgraph in the tracked by
+    /// an [`EncodedCircuit`][super::super::EncodedCircuit].
     pub fn new_external(subgraph_id: SubgraphId) -> Self {
         Self::External { id: subgraph_id }
     }

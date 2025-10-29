@@ -15,12 +15,12 @@ use hugr::HugrView;
 
 /// The ID of a subgraph in the Hugr.
 #[derive(Debug, derive_more::Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[display("{local_id}.{tracker_id}")]
+#[display("{tracker_id}.{local_id}")]
 pub struct SubgraphId {
-    /// A locally unique ID in the [`OpaqueSubgraphs`] instance.
-    local_id: usize,
     /// The unique ID of the [`OpaqueSubgraphs`] instance that generated this ID.
     tracker_id: usize,
+    /// A locally unique ID in the [`OpaqueSubgraphs`] instance.
+    local_id: usize,
 }
 
 /// A set of subgraphs a HUGR that have been marked as _unsupported_ during a
@@ -44,16 +44,16 @@ pub(super) struct OpaqueSubgraphs<N> {
 
 impl serde::Serialize for SubgraphId {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        (&self.local_id, &self.tracker_id).serialize(s)
+        (&self.tracker_id, &self.local_id).serialize(s)
     }
 }
 
 impl<'de> serde::Deserialize<'de> for SubgraphId {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let (local_id, tracker_id) = serde::Deserialize::deserialize(d)?;
+        let (tracker_id, local_id) = serde::Deserialize::deserialize(d)?;
         Ok(Self {
-            local_id,
             tracker_id,
+            local_id,
         })
     }
 }

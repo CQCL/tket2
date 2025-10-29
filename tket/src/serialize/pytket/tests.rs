@@ -594,18 +594,19 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     compare_serial_circs(&ser, &reser);
 }
 
-/// Test the serialisation roundtrip from a tket circuit.
+/// Test the standalone serialisation roundtrip from a tket circuit.
 ///
-/// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
+/// This is not a pure roundtrip as the encoder may add internal qubits/bits to
+/// the circuit.
+///
+/// Standalone circuit do not currently support unsupported subgraphs with
+/// nested structure or non-local edges.
 #[rstest]
 #[case::meas_ancilla(circ_measure_ancilla(), 1)]
 #[case::preset_qubits(circ_preset_qubits(), 1)]
 #[case::preset_parameterized(circ_parameterized(), 1)]
 #[case::nested_dfgs(circ_nested_dfgs(), 1)]
-#[case::global_defs(circ_global_defs(), 1)]
-#[case::recursive(circ_recursive(), 1)]
-#[case::non_local(circ_non_local(), 1)]
-fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
+fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let circ_signature = circ.circuit_signature().into_owned();
 
     let encoded = EncodedCircuit::new_standalone(&circ, EncodeOptions::new_with_subcircuits())
@@ -618,6 +619,8 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let deser: Circuit = ser
         .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
         .unwrap_or_else(|e| panic!("{e}"));
+
+    deser.hugr().validate().unwrap_or_else(|e| panic!("{e}"));
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
@@ -634,6 +637,46 @@ fn circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
     validate_serial_circ(&reser);
     compare_serial_circs(ser, &reser);
+}
+
+/// Test the serialisation roundtrip from a tket circuit into an EncodedCircuit and back.
+#[rstest]
+#[case::meas_ancilla(circ_measure_ancilla(), 1)]
+#[case::preset_qubits(circ_preset_qubits(), 1)]
+#[case::preset_parameterized(circ_parameterized(), 1)]
+#[case::nested_dfgs(circ_nested_dfgs(), 1)]
+#[case::global_defs(circ_global_defs(), 1)]
+#[case::recursive(circ_recursive(), 1)]
+// TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
+// to/from the input of the head region being encoded...
+//#[case::non_local(circ_non_local(), 1)]
+fn encoded_circuit_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
+    let circ_signature = circ.circuit_signature().into_owned();
+
+    let encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits())
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains_circuit(circ.parent()));
+    assert_eq!(encoded.len(), num_circuits);
+
+    let mut deser = circ.clone();
+    encoded
+        .reassemble_inline(deser.hugr_mut(), None)
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    deser.hugr().validate().unwrap_or_else(|e| panic!("{e}"));
+
+    let deser_sig = deser.circuit_signature();
+    assert_eq!(
+        &circ_signature.input, &deser_sig.input,
+        "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &circ_signature, &deser_sig
+    );
+    assert_eq!(
+        &circ_signature.output, &deser_sig.output,
+        "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &circ_signature, &deser_sig
+    );
 }
 
 /// Test serialisation of circuits with a symbolic expression.

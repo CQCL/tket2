@@ -7,7 +7,7 @@ use std::sync::Arc;
 use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
-use hugr::ops::{OpTag, OpTrait};
+use hugr::ops::{OpParent, OpTag, OpTrait};
 use hugr::{Hugr, HugrView, Node};
 use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Itertools;
@@ -34,6 +34,7 @@ use super::opaque::OpaqueSubgraphs;
 /// circuit that can be used independently, and stored permanently, use
 /// [`EncodedCircuit::new_standalone`] or call
 /// [`EncodedCircuit::ensure_standalone`].
+#[derive(Debug, Clone)]
 pub struct EncodedCircuit<Node: HugrNode> {
     /// Circuits encoded from independent dataflow regions in the HUGR.
     ///
@@ -93,7 +94,6 @@ impl EncodedCircuit<Node> {
         };
 
         enc.encode_circuits(circuit, options)?;
-        enc.ensure_standalone(circuit.hugr())?;
 
         Ok(enc)
     }
@@ -124,7 +124,7 @@ impl EncodedCircuit<Node> {
     /// Returns an error if a circuit being decoded is invalid. See
     /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
     /// more details.
-    pub fn reassemble_inline<H: AsRef<Hugr> + AsMut<Hugr> + HugrView<Node = Node>>(
+    pub fn reassemble_inline(
         &self,
         hugr: &mut Hugr,
         config: Option<Arc<PytketDecoderConfig>>,
@@ -136,7 +136,7 @@ impl EncodedCircuit<Node> {
 
         for (&original_region, encoded) in &self.circuits {
             // Decode the circuit into a temporary function node.
-            let Some(signature) = hugr.get_optype(original_region).dataflow_signature() else {
+            let Some(signature) = hugr.get_optype(original_region).inner_function_type() else {
                 return Err(PytketDecodeErrorInner::IncompatibleTargetRegion {
                     region: original_region,
                     new_optype: hugr.get_optype(original_region).clone(),
@@ -171,6 +171,7 @@ impl EncodedCircuit<Node> {
             while let Some(child) = hugr.first_child(decoded_node) {
                 hugr.set_parent(child, original_region);
             }
+            hugr.remove_node(decoded_node);
         }
         Ok(self.circuits.keys().copied().collect_vec())
     }
@@ -201,6 +202,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
         };
 
         enc.encode_circuits(circuit, options)?;
+        enc.ensure_standalone(circuit.hugr())?;
 
         Ok(enc)
     }

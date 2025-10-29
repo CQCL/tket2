@@ -69,10 +69,12 @@ impl<'h> PytketDecoderContext<'h> {
             .builder
             .hugr()
             .get_parent(subgraph.nodes()[0])
-            .ok_or_else(|| mk_subgraph_error(id, "Subgraph must contain be dataflow nodes."))?;
-        let [old_input, old_output] = self.builder.hugr().get_io(old_parent).ok_or_else(|| {
-            mk_subgraph_error(id, "Stored subgraph must be in a dataflow region.")
-        })?;
+            .ok_or_else(|| mk_subgraph_error(id, "Subgraph must contain dataflow nodes."))?;
+        let [old_input, old_output] = self
+            .builder
+            .hugr()
+            .get_io(old_parent)
+            .ok_or_else(|| mk_subgraph_error(id, "Subgraph must be in a dataflow region."))?;
         let new_parent = self.builder.container_node();
 
         // Re-parent the nodes in the subgraph.
@@ -99,7 +101,9 @@ impl<'h> PytketDecoderContext<'h> {
                     unreachable!("`unsupported_wire` not passed to `find_typed_wire`.");
                 }
                 Err(PytketDecodeError {
-                    inner: PytketDecodeErrorInner::NoMatchingWire { .. },
+                    inner:
+                        PytketDecodeErrorInner::NoMatchingWire { .. }
+                        | PytketDecodeErrorInner::NoMatchingParameter { .. },
                     ..
                 }) => {
                     // Not a qubit or bit wire.
@@ -130,7 +134,7 @@ impl<'h> PytketDecoderContext<'h> {
         // Re-wire wires from the subgraph to the old region's outputs.
         let mut output_qubits = qubits;
         let mut output_bits = bits;
-        for (ty, (src, src_port)) in signature.input().iter().zip_eq(subgraph.outgoing_ports()) {
+        for (ty, (src, src_port)) in signature.output().iter().zip_eq(subgraph.outgoing_ports()) {
             let wire = Wire::new(*src, *src_port);
             match self.config().type_to_pytket(ty) {
                 Some(counts) => {
@@ -307,6 +311,8 @@ impl<'h> PytketDecoderContext<'h> {
                             .entry(id)
                             .or_default()
                             .extend(targets);
+                        // TODO: We have to store this list somewhere so we
+                        // connect ports from subgraph that get added later.
                         continue;
                     };
                     *wire
@@ -350,14 +356,6 @@ impl<'h> PytketDecoderContext<'h> {
                 None => {
                     // This is an unsupported wire, so we just register the edge id to the wire.
                     self.wire_tracker.register_unsupported_wire(*edge_id, wire);
-                    // If we've registered a pending connection for this edge id, connect it now.
-                    if let Some(targets) = pending_encoded_edge_connections.remove(edge_id) {
-                        for (node, port) in targets {
-                            self.builder
-                                .hugr_mut()
-                                .connect(wire.node(), wire.source(), node, port);
-                        }
-                    }
                 }
             }
         }
