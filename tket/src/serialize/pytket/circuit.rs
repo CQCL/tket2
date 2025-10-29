@@ -116,8 +116,10 @@ impl EncodedCircuit<Node> {
     ///
     /// # Errors
     ///
-    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
-    /// [`Self::head_region`] is not a dataflow container in the hugr.
+    /// Returns a [`PytketDecodeErrorInner::IncompatibleTargetRegion`] error if
+    /// the source region of an encoded circuit does not match the circuit
+    /// signature. This is likely caused by the original hugr being modified
+    /// since the circuit was encoded.
     ///
     /// Returns an error if a circuit being decoded is invalid. See
     /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
@@ -206,7 +208,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// Encode the circuits for the entrypoint region to the hugr, and if [`EncodeOptions::encode_subcircuits`] is set,
     /// for the descendants of any unsupported node in the main circuit.
     ///
-    /// Auxiliary method for [`Self::from_hugr`].
+    /// Auxiliary method for [`Self::new`] and [`Self::new_standalone`].
     ///
     /// TODO: Add an option in [EncodeOptions] to run the subcircuit encoders in parallel.
     fn encode_circuits<H: HugrView<Node = Node>>(
@@ -274,11 +276,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     }
 
     /// Reassemble the encoded circuits into a new [`Hugr`], containing a
-    /// function defining the [`Self::head_region`] and expanding any opaque
-    /// hugrs in pytket barrier operations back into Hugr subgraphs.
-    ///
-    /// Functions called by the internal hugrs may be added to the hugr module
-    /// as well.
+    /// function with the decoded circuit originally corresponding to `region`.
     ///
     /// # Arguments
     ///
@@ -288,12 +286,8 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     ///
     /// # Errors
     ///
-    /// Returns a [`PytketDecodeErrorInner::NonDataflowHeadRegion`] error if
-    /// [`Self::head_region`] is not a dataflow container in the hugr.
-    ///
-    /// Returns an error if a circuit being decoded is invalid. See
-    /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
-    /// more details.
+    /// Returns a [`PytketDecodeErrorInner::NotAnEncodedRegion`] error if
+    /// there is no encoded circuit for `region`.
     pub fn reassemble(
         &self,
         region: Node,
@@ -326,8 +320,8 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// Ensure that none of the encoded circuits contain references to opaque subgraphs in the original HUGR.
     ///
     /// Traverses the commands in the encoded circuits and replaces
-    /// [`OpaqueSubgraphPayloadType::External`][super::opaque::OpaqueSubgraphPayloadType::External]
-    /// pointers in opaque barriers with inline payloads.
+    /// [`OpaqueSubgraphPayload::External`][super::opaque::OpaqueSubgraphPayload::External]
+    /// payloads in opaque barriers with inline payloads.
     ///
     /// # Errors
     ///

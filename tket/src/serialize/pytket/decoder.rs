@@ -1,6 +1,7 @@
 //! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
 mod param;
+mod subgraph;
 mod tracked_elem;
 mod wires;
 
@@ -36,7 +37,7 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::opaque::{OpaqueSubgraphPayloadType, OpaqueSubgraphs};
+use crate::serialize::pytket::opaque::OpaqueSubgraphs;
 use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner};
 use crate::TketOp;
 
@@ -406,32 +407,6 @@ impl<'h> PytketDecoderContext<'h> {
             }
         }
         Ok(())
-    }
-
-    /// Returns a tracked opaque subgraph encoded in an opaque barrier in the pytket circuit.
-    ///
-    /// See [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]
-    /// for more details.
-    pub(super) fn get_opaque_subgraph(
-        &self,
-        payload: &OpaqueSubgraphPayloadType,
-    ) -> Result<Hugr, PytketDecodeError> {
-        match payload {
-            OpaqueSubgraphPayloadType::Inline { hugr_envelope } => {
-                let hugr = Hugr::load_str(hugr_envelope, Some(self.options.extension_registry()))
-                    .map_err(|e| PytketDecodeErrorInner::UnsupportedSubgraphPayload {
-                    source: e,
-                })?;
-                Ok(hugr)
-            }
-            OpaqueSubgraphPayloadType::External { id } => match self.opaque_subgraphs {
-                Some(subgraphs) if subgraphs.contains(*id) => {
-                    let hugr = subgraphs[*id].extract_subgraph(self.builder.hugr(), id.to_string());
-                    Ok(hugr)
-                }
-                _ => Err(PytketDecodeErrorInner::OpaqueSubgraphNotFound { id: *id }.wrap()),
-            },
-        }
     }
 }
 
