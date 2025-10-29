@@ -10,13 +10,14 @@ use hugr::hugr::views::sibling_subgraph::{IncomingPorts, InvalidSubgraph, Outgoi
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{constant, OpTrait};
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, Wire};
+use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, Wire};
 use indexmap::IndexMap;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 
 use crate::circuit::Circuit;
-use crate::resource::{Position, ResourceId, ResourceScope};
+use crate::resource::{CircuitUnit, Position, ResourceId, ResourceScope};
 use crate::rewrite::CircuitRewrite;
+use crate::subcircuit::expression::is_pure_copyable;
 
 mod interval;
 pub use interval::{Interval, InvalidInterval};
@@ -49,21 +50,18 @@ pub use expression::CopyableExpr;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subcircuit<N: HugrNode = hugr::Node> {
     intervals: Vec<Interval<N>>,
-    /// The subcircuit inputs that are linear values
-    input_resources: Vec<ResourceId>,
     /// The subcircuit inputs that are copyable values
-    input_copyable_values: Vec<Wire<N>>,
-    /// The subcircuit outputs (only linear values supported)
-    output_resources: Vec<ResourceId>,
+    input_copyable: IncomingPorts<N>,
+    /// The subcircuit outputs that are copyable values
+    output_copyable: OutgoingPorts<N>,
 }
 
 impl<N: HugrNode> Default for Subcircuit<N> {
     fn default() -> Self {
         Self {
             intervals: Vec::new(),
-            input_resources: Vec::new(),
-            input_copyable_values: Vec::new(),
-            output_resources: Vec::new(),
+            input_copyable: Vec::new(),
+            output_copyable: Vec::new(),
         }
     }
 }
@@ -74,6 +72,10 @@ pub enum InvalidSubcircuit<N> {
     /// Copyable values at the output are currently not supported.
     #[display("unsupported copyable output values in {_0:?}")]
     OutputCopyableValues(N),
+    /// The [`Subcircuit::try_from_nodes`] constructor does not support pure
+    /// copyable nodes. Use [`Subcircuit::try_from_subgraph`] instead.
+    #[display("unsupported pure copyable node {_0:?}")]
+    PureCopyableNode(N),
     /// The node is not contiguous with the subcircuit.
     #[display("node {_0:?} is not contiguous with the subcircuit")]
     NotContiguous(N),
@@ -94,11 +96,25 @@ impl<N: HugrNode> Subcircuit<N> {
         // For each resource, track the largest interval that contains all nodes,
         // as well as the number of nodes in the interval.
         let mut intervals: IndexMap<ResourceId, (Interval<N>, usize)> = IndexMap::new();
-        let mut input_copyable_values = Vec::new();
+        let mut input_copyable = Vec::new();
+        let mut output_copyable = Vec::new();
 
         for node in nodes {
+            if is_pure_copyable(node, circuit.hugr()) {
+                // We do not support pure copyable nodes. Use
+                // [`Subcircuit::try_from_subgraph`] instead.
+                return Err(InvalidSubcircuit::PureCopyableNode(node));
+            }
+
             extend_intervals(&mut intervals, node, circuit);
-            update_copyable_inputs(&mut input_copyable_values, node, circuit)?;
+
+            // Collect copyable input and output boundary values
+            for p in circuit.get_copyable_ports(node, Direction::Incoming) {
+                input_copyable.push(vec![(node, p.as_incoming().expect("incoming port"))]);
+            }
+            for p in circuit.get_copyable_ports(node, Direction::Outgoing) {
+                output_copyable.push((node, p.as_outgoing().expect("outgoing port")));
+            }
         }
 
         // Check that all intervals are full, i.e. all expected nodes are present
@@ -114,19 +130,11 @@ impl<N: HugrNode> Subcircuit<N> {
             .map(|(interval, _)| interval)
             .collect_vec();
 
-        let mut subcircuit = Self {
+        Ok(Self {
             intervals,
-            input_copyable_values,
-            input_resources: Vec::new(),
-            output_resources: Vec::new(),
-        };
-
-        for res in subcircuit.resources(circuit).collect_vec() {
-            subcircuit.update_input(res, circuit);
-            subcircuit.update_output(res, circuit);
-        }
-
-        Ok(subcircuit)
+            input_copyable,
+            output_copyable,
+        })
     }
 
     /// Create a new empty subcircuit.
@@ -175,7 +183,7 @@ impl<N: HugrNode> Subcircuit<N> {
         };
 
         // Add copyable inputs to the subcircuit where required
-        was_changed |= self.extend_copyable_inputs(node, circuit);
+        was_changed |= self.extend_copyable_io(node, circuit);
 
         Ok(was_changed)
     }
@@ -198,16 +206,8 @@ impl<N: HugrNode> Subcircuit<N> {
         }
 
         self.intervals.extend(other.intervals.iter().copied());
-        self.input_resources
-            .extend(other.input_resources.iter().copied());
-        self.output_resources
-            .extend(other.output_resources.iter().copied());
-        let new_input_copyable_values = other
-            .input_copyable_values
-            .into_iter()
-            .filter(|w| !self.input_copyable_values.contains(w))
-            .collect_vec();
-        self.input_copyable_values.extend(new_input_copyable_values);
+        extend_unique(&mut self.input_copyable, other.input_copyable);
+        extend_unique(&mut self.output_copyable, other.output_copyable);
 
         true
     }
@@ -289,14 +289,10 @@ impl<N: HugrNode> Subcircuit<N> {
         &self,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> IncomingPorts<N> {
-        let resource_ports = self
-            .boundary_resource_ports(circuit, Direction::Incoming)
-            .map(|(node, port)| {
-                let port = port.as_incoming().expect("boundary_resource_ports dir");
-                vec![(node, port)]
-            });
+        let resource_ports = self.resource_inputs(circuit);
         resource_ports
-            .chain(self.boundary_copyable_input_ports(circuit))
+            .chain(self.copyable_inputs(circuit))
+            .map(|(node, port)| vec![(node, port)])
             .collect_vec()
     }
 
@@ -309,7 +305,7 @@ impl<N: HugrNode> Subcircuit<N> {
         &self,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> OutgoingPorts<N> {
-        self.boundary_resource_ports(circuit, Direction::Outgoing)
+        self.resource_boundary(circuit, Direction::Outgoing)
             .map(|(node, port)| {
                 let port = port.as_outgoing().expect("boundary_resource_ports dir");
                 (node, port)
@@ -424,49 +420,70 @@ impl<N: HugrNode> Subcircuit<N> {
         )
     }
 
+    pub fn resource_inputs<'a>(
+        &'a self,
+        scope: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = (N, IncomingPort)> + 'a {
+        self.intervals
+            .iter()
+            .filter_map(|interval| interval.incoming_boundary_port(scope))
+    }
+
+    pub fn resource_outputs<'a>(
+        &'a self,
+        scope: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = (N, OutgoingPort)> + 'a {
+        self.intervals
+            .iter()
+            .filter_map(|interval| interval.outgoing_boundary_port(scope))
+    }
+
+    /// Get the linear input or output ports of the subcircuit.
+    pub fn resource_boundary<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+        dir: Direction,
+    ) -> impl Iterator<Item = (N, Port)> + 'a {
+        match dir {
+            Direction::Incoming => {
+                Either::Left(self.resource_inputs(circuit).map(|(n, p)| (n, p.into())))
+            }
+            Direction::Outgoing => {
+                Either::Right(self.resource_outputs(circuit).map(|(n, p)| (n, p.into())))
+            }
+        }
+    }
+
+    pub fn copyable_inputs(
+        &self,
+        _scope: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = (N, IncomingPort)> + '_ {
+        self.input_copyable.iter().flatten().copied()
+    }
+
     /// Get the indices and values of the subcircuit inputs that can be
     /// statically resolved to constants.
     pub fn get_const_inputs<'c>(
         &'c self,
         circuit: &'c ResourceScope<impl HugrView<Node = N>>,
-    ) -> impl Iterator<Item = (usize, constant::Value)> + 'c {
-        let n_lin_inputs = self.input_resources.len();
-        self.input_copyable_values
-            .iter()
-            .enumerate()
-            .filter_map(move |(i, &wire)| {
-                let val = circuit.as_const_value(crate::resource::CircuitUnit::Copyable(wire))?;
-                Some((n_lin_inputs + i, val.clone()))
-            })
+    ) -> impl Iterator<Item = ((N, IncomingPort), constant::Value)> + 'c {
+        self.copyable_inputs(circuit).filter_map(move |(n, p)| {
+            let wire = circuit.get_copyable_wire(n, p)?;
+            let val = circuit.as_const_value(wire.into())?;
+            Some(((n, p), val.clone()))
+        })
     }
+}
+
+fn extend_unique<E: PartialEq>(vec: &mut Vec<E>, other: impl IntoIterator<Item = E>) {
+    let other_unique = other.into_iter().filter(|x| !vec.contains(x)).collect_vec();
+    vec.extend(other_unique);
 }
 
 impl<H: HugrView> ResourceScope<H> {
     fn is_convex(&self, subcircuit: &Subcircuit<H::Node>) -> bool {
         unimplemented!("is_convex is not yet implemented")
     }
-}
-
-fn update_copyable_inputs<N: HugrNode>(
-    input_copyable_values: &mut Vec<Wire<N>>,
-    node: N,
-    circuit: &ResourceScope<impl HugrView<Node = N>>,
-) -> Result<(), InvalidSubcircuit<N>> {
-    for copyable_input in circuit.get_copyable_wires(node, Direction::Incoming) {
-        if !input_copyable_values.contains(&copyable_input) {
-            input_copyable_values.push(copyable_input);
-        }
-    }
-
-    if circuit
-        .get_copyable_wires(node, Direction::Outgoing)
-        .count()
-        > 0
-    {
-        return Err(InvalidSubcircuit::OutputCopyableValues(node));
-    }
-
-    Ok(())
 }
 
 /// Extend the intervals such that the given node is included.
@@ -504,12 +521,10 @@ impl<N: HugrNode> Subcircuit<N> {
                     Ok(Some(Direction::Incoming)) => {
                         // Added node to the left of the interval
                         was_changed = true;
-                        self.update_input(resource_id, circuit);
                     }
                     Ok(Some(Direction::Outgoing)) => {
                         // Added node to the right of the interval
                         was_changed = true;
-                        self.update_output(resource_id, circuit);
                     }
                     Err(InvalidInterval::NotContiguous(node)) => {
                         return Err(InvalidSubcircuit::NotContiguous(node));
@@ -527,118 +542,43 @@ impl<N: HugrNode> Subcircuit<N> {
                     Interval::new_singleton(resource_id, node, circuit)
                         .expect("node on resource path"),
                 );
-                self.update_input(resource_id, circuit);
-                self.update_output(resource_id, circuit);
             }
         }
 
         Ok(was_changed)
     }
 
-    fn extend_copyable_inputs(
+    fn extend_copyable_io(
         &mut self,
         node: N,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> bool {
-        let input_copyable_values = circuit.get_copyable_wires(node, Direction::Incoming);
         let mut was_changed = false;
 
-        for copyable_value_id in input_copyable_values {
-            if !self.input_copyable_values.contains(&copyable_value_id) {
-                self.input_copyable_values.push(copyable_value_id);
-                was_changed = true;
+        for dir in Direction::BOTH {
+            let copyable_ports = circuit.get_copyable_ports(node, dir);
+
+            match dir {
+                Direction::Incoming => {
+                    let new_inputs = copyable_ports
+                        .map(|p| vec![(node, p.as_incoming().expect("incoming port"))]);
+
+                    let len = self.input_copyable.len();
+                    extend_unique(&mut self.input_copyable, new_inputs);
+                    was_changed |= self.input_copyable.len() > len;
+                }
+                Direction::Outgoing => {
+                    let new_outputs =
+                        copyable_ports.map(|p| (node, p.as_outgoing().expect("outgoing port")));
+
+                    let len = self.output_copyable.len();
+                    extend_unique(&mut self.output_copyable, new_outputs);
+                    was_changed |= self.output_copyable.len() > len;
+                }
             }
         }
 
         was_changed
-    }
-
-    /// Whether the resource should be part of the incoming/outgoing subcircuit
-    /// boundary.
-    fn is_in_boundary(
-        &self,
-        resource_id: ResourceId,
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
-        dir: Direction,
-    ) -> bool {
-        let Some(interval) = self.get_interval(resource_id, circuit) else {
-            return false;
-        };
-        let node = match dir {
-            Direction::Incoming => interval.start_node(),
-            Direction::Outgoing => interval.end_node(),
-        };
-        circuit.get_resource_port(node, resource_id, dir).is_some()
-    }
-
-    /// Get the linear input or output ports of the subcircuit.
-    fn boundary_resource_ports<'a>(
-        &'a self,
-        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
-        dir: Direction,
-    ) -> impl Iterator<Item = (N, Port)> + 'a {
-        let boundary_resources = match dir {
-            Direction::Incoming => &self.input_resources,
-            Direction::Outgoing => &self.output_resources,
-        };
-        boundary_resources.iter().map(move |&res| {
-            let interval = self
-                .get_interval(res, circuit)
-                .expect("resource is in subcircuit");
-            let node = match dir {
-                Direction::Incoming => interval.start_node(),
-                Direction::Outgoing => interval.end_node(),
-            };
-            let port = circuit
-                .get_resource_port(node, res, dir)
-                .expect("subcircuit input has incoming port");
-            (node, port)
-        })
-    }
-
-    /// Get the copyable input ports of the subcircuit.
-    fn boundary_copyable_input_ports<'a>(
-        &'a self,
-        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
-    ) -> impl Iterator<Item = Vec<(N, IncomingPort)>> + 'a {
-        self.input_copyable_values.iter().map(move |&val| {
-            self.nodes(circuit)
-                .flat_map(move |node| {
-                    circuit
-                        .get_ports(node, val, Direction::Incoming)
-                        .map(|p| p.as_incoming().expect("port dir matches get_port arg"))
-                        .map(move |port| (node, port))
-                })
-                .collect_vec()
-        })
-    }
-
-    fn update_input(
-        &mut self,
-        resource_id: ResourceId,
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) {
-        if self.is_in_boundary(resource_id, circuit, Direction::Incoming) {
-            if !self.input_resources.contains(&resource_id) {
-                self.input_resources.push(resource_id);
-            }
-        } else {
-            self.input_resources.retain(|id| *id != resource_id);
-        }
-    }
-
-    fn update_output(
-        &mut self,
-        resource_id: ResourceId,
-        circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) {
-        if self.is_in_boundary(resource_id, circuit, Direction::Outgoing) {
-            if !self.output_resources.contains(&resource_id) {
-                self.output_resources.push(resource_id);
-            }
-        } else {
-            self.output_resources.retain(|id| *id != resource_id);
-        }
     }
 }
 
@@ -719,17 +659,17 @@ mod tests {
             let subcircuit = result.unwrap();
             assert_eq!(subcircuit.nodes(&scope).collect_vec(), selected_nodes);
             assert_eq!(
-                subcircuit.input_resources.len(),
+                subcircuit.resource_inputs(&scope).count(),
                 expected_input_resources,
                 "Wrong number of input resources"
             );
             assert_eq!(
-                subcircuit.output_resources.len(),
+                subcircuit.resource_outputs(&scope).count(),
                 expected_output_resources,
                 "Wrong number of output resources"
             );
             assert_eq!(
-                subcircuit.input_copyable_values.len(),
+                subcircuit.copyable_inputs(&scope).count(),
                 expected_copyable_inputs,
                 "Wrong number of copyable inputs"
             );
@@ -755,7 +695,10 @@ mod tests {
         // Add first a H gate
         assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), [resources[0]]);
-        assert_eq!(subcircuit.input_resources, [resources[0]]);
+        assert_eq!(
+            subcircuit.resource_inputs(&circ).collect_vec(),
+            [resources[0]]
+        );
         assert_eq!(subcircuit.output_resources, [resources[0]]);
         assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(false));
 

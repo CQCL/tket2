@@ -208,6 +208,11 @@ impl<H: HugrView> ResourceScope<H> {
         unit.as_resource()
     }
 
+    pub fn get_copyable_wire(&self, node: H::Node, port: impl Into<Port>) -> Option<Wire<H::Node>> {
+        let unit = self.get_circuit_unit(node, port)?;
+        unit.as_copyable_wire()
+    }
+
     /// Get the position of the given node.
     pub fn get_position(&self, node: H::Node) -> Option<Position> {
         self.circuit_units
@@ -271,6 +276,18 @@ impl<H: HugrView> ResourceScope<H> {
             &CircuitUnit::Copyable(wire) => Some(wire),
             _ => None,
         })
+    }
+
+    /// All ports of `node` in the given direction that are copyable.
+    pub fn get_copyable_ports(
+        &self,
+        node: H::Node,
+        dir: Direction,
+    ) -> impl Iterator<Item = Port> + '_ {
+        let units = self.get_circuit_units_slice(node, dir);
+        let ports = self.hugr().node_ports(node, dir);
+        let units_ports = units.into_iter().flatten().zip(ports);
+        units_ports.filter_map(|(unit, port)| unit.is_copyable().then_some(port))
     }
 
     /// Iterate over the nodes on the resource path starting from the given
