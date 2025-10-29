@@ -1,8 +1,10 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 
 use hugr::{
-    core::HugrNode, hugr::views::SiblingSubgraph, ops::OpTrait, Direction, HugrView, IncomingPort,
-    OutgoingPort,
+    core::HugrNode,
+    hugr::views::{sibling_subgraph::InvalidSubgraph, SiblingSubgraph},
+    ops::OpTrait,
+    Direction, HugrView, IncomingPort, OutgoingPort,
 };
 use indexmap::IndexSet;
 use itertools::{Either, Itertools};
@@ -63,27 +65,34 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
     /// `allowed_input_nodes`, then the AST is trivial and a
     /// [CopyableExpressionAST::Identity] variant is returned.
     ///
+    /// If the subgraph is not convex, then an [InvalidSubgraph::NotConvex]
+    /// error is returned.
+    ///
     /// ## Panics
     ///
     /// This will panic if `output` is not a value of copyable type in
     /// `circuit`.
-    pub fn new(
+    pub fn try_new(
         output: (N, OutgoingPort),
         allowed_input_ports: IndexSet<(N, IncomingPort)>,
         allowed_input_nodes: IndexSet<N>,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
-    ) -> Self {
+    ) -> Result<Self, InvalidSubgraph> {
         Self::validate_output_copyable(output, circuit);
         let circuit_nodes = circuit.hugr().nodes().collect::<BTreeSet<_>>();
         let admissible_node =
             |node: N| admissible_node(node, &allowed_input_nodes, circuit.hugr(), &circuit_nodes);
 
         if !admissible_node(output.0) {
-            return Self::Identity { value: output };
+            return Ok(Self::Identity { value: output });
         }
 
         let (inputs, outputs, function_calls, nodes) =
             Self::traverse_expression(output, &allowed_input_ports, circuit, &admissible_node);
+
+        if any_in_future_of(&inputs, &outputs, circuit) {
+            return Err(InvalidSubgraph::NotConvex);
+        }
 
         let inputs = sort_inputs(inputs, &allowed_input_ports, &allowed_input_nodes);
         let outputs = outputs.into_iter().collect_vec();
@@ -91,7 +100,7 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
         let function_calls = group_function_calls(function_calls, circuit);
 
         let subgraph = SiblingSubgraph::new_unchecked(inputs, outputs, function_calls, nodes);
-        Self::Composite { subgraph }
+        Ok(Self::Composite { subgraph })
     }
 
     fn validate_output_copyable(
@@ -133,11 +142,16 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
         // Queues and set useful during traversal.
         let mut curr_nodes = PriorityQueue::new();
         let prio = |node: N| circuit.get_position(node).expect("known node has position");
+        let mut visited = BTreeSet::new();
         curr_nodes.push(output.0, prio(output.0));
-        let mut outputs_within_expr = IndexSet::new();
+        let mut inputs_within_expr = IndexSet::new();
 
         // Traverse nodes in reverse dataflow order.
         while let Some((node, _)) = curr_nodes.pop() {
+            if !visited.insert(node) {
+                continue; // been here before
+            }
+
             debug_assert!(
                 admissible_node(node),
                 "cannot include a non-pure-copyable or allowed input into CopyableExpression"
@@ -148,10 +162,15 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
 
             // Add all node outputs that we have not traversed to `outputs`
             let node_outputs = circuit.hugr().out_value_types(node).map(|(p, _)| (node, p));
-            outputs.extend(node_outputs.filter(|o| !outputs_within_expr.contains(o)));
+            outputs.extend(node_outputs.filter(|&(n, p)| {
+                circuit
+                    .hugr()
+                    .linked_inputs(n, p)
+                    .any(|inp| !inputs_within_expr.contains(&inp))
+            }));
             for (in_port, t) in circuit.hugr().in_value_types(node) {
                 debug_assert!(t.copyable());
-                let (prev_node, out_port) = circuit
+                let (prev_node, _out_port) = circuit
                     .hugr()
                     .single_linked_output(node, in_port)
                     .expect("valid dataflow wire");
@@ -161,7 +180,7 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
                     inputs.insert((node, in_port));
                 } else {
                     // Continue traversing expression backwards
-                    outputs_within_expr.insert((prev_node, out_port));
+                    inputs_within_expr.insert((node, in_port));
                     curr_nodes.push(prev_node, prio(prev_node));
                 }
             }
@@ -191,6 +210,46 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
             Self::Composite { subgraph } => Some(subgraph),
         }
     }
+}
+
+/// Whether any of the `ends` are in the future of any of the `starts`.
+fn any_in_future_of<N: HugrNode>(
+    ends: &IndexSet<(N, IncomingPort)>,
+    starts: &IndexSet<(N, OutgoingPort)>,
+    circuit: &ResourceScope<impl HugrView<Node = N>>,
+) -> bool {
+    let end_nodes = BTreeSet::from_iter(ends.iter().map(|&(n, _)| n));
+    let Some(max_pos) = end_nodes
+        .iter()
+        .map(|&n| circuit.get_position(n).expect("node in circuit"))
+        .max()
+    else {
+        return false;
+    };
+    let mut visited_nodes = BTreeSet::new();
+    let mut is_of_interest =
+        |n| circuit.get_position(n).is_some_and(|p| p <= max_pos) && visited_nodes.insert(n);
+
+    let mut curr_nodes = VecDeque::from_iter(
+        starts
+            .iter()
+            .flat_map(|&(n, p)| circuit.hugr().linked_inputs(n, p))
+            .filter_map(|(n, _)| is_of_interest(n).then_some(n)),
+    );
+
+    while let Some(node) = curr_nodes.pop_front() {
+        if end_nodes.contains(&node) {
+            return true;
+        }
+        curr_nodes.extend(
+            circuit
+                .hugr()
+                .output_neighbours(node)
+                .filter(|&n| is_of_interest(n)),
+        );
+    }
+
+    false
 }
 
 /// Whether a node only contains copyable inputs and output values.
@@ -362,12 +421,13 @@ mod tests {
 
         let circuit = ResourceScope::from_circuit(Circuit::new(hugr));
 
-        let result = CopyableExpressionAST::new(
+        let result = CopyableExpressionAST::try_new(
             output,
             iter::empty().collect(),
             iter::empty().collect(),
             &circuit,
-        );
+        )
+        .unwrap();
         assert_eq!(result, expected);
     }
 
@@ -391,12 +451,13 @@ mod tests {
                 .unwrap()
         };
 
-        let expr = CopyableExpressionAST::new(
+        let expr = CopyableExpressionAST::try_new(
             two_rot_angle_output,
             iter::empty().collect(),
             [rot_cast].into_iter().collect(),
             &circuit,
-        );
+        )
+        .unwrap();
 
         let subgraph = expr.as_subgraph().expect("non-identity expression");
 
@@ -415,5 +476,24 @@ mod tests {
             subgraph.outgoing_ports(),
             &vec![(radd, OutgoingPort::from(0))]
         );
+    }
+
+    #[test]
+    fn test_copyable_expression_ast_new_non_convex() {
+        let hugr = hugr_with_midcircuit_meas();
+
+        let radd = hugr
+            .nodes()
+            .find(|&n| hugr.get_optype(n) == &(RotationOp::radd.into()))
+            .unwrap();
+        let circuit = ResourceScope::from_circuit(Circuit::new(&hugr));
+
+        let _expr = CopyableExpressionAST::try_new(
+            (radd, OutgoingPort::from(0)),
+            [(radd, IncomingPort::from(0))].into_iter().collect(),
+            iter::empty().collect(),
+            &circuit,
+        )
+        .expect_err("is not convex");
     }
 }
