@@ -3,10 +3,7 @@
 
 mod payload;
 
-pub use payload::{
-    EncodedEdgeID, ExtraCircuitDataPayload, OpaqueSubgraphPayload, OpaqueSubgraphPayloadType,
-    OPGROUP_OPAQUE_HUGR,
-};
+pub use payload::{EncodedEdgeID, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 
 use std::collections::BTreeMap;
 use std::ops::Index;
@@ -133,18 +130,15 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
             )));
         };
 
-        let Some(mut payload) = parse_external_payload(&payload)? else {
+        let Some(subgraph_id) = parse_external_payload(&payload)? else {
             // Inline payload, nothing to do.
             return Ok(());
-        };
-        let OpaqueSubgraphPayloadType::External { id: subgraph_id } = payload.typ else {
-            unreachable!("Checked by `parse_external_payload`");
         };
         if !self.contains(subgraph_id) {
             return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
         }
 
-        payload.typ = OpaqueSubgraphPayloadType::inline(&self[subgraph_id], hugr);
+        let payload = OpaqueSubgraphPayload::new_inline(&self[subgraph_id], hugr);
         command.op.data = Some(serde_json::to_string(&payload).unwrap());
 
         Ok(())
@@ -177,25 +171,26 @@ impl<N> Default for OpaqueSubgraphs<N> {
 /// # Errors
 ///
 /// Returns an error if the payload is invalid.
-fn parse_external_payload<N>(
-    payload: &str,
-) -> Result<Option<OpaqueSubgraphPayload>, PytketEncodeError<N>> {
-    let mk_serde_error = |e: serde_json::Error| {
-        PytketEncodeError::custom(format!(
-            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has corrupt data payload: {e}"
-        ))
-    };
-
+fn parse_external_payload<N>(payload: &str) -> Result<Option<SubgraphId>, PytketEncodeError<N>> {
     // Check if the payload is inline, without fully copying it to memory.
     #[derive(serde::Deserialize)]
     struct PartialPayload {
         pub typ: String,
-    }
-    let partial_payload: PartialPayload = serde_json::from_str(payload).map_err(mk_serde_error)?;
-    if partial_payload.typ == "Inline" {
-        return Ok(None);
+        pub id: Option<SubgraphId>,
     }
 
-    let payload: OpaqueSubgraphPayload = serde_json::from_str(payload).map_err(mk_serde_error)?;
-    Ok(Some(payload))
+    let partial_payload: PartialPayload =
+        serde_json::from_str(payload).map_err(|e: serde_json::Error| {
+            PytketEncodeError::custom(format!(
+            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has corrupt data payload: {e}"
+        ))
+        })?;
+
+    match (partial_payload.typ.as_str(), partial_payload.id) {
+        ("Inline", None) => Ok(None),
+        ("External", Some(id)) => Ok(Some(id)),
+        _ => Err(PytketEncodeError::custom(format!(
+            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has invalid data payload: {payload:?}"
+        ))),
+    }
 }

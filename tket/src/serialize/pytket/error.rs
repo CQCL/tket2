@@ -416,6 +416,14 @@ pub enum PytketDecodeErrorInner {
         /// The ID of the opaque subgraph.
         id: SubgraphId,
     },
+    /// The stored subgraph payload was not a valid flat subgraph in a dataflow region of the target hugr.
+    #[display("The stored subgraph {id} was not a valid flat subgraph in a dataflow region of the target hugr. {context}")]
+    InvalidExternalSubgraph {
+        /// The ID of the opaque subgraph.
+        id: SubgraphId,
+        /// Additional context about the error.
+        context: String,
+    },
     /// Cannot decode Hugr from an unsupported subgraph payload in a pytket barrier operation.
     #[display("Cannot decode Hugr from an opaque subgraph payload in a pytket barrier operation. {source}")]
     UnsupportedSubgraphPayload {

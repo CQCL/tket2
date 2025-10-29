@@ -33,9 +33,7 @@ use crate::circuit::Circuit;
 use crate::serialize::pytket::circuit::EncodedCircuitInfo;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::opaque::{
-    OpaqueSubgraphPayload, OpaqueSubgraphPayloadType, OPGROUP_OPAQUE_HUGR,
-};
+use crate::serialize::pytket::opaque::{OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
@@ -609,12 +607,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
         // Encode a payload referencing the subgraph in the Hugr.
         let subgraph_id = self.opaque_subgraphs.register_opaque_subgraph(subgraph);
-        let subgraph = &self.opaque_subgraphs[subgraph_id];
-        let payload = OpaqueSubgraphPayload::new(
-            subgraph,
-            circ.hugr(),
-            OpaqueSubgraphPayloadType::External { id: subgraph_id },
-        );
+        let payload = OpaqueSubgraphPayload::new_external(subgraph_id);
 
         // Collects the input values for the subgraph.
         //
