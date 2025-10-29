@@ -348,7 +348,7 @@ pub enum PytketDecodeErrorInner {
         bit_args: Vec<String>,
     },
     /// We couldn't find a parameter for the required input type.
-    #[display("Could not find a parameter for the required input type {ty}")]
+    #[display("Could not find a parameter for the required input type '{ty}'")]
     NoMatchingParameter {
         /// The type that couldn't be found.
         ty: String,

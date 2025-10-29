@@ -63,7 +63,7 @@ pub struct PytketDecoderContext<'h> {
     options: DecodeOptions,
     /// A registry of opaque subgraphs from `original_hugr`, that are referenced by opaque barriers in the pytket circuit
     /// via their [`SubgraphId`].
-    opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
+    pub(super) opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
 }
 
 impl<'h> PytketDecoderContext<'h> {
@@ -331,7 +331,11 @@ impl<'h> PytketDecoderContext<'h> {
                 };
                 e.hugr_op("Output")
             })?;
+        let output_wire_count = output_wires.register_count();
         let output_wires = output_wires.wires();
+
+        // Qubits not in the output need to be freed.
+        self.add_implicit_qfree_operations(&qubits[output_wire_count.qubits..]);
 
         // Store the name for the input parameter wires
         let input_params = self.wire_tracker.finish();
@@ -347,6 +351,33 @@ impl<'h> PytketDecoderContext<'h> {
             .finish_with_outputs(output_wires)
             .map_err(PytketDecodeError::custom)?
             .node())
+    }
+
+    /// Add the implicit QFree operations for a list of qubits that are not in the hugr output.
+    ///
+    /// We only do this if there's a wire with type `qb_t` containing the qubit.
+    fn add_implicit_qfree_operations(&mut self, qubits: &[TrackedQubit]) {
+        let qb_type = qb_t();
+        let mut bit_args: &[TrackedBit] = &[];
+        let mut params: &[LoadedParameter] = &[];
+        for q in qubits.iter() {
+            let mut qubit_args: &[TrackedQubit] = std::slice::from_ref(q);
+            let Ok(FoundWire::Register(wire)) = self.wire_tracker.find_typed_wire(
+                self.config(),
+                &qb_type,
+                &mut qubit_args,
+                &mut bit_args,
+                &mut params,
+                None,
+            ) else {
+                continue;
+            };
+
+            self.builder
+                .add_dataflow_op(TketOp::QFree, [wire.wire()])
+                .unwrap()
+                .out_wire(0);
+        }
     }
 
     /// Register the set of opaque subgraphs that are present in the HUGR being decoded.
