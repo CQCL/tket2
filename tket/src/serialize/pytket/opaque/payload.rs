@@ -9,7 +9,9 @@ use hugr::package::Package;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
 
-use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner};
+use crate::serialize::pytket::{
+    PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError, PytketEncodeOpError,
+};
 
 use super::SubgraphId;
 
@@ -108,11 +110,27 @@ impl OpaqueSubgraphPayload {
     /// Create a new payload for an opaque subgraph in the Hugr.
     ///
     /// Encodes the subgraph into a hugr envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a node in the subgraph has children or non-local const edges.
     pub fn new_inline<N: HugrNode>(
         subgraph: &SiblingSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
-    ) -> Self {
+    ) -> Result<Self, PytketEncodeError<N>> {
         let signature = subgraph.signature(hugr);
+
+        if !subgraph.function_calls().is_empty()
+            || subgraph
+                .nodes()
+                .iter()
+                .any(|n| hugr.children(*n).next().is_some())
+        {
+            return Err(PytketEncodeOpError::UnsupportedStandaloneSubgraph {
+                nodes: subgraph.nodes().to_vec(),
+            }
+            .into());
+        }
 
         let mut inputs = Vec::with_capacity(subgraph.incoming_ports().iter().map(Vec::len).sum());
         for subgraph_inputs in subgraph.incoming_ports() {
@@ -135,11 +153,11 @@ impl OpaqueSubgraphPayload {
             .store_str(EnvelopeConfig::text())
             .unwrap();
 
-        Self::Inline {
+        Ok(Self::Inline {
             hugr_envelope,
             inputs: signature.input().iter().cloned().zip(inputs).collect(),
             outputs: signature.output().iter().cloned().zip(outputs).collect(),
-        }
+        })
     }
 
     /// Load a payload encoded in a json string.

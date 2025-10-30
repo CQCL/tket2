@@ -7,11 +7,11 @@ use hugr::builder::{
     Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
     ModuleBuilder, SubContainer,
 };
-use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
-use hugr::ops::{OpParent, Value};
+use hugr::ops::{OpParent, OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
@@ -27,8 +27,9 @@ use crate::extension::bool::BoolOp;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
+use crate::serialize::pytket::extension::OpaqueTk1Op;
 use crate::serialize::pytket::{
-    DecodeInsertionTarget, DecodeOptions, EncodeOptions, EncodedCircuit,
+    DecodeInsertionTarget, DecodeOptions, EncodeOptions, EncodedCircuit, PytketEncodeOpError,
 };
 use crate::TketOp;
 
@@ -274,6 +275,51 @@ fn circ_parameterized() -> Circuit {
         serde_json::json!(["alpha", "beta"]),
     );
 
+    hugr.into()
+}
+
+/// A circuit with a nested unsupported operation.
+///
+/// Tries to allocate a qubit, and panics if it fails.
+/// This creates an unsupported conditional inside the region.
+#[fixture]
+fn circ_flat_opaque() -> Circuit {
+    let input_t = vec![qb_t(), qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
+    let mut h = FunctionBuilder::new("flat_opaque", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2] = h.input_wires_arr();
+
+    // An unsupported tk1-only operation.
+    let mut tk1op = tket_json_rs::circuit_json::Operation::default();
+    tk1op.op_type = tket_json_rs::optype::OpType::CH;
+    tk1op.n_qb = Some(2);
+    let op: OpType = OpaqueTk1Op::new_from_op(&tk1op, 2, 0)
+        .as_extension_op()
+        .into();
+    let [q1, q2] = h.add_dataflow_op(op, [q1, q2]).unwrap().outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
+/// A circuit with a nested unsupported operation.
+///
+/// Tries to allocate a qubit, and panics if it fails.
+/// This creates an unsupported conditional inside the region.
+#[fixture]
+fn circ_nested_opaque() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![qb_t()];
+    let mut h = FunctionBuilder::new("nested_opaque", Signature::new(input_t, output_t)).unwrap();
+
+    let [maybe_q] = h
+        .add_dataflow_op(TketOp::TryQAlloc, [])
+        .unwrap()
+        .outputs_arr();
+    let [q] = h.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([q]).unwrap();
     hugr.into()
 }
 
@@ -606,6 +652,7 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
 #[case::preset_qubits(circ_preset_qubits(), 1)]
 #[case::preset_parameterized(circ_parameterized(), 1)]
 #[case::nested_dfgs(circ_nested_dfgs(), 1)]
+#[case::flat_opaque(circ_flat_opaque(), 1)]
 fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usize) {
     let circ_signature = circ.circuit_signature().into_owned();
 
@@ -639,12 +686,35 @@ fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usi
     compare_serial_circs(ser, &reser);
 }
 
+/// Test that more complex unsupported subgraphs (nested structure, non-local edges) are rejected when encoding a standalone circuit.
+#[rstest]
+//#[case::nested_opaque(circ_nested_opaque())] TODO: Raises a different error
+#[case::global_defs(circ_global_defs())]
+#[case::recursive(circ_recursive())]
+fn test_complex_unsupported_subgraphs(#[case] circ: Circuit) {
+    use cool_asserts::assert_matches;
+
+    use crate::serialize::pytket::PytketEncodeError;
+
+    println!("{}", circ.mermaid_string());
+
+    let try_encoded = EncodedCircuit::new_standalone(&circ, EncodeOptions::new());
+    assert_matches!(
+        try_encoded,
+        Err(PytketEncodeError::OpEncoding(
+            PytketEncodeOpError::UnsupportedStandaloneSubgraph { .. }
+        ))
+    );
+}
+
 /// Test the serialisation roundtrip from a tket circuit into an EncodedCircuit and back.
 #[rstest]
 #[case::meas_ancilla(circ_measure_ancilla(), 1)]
 #[case::preset_qubits(circ_preset_qubits(), 1)]
 #[case::preset_parameterized(circ_parameterized(), 1)]
 #[case::nested_dfgs(circ_nested_dfgs(), 1)]
+#[case::flat_opaque(circ_flat_opaque(), 1)]
+//#[case::nested_opaque(circ_nested_opaque(), 1)] TODO: Raises a different error
 #[case::global_defs(circ_global_defs(), 1)]
 #[case::recursive(circ_recursive(), 1)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox

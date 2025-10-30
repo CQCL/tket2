@@ -7,7 +7,7 @@ use derive_more::{Display, Error, From};
 use hugr::{HugrView, Node};
 use itertools::Itertools;
 
-use crate::serialize::pytket::OpConvertError;
+use crate::serialize::pytket::PytketEncodeOpError;
 use crate::Circuit;
 
 use super::find_tuple_unpack_rewrites;
@@ -37,7 +37,7 @@ pub enum PytketLoweringError {
     /// An error occurred during the conversion of an operation.
     #[display("operation conversion error: {_0}")]
     #[from]
-    OpConversionError(OpConvertError),
+    OpConversionError(PytketEncodeOpError),
     /// The circuit is not fully-contained in a region.
     /// Function calls are not supported.
     #[display("Non-local operations found. Function calls are not supported.")]
