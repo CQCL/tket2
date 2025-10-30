@@ -21,9 +21,6 @@ use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner, Pytket
 impl<'h> PytketDecoderContext<'h> {
     /// Insert a subgraph encoded in the payload of a pytket barrier operation into
     /// the Hugr being decoded.
-    ///
-    /// This function involves accessing various internal definitions of `decoder`
-    /// to deal with wires between unsupported subgraphs.
     pub(in crate::serialize::pytket) fn insert_subgraph_from_payload(
         &mut self,
         qubits: &[TrackedQubit],
@@ -330,10 +327,11 @@ impl<'h> PytketDecoderContext<'h> {
         // Register the subgraph outputs in the wire tracker.
         let mut output_qubits = qubits;
         let mut output_bits = bits;
-        for ((ty, edge_id), (unsupported_node, port)) in
+        for ((ty, edge_id), (to_insert_node, port)) in
             payload_outputs.iter().zip_eq(to_insert_outputs)
         {
-            let wire = Wire::new(unsupported_node, port);
+            let node = *insertion_result.node_map.get(&to_insert_node).unwrap();
+            let wire = Wire::new(node, port);
             match self.config().type_to_pytket(ty) {
                 Some(counts) => {
                     let wire_qubits = split_off(&mut output_qubits, ..counts.qubits);

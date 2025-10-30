@@ -682,6 +682,28 @@ impl WireTracker {
             .wrap());
         };
 
+        // Check that none of the selected qubit or bit has been marked as outdated.
+        if let Some(qubit) = qubit_args
+            .iter()
+            .take(reg_count.qubits)
+            .find(|q| q.is_outdated())
+        {
+            return Err(PytketDecodeErrorInner::OutdatedQubit {
+                qubit: qubit.pytket_register().to_string(),
+            }
+            .wrap());
+        }
+        if let Some(bit) = bit_args
+            .iter()
+            .take(reg_count.bits)
+            .find(|b| b.is_outdated())
+        {
+            return Err(PytketDecodeErrorInner::OutdatedBit {
+                bit: bit.pytket_register().to_string(),
+            }
+            .wrap());
+        }
+
         // Mark the qubits and bits as used.
         // TODO: We can use the slice `split_off` method once MSRV is ≥1.87
         *qubit_args = &qubit_args[reg_count.qubits..];
@@ -722,20 +744,6 @@ impl WireTracker {
         mut bit_args: &[TrackedBit],
         mut params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
-        // Check that no qubit or bit has been marked as outdated.
-        if let Some(qubit) = qubit_args.iter().find(|q| q.is_outdated()) {
-            return Err(PytketDecodeErrorInner::OutdatedQubit {
-                qubit: qubit.pytket_register().to_string(),
-            }
-            .wrap());
-        }
-        if let Some(bit) = bit_args.iter().find(|b| b.is_outdated()) {
-            return Err(PytketDecodeErrorInner::OutdatedBit {
-                bit: bit.pytket_register().to_string(),
-            }
-            .wrap());
-        }
-
         // Map each requested type to a wire.
         //
         // Ignore parameter inputs.
