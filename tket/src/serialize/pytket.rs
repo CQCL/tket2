@@ -15,7 +15,9 @@ pub use config::{
     TypeTranslatorSet,
 };
 pub use encoder::PytketEncoderContext;
-pub use error::{OpConvertError, PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError};
+pub use error::{
+    PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError, PytketEncodeOpError,
+};
 pub use extension::PytketEmitter;
 pub use options::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 

@@ -138,7 +138,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
             return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
         }
 
-        let payload = OpaqueSubgraphPayload::new_inline(&self[subgraph_id], hugr);
+        let payload = OpaqueSubgraphPayload::new_inline(&self[subgraph_id], hugr)?;
         command.op.data = Some(serde_json::to_string(&payload).unwrap());
 
         Ok(())
@@ -171,7 +171,9 @@ impl<N> Default for OpaqueSubgraphs<N> {
 /// # Errors
 ///
 /// Returns an error if the payload is invalid.
-fn parse_external_payload<N>(payload: &str) -> Result<Option<SubgraphId>, PytketEncodeError<N>> {
+fn parse_external_payload<N: HugrNode>(
+    payload: &str,
+) -> Result<Option<SubgraphId>, PytketEncodeError<N>> {
     // Check if the payload is inline, without fully copying it to memory.
     #[derive(serde::Deserialize)]
     struct PartialPayload {

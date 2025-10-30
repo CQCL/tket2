@@ -27,7 +27,7 @@ use unsupported_tracker::UnsupportedTracker;
 
 use super::opaque::OpaqueSubgraphs;
 use super::{
-    OpConvertError, PytketEncodeError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
+    PytketEncodeError, PytketEncodeOpError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
 use crate::serialize::pytket::circuit::EncodedCircuitInfo;
@@ -291,8 +291,8 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// ### Errors
     ///
-    /// - [`OpConvertError::WireHasNoValues`] if the wire is not tracked or has
-    ///   a type that cannot be converted to pytket values.
+    /// - [`PytketEncodeOpError::WireHasNoValues`] if the wire is not tracked or
+    ///   has a type that cannot be converted to pytket values.
     pub fn get_wire_values(
         &mut self,
         wire: Wire<H::Node>,
@@ -313,7 +313,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             return self.get_wire_values(wire, circ);
         }
 
-        Err(OpConvertError::WireHasNoValues { wire }.into())
+        Err(PytketEncodeOpError::WireHasNoValues { wire }.into())
     }
 
     /// Given a node in the HUGR, returns all the [`TrackedValue`]s associated
@@ -378,7 +378,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
 
             match self.get_wire_values(wire, circ) {
                 Ok(values) => tracked_values.extend(values.iter().copied()),
-                Err(PytketEncodeError::OpConversionError(OpConvertError::WireHasNoValues {
+                Err(PytketEncodeError::OpEncoding(PytketEncodeOpError::WireHasNoValues {
                     wire,
                 })) => unknown_values.push(wire),
                 Err(e) => panic!(
@@ -1186,7 +1186,7 @@ impl<N: HugrNode> NodeInputValues<N> {
     pub fn try_into_tracked_values(self) -> Result<TrackedValues, PytketEncodeError<N>> {
         match self.unknown_values.is_empty() {
             true => Ok(self.tracked_values),
-            false => Err(OpConvertError::WireHasNoValues {
+            false => Err(PytketEncodeOpError::WireHasNoValues {
                 wire: self.unknown_values[0],
             }
             .into()),

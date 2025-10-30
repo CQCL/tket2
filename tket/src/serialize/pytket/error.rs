@@ -15,7 +15,7 @@ use crate::serialize::pytket::opaque::SubgraphId;
 #[derive(Display, derive_more::Debug, Error)]
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
-pub enum OpConvertError<N = hugr::Node> {
+pub enum PytketEncodeOpError<N: HugrNode = hugr::Node> {
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
@@ -48,7 +48,7 @@ pub enum OpConvertError<N = hugr::Node> {
     /// Tried to query the values associated with an unexplored wire.
     ///
     /// This reflects a bug in the operation encoding logic of an operation.
-    #[display("Could not find values associated with wire {wire}.")]
+    #[display("Could not find values associated with {wire}.")]
     WireHasNoValues {
         /// The wire that has no values.
         wire: Wire<N>,
@@ -61,13 +61,21 @@ pub enum OpConvertError<N = hugr::Node> {
         /// The wire that already has values.
         wire: Wire<N>,
     },
+    /// Cannot encode subgraphs with nested structure or non-local edges in an standalone circuit.
+    #[display("Cannot encode subgraphs with nested structure or non-local edges in an standalone circuit. Unsupported nodes: {}",
+        nodes.iter().join(", "),
+    )]
+    UnsupportedStandaloneSubgraph {
+        /// The nodes that are part of the unsupported subgraph.
+        nodes: Vec<N>,
+    },
 }
 
 /// Error type for conversion between tket ops and pytket operations.
 #[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
-pub enum PytketEncodeError<N = hugr::Node> {
+pub enum PytketEncodeError<N: HugrNode = hugr::Node> {
     /// Tried to encode a non-dataflow region.
     #[display("Cannot encode non-dataflow region at {region} with type {optype}.")]
     NonDataflowRegion {
@@ -78,7 +86,7 @@ pub enum PytketEncodeError<N = hugr::Node> {
     },
     /// Operation conversion error.
     #[from]
-    OpConversionError(OpConvertError<N>),
+    OpEncoding(PytketEncodeOpError<N>),
     /// Custom user-defined error raised while encoding an operation.
     #[display("Error while encoding operation: {msg}")]
     CustomError {
@@ -98,7 +106,7 @@ pub enum PytketEncodeError<N = hugr::Node> {
     UnsupportedSubgraphHasNoRegisters {},
 }
 
-impl<N> PytketEncodeError<N> {
+impl<N: HugrNode> PytketEncodeError<N> {
     /// Create a new error with a custom message.
     pub fn custom(msg: impl ToString) -> Self {
         Self::CustomError {
