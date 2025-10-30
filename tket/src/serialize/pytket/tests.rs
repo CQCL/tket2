@@ -662,6 +662,19 @@ fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usi
     assert!(encoded.contains_circuit(circ.parent()));
     assert_eq!(encoded.len(), num_circuits);
 
+    // Re-encode the EncodedCircuit
+    let extracted_from_circ = encoded
+        .reassemble(
+            circ.parent(),
+            Some("main".to_string()),
+            DecodeOptions::new().with_signature(circ_signature.clone()),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    extracted_from_circ
+        .validate()
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    // Extract the head pytket circuit, and re-encode it on its own.
     let ser: &SerialCircuit = &encoded[circ.parent()];
     let deser: Circuit = ser
         .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
@@ -691,7 +704,7 @@ fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] num_circuits: usi
 //#[case::nested_opaque(circ_nested_opaque())] TODO: Raises a different error
 #[case::global_defs(circ_global_defs())]
 #[case::recursive(circ_recursive())]
-fn test_complex_unsupported_subgraphs(#[case] circ: Circuit) {
+fn reject_standalone_complex_subgraphs(#[case] circ: Circuit) {
     use cool_asserts::assert_matches;
 
     use crate::serialize::pytket::PytketEncodeError;
