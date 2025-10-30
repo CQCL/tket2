@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
+use cool_asserts::assert_matches;
 use hugr::builder::{
     Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
     ModuleBuilder, SubContainer,
@@ -29,7 +30,8 @@ use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
 use crate::serialize::pytket::extension::OpaqueTk1Op;
 use crate::serialize::pytket::{
-    DecodeInsertionTarget, DecodeOptions, EncodeOptions, EncodedCircuit, PytketEncodeOpError,
+    DecodeInsertionTarget, DecodeOptions, EncodeOptions, EncodedCircuit, PytketDecodeError,
+    PytketDecodeErrorInner, PytketEncodeOpError,
 };
 use crate::TketOp;
 
@@ -717,6 +719,30 @@ fn reject_standalone_complex_subgraphs(#[case] circ: Circuit) {
         Err(PytketEncodeError::OpEncoding(
             PytketEncodeOpError::UnsupportedStandaloneSubgraph { .. }
         ))
+    );
+}
+
+/// Test that modifying the hugr before reassembling an EncodedCircuit fails.
+#[rstest]
+fn fail_on_modified_hugr() {
+    let circ = circ_flat_opaque();
+    let encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits())
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let mut a_new_hugr = ModuleBuilder::new();
+    a_new_hugr
+        .declare("decl", Signature::new_endo(vec![qb_t()]).into())
+        .unwrap();
+    let mut a_new_hugr = a_new_hugr.finish_hugr().unwrap();
+
+    let try_reassemble = encoded.reassemble_inline(&mut a_new_hugr, None);
+
+    assert_matches!(
+        try_reassemble,
+        Err(PytketDecodeError {
+            inner: PytketDecodeErrorInner::IncompatibleTargetRegion { .. },
+            ..
+        })
     );
 }
 
