@@ -208,6 +208,7 @@ impl<H: HugrView> ResourceScope<H> {
         unit.as_resource()
     }
 
+    /// Get the copyable wire at the given port of the given node.
     pub fn get_copyable_wire(&self, node: H::Node, port: impl Into<Port>) -> Option<Wire<H::Node>> {
         let unit = self.get_circuit_unit(node, port)?;
         unit.as_copyable_wire()
@@ -266,7 +267,7 @@ impl<H: HugrView> ResourceScope<H> {
     }
 
     /// All copyable wires on the ports of `node` in the given direction.
-    pub fn get_copyable_wires(
+    pub fn all_copyable_wires(
         &self,
         node: H::Node,
         dir: Direction,

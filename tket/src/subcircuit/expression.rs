@@ -292,7 +292,7 @@ fn sort_inputs<N: HugrNode>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::iter;
 
     use crate::{extension::rotation::RotationOp, Circuit, TketOp};
@@ -309,7 +309,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     #[fixture]
-    fn hugr_with_midcircuit_meas() -> Hugr {
+    pub(crate) fn hugr_with_midcircuit_meas() -> Hugr {
         let qb_row = vec![qb_t()];
         let signature = Signature::new_endo(qb_row);
         let mut h = FunctionBuilder::new("main", signature).unwrap();

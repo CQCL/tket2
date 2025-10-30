@@ -47,19 +47,14 @@
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
 use hugr::{
     extension::simple_op::MakeExtensionOp,
-    hugr::{hugrmut::HugrMut, views::NodesIter},
     ops::{constant, OpType},
     std_extensions::arithmetic::{conversions::ConvertOpDef, float_types::ConstF64},
     HugrView, IncomingPort, PortIndex,
 };
-use itertools::Itertools;
 pub use scope::ResourceScope;
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
-use crate::{
-    extension::rotation::{ConstRotation, RotationOp},
-    rewrite::trace::RewriteTrace,
-};
+use crate::extension::rotation::{ConstRotation, RotationOp};
 
 // Internal modules
 mod flow;

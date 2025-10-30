@@ -1,7 +1,11 @@
-//! Placeholder file until subcircuit is merged, see
-//! [https://github.com/CQCL/tket2/pull/1054](https://github.com/CQCL/tket2/pull/1054)
+//! Subcircuits of circuits.
+//!
+//! Subcircuits are subgraphs of [`hugr::Hugr`] that use a pre-computed
+//! [`ResourceScope`] to express subgraphs in terms of intervals on resource
+//! paths and (purely classical) copyable expressions.
 
 use std::collections::BTreeSet;
+use std::{iter, usize};
 
 use derive_more::derive::{Display, Error};
 use hugr::core::HugrNode;
@@ -11,11 +15,11 @@ use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{constant, OpTrait};
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, Wire};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 
 use crate::circuit::Circuit;
-use crate::resource::{CircuitUnit, Position, ResourceId, ResourceScope};
+use crate::resource::{Position, ResourceId, ResourceScope};
 use crate::rewrite::CircuitRewrite;
 use crate::subcircuit::expression::is_pure_copyable;
 
@@ -27,11 +31,31 @@ pub use expression::CopyableExpr;
 
 /// A subgraph within a [`ResourceScope`].
 ///
-/// Store subgraphs of [`ResourceScope`]s as intervals on the resource paths of
-/// the circuit (see below and [`ResourceScope`]). Convex subgraphs can always
-/// be represented by intervals; some non-convex subgraphs can also be
-/// expressed, as long as for each resource path within the subgraph, the nodes
-/// on that path are connected.
+/// Just like [`SiblingSubgraph`], [`Subcircuit`] represents connected subgraphs
+/// within hugr dataflow regions. Unlike [`SiblingSubgraph`], the convexity
+/// check is not performed at construction time, but instead defered until
+/// a [`SiblingSubgraph`] needs to be constructed (see
+/// [`Subcircuit::try_to_subgraph`] and [`Subcircuit::validate_subgraph`]).
+///
+/// [`Subcircuit`] distinguishes between "pure copyable" nodes, which has
+/// exclusively copyable inputs and outputs, and "resource" nodes, which have at
+/// least one linear input or output.
+///
+/// ## Subcircuit representation: resource nodes
+///
+/// The subgraph composed of resource nodes is represented as a vector of
+/// intervals on the resource paths of the circuit (see below and
+/// [`ResourceScope`]). Convex subgraphs can always be represented by intervals;
+/// some non-convex subgraphs can also be expressed, as long as for each
+/// resource path within the subgraph, the nodes on that path are connected.
+///
+/// ## Subcircuit representation: copyable values
+///
+/// Subgraphs within the subcircuit that are made solely of copyable values
+/// are represented as [`CopyableExpressionAST`]s. For any copyable input to a
+/// resource node, its value as a copyable expression can be retrieved using
+/// [`Subcircuit::get_copyable_expression`]. These expressions are constructed
+/// on the fly from the set of copyable inputs of the subcircuit.
 ///
 /// ## Differences with [`SiblingSubgraph`]
 ///
@@ -45,14 +69,26 @@ pub use expression::CopyableExpr;
 ///    [`SiblingSubgraph`] may fail.
 ///  - Subcircuits can be updated by extending the intervals without having to
 ///    recompute the subgraph from scratch or rechecking convexity.
-///  - Subcircuits currently do not support ops with copyable outputs. In
-///    particular, all copyable values in the subcircuit will always be inputs.
+///  - Just like [`SiblingSubgraph`], subcircuits store their inputs and outputs
+///    as ordered lists. However, subcircuits impose stricter limitations on the
+///    ordering of inputs and outputs: all resource inputs/outputs must come
+///    before any copyable inputs/outputs; furthermore, the order of resources
+///    at the outputs must match the inputs (i.e. if the i-th resource input
+///    comes before the j-th resource input, then the i-th resource output must
+///    also come before the j-th resource output).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Subcircuit<N: HugrNode = hugr::Node> {
+    /// The resource intervals making up the resource part of the subcircuit
     intervals: Vec<Interval<N>>,
-    /// The subcircuit inputs that are copyable values
+    /// The subcircuit inputs that are copyable values.
+    ///
+    /// The copyable expressions within the subcircuit can be computed on the
+    /// fly based on these inputs.
     input_copyable: IncomingPorts<N>,
-    /// The subcircuit outputs that are copyable values
+    /// The subcircuit outputs that are copyable values.
+    ///
+    /// These determine the subset of copyable values in the subcircuit that
+    /// are exposed as outputs.
     output_copyable: OutgoingPorts<N>,
 }
 
@@ -79,17 +115,24 @@ pub enum InvalidSubcircuit<N> {
     /// The node is not contiguous with the subcircuit.
     #[display("node {_0:?} is not contiguous with the subcircuit")]
     NotContiguous(N),
+    /// The node is not contiguous with the subcircuit.
+    #[display("unsupported subcircuit boundary: {_0}")]
+    UnsupportedBoundary(#[error(not(source))] String),
 }
 
 impl<N: HugrNode> Subcircuit<N> {
     /// Create a new subcircuit induced from a single node.
     #[inline(always)]
     pub fn from_node(node: N, circuit: &ResourceScope<impl HugrView<Node = N>>) -> Self {
-        Self::try_from_nodes([node], circuit).expect("single node is a valid subcircuit")
+        Self::try_from_resource_nodes([node], circuit).expect("single node is a valid subcircuit")
     }
 
     /// Create a new subcircuit induced from a set of nodes.
-    pub fn try_from_nodes(
+    ///
+    /// All nodes in `nodes` must be resource nodes (i.e. not pure copyable).
+    /// To create more general [`Subcircuit`]s, use
+    /// [`Subcircuit::try_from_subgraph`].
+    pub fn try_from_resource_nodes(
         nodes: impl IntoIterator<Item = N>,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<Self, InvalidSubcircuit<N>> {
@@ -143,11 +186,69 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// Create a new subcircuit from a [`SiblingSubgraph`].
+    ///
+    /// The returned subcircuit will match the boundary of the subgraph. If
+    /// the boundary cannot be matched, an error is returned.
     pub fn try_from_subgraph(
         subgraph: &SiblingSubgraph<N>,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<Self, InvalidSubcircuit<N>> {
-        Self::try_from_nodes(subgraph.nodes().iter().copied(), circuit)
+        let resource_nodes = subgraph
+            .nodes()
+            .iter()
+            .filter(|&&n| !is_pure_copyable(n, circuit.hugr()))
+            .copied();
+        let mut subcircuit = Self::try_from_resource_nodes(resource_nodes, circuit)?;
+
+        // Now adjust the boundary of subcircuit to match the subgraph
+        let (resource_inputs, copyable_inputs) = parse_input_boundary(&subgraph, circuit)?;
+        let (resource_outputs, copyable_outputs) = parse_output_boundary(&subgraph, circuit)?;
+
+        // Reorder intervals to match resource inputs/outputs
+        subcircuit.reorder_intervals(&resource_inputs, &resource_outputs, circuit)?;
+
+        // Ensure all copyable inputs/outputs of the subgraph are included
+        let missing_inputs = copyable_inputs
+            .iter()
+            .flatten()
+            .filter(|np| !subcircuit.input_copyable.iter().flatten().contains(np))
+            .copied()
+            .collect_vec();
+        let missing_outputs = copyable_outputs
+            .iter()
+            .filter(|np| !subcircuit.output_copyable.contains(np))
+            .copied()
+            .collect_vec();
+        subcircuit
+            .input_copyable
+            .extend(missing_inputs.into_iter().map(|np| vec![np]));
+        subcircuit.output_copyable.extend(missing_outputs);
+
+        // Remove all copyable inputs not in the subgraph boundary
+        let remove_inputs = subcircuit
+            .input_copyable
+            .iter()
+            .flatten()
+            .filter(|&np| !copyable_inputs.iter().flatten().contains(np))
+            .copied()
+            .collect_vec();
+        for (node, port) in remove_inputs {
+            subcircuit
+                .try_remove_copyable_input(node, port, circuit)
+                .map_err(|err| {
+                    InvalidSubcircuit::UnsupportedBoundary(format!(
+                        "copyable input {:?} is not in subgraph boundary but cannot be removed: {err}",
+                        (node, port)
+                    ))
+                })?;
+        }
+
+        // It is now safe to set the copyable inputs/outputs to match subgraph
+        // (basically just a reordering + grouping + discarding unused outputs)
+        subcircuit.input_copyable = copyable_inputs;
+        subcircuit.output_copyable = copyable_outputs;
+
+        Ok(subcircuit)
     }
 
     /// Extend the subcircuit to include the given node.
@@ -165,7 +266,7 @@ impl<N: HugrNode> Subcircuit<N> {
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<bool, InvalidSubcircuit<N>> {
         // Do not support copyable values at node outputs
-        let output_copyable_values = circuit.get_copyable_wires(node, Direction::Outgoing);
+        let output_copyable_values = circuit.all_copyable_wires(node, Direction::Outgoing);
         if output_copyable_values.count() > 0 {
             return Err(InvalidSubcircuit::OutputCopyableValues(node));
         }
@@ -182,7 +283,7 @@ impl<N: HugrNode> Subcircuit<N> {
             }
         };
 
-        // Add copyable inputs to the subcircuit where required
+        // Add copyable inputs/outputs to the subcircuit where required
         was_changed |= self.extend_copyable_io(node, circuit);
 
         Ok(was_changed)
@@ -212,6 +313,69 @@ impl<N: HugrNode> Subcircuit<N> {
         true
     }
 
+    /// Remove a copyable input from the subcircuit.
+    ///
+    /// This is possible when the input can be expressed as a function of other
+    /// inputs or computations within the subcircuit.
+    pub fn try_remove_copyable_input(
+        &mut self,
+        node: N,
+        port: IncomingPort,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<(), RemoveCopyableInputError<N>> {
+        if !self.input_copyable.iter().flatten().contains(&(node, port)) {
+            return Err(RemoveCopyableInputError::InputNotFound(node, port));
+        }
+
+        let value = circuit
+            .hugr()
+            .single_linked_output(node, port)
+            .expect("valid dataflow wire");
+        let Ok(value_ast) = CopyableExpr::try_new(
+            value,
+            self.copyable_inputs(circuit).collect(),
+            iter::empty().collect(),
+            circuit,
+        ) else {
+            return Err(RemoveCopyableInputError::NonConvexAST(value.0, value.1));
+        };
+        let CopyableExpr::Composite { subgraph } = value_ast else {
+            return Err(RemoveCopyableInputError::TrivialExpression(
+                value.0, value.1,
+            ));
+        };
+
+        let known_inputs: BTreeSet<_> = self
+            .copyable_inputs(circuit)
+            .filter(|&np| np != (node, port))
+            .collect();
+        let mut subgraph_inputs = subgraph.incoming_ports().iter().flatten();
+        let invalid_inp = |(node, port)| {
+            if known_inputs.contains(&(node, port)) {
+                return false;
+            }
+            let (prev_node, _) = circuit
+                .hugr()
+                .single_linked_output(node, port)
+                .expect("valid dataflow wire");
+            !self.nodes_on_resource_paths(circuit).contains(&prev_node)
+        };
+        if let Some(&missing_input) = subgraph_inputs.find(|&&np| invalid_inp(np)) {
+            return Err(RemoveCopyableInputError::MissingInputs(
+                missing_input.0,
+                missing_input.1,
+            ));
+        }
+
+        // It is safe to remove the input
+        self.input_copyable.retain_mut(|all_uses| {
+            all_uses.retain(|&np| np != (node, port));
+            !all_uses.is_empty()
+        });
+
+        Ok(())
+    }
+
     /// Iterate over the resources in the subcircuit.
     pub fn resources<'a>(
         &'a self,
@@ -223,7 +387,7 @@ impl<N: HugrNode> Subcircuit<N> {
     }
 
     /// Nodes in the subcircuit.
-    pub fn nodes<'a>(
+    pub fn nodes_on_resource_paths<'a>(
         &'a self,
         circuit: &'a ResourceScope<impl HugrView<Node = N>>,
     ) -> impl Iterator<Item = N> + 'a {
@@ -238,9 +402,64 @@ impl<N: HugrNode> Subcircuit<N> {
             .dedup()
     }
 
+    /// All nodes in the subcircuit.
+    ///
+    /// This includes both nodes on resource paths and within copyable
+    /// expressions.
+    pub fn nodes<'a>(&'a self, circuit: &'a ResourceScope<impl HugrView<Node = N>>) -> IndexSet<N> {
+        let mut nodes: IndexSet<N> = self.nodes_on_resource_paths(circuit).collect();
+
+        // Add any nodes and function calls that are part of copyable expressions
+        for n in self.nodes_on_resource_paths(circuit) {
+            for p in circuit
+                .get_copyable_ports(n, Direction::Incoming)
+                .map(|p| p.as_incoming().expect("incoming port"))
+            {
+                let Some(expr) = self.get_copyable_expression(n, p, circuit) else {
+                    continue;
+                };
+                let Some(subgraph) = expr.as_subgraph() else {
+                    continue;
+                };
+                nodes.extend(subgraph.nodes());
+            }
+        }
+
+        nodes
+    }
+
+    /// All function calls in the subcircuit.
+    ///
+    /// Currently, this only handles function calls within copyable
+    /// expressions.
+    pub fn function_calls<'a>(
+        &'a self,
+        circuit: &'a ResourceScope<impl HugrView<Node = N>>,
+    ) -> IndexSet<Vec<(N, IncomingPort)>> {
+        let mut func_calls = IndexSet::<Vec<(N, IncomingPort)>>::new();
+
+        // Add any nodes and function calls that are part of copyable expressions
+        for n in self.nodes_on_resource_paths(circuit) {
+            for p in circuit
+                .get_copyable_ports(n, Direction::Incoming)
+                .map(|p| p.as_incoming().expect("incoming port"))
+            {
+                let Some(expr) = self.get_copyable_expression(n, p, circuit) else {
+                    continue;
+                };
+                let Some(subgraph) = expr.as_subgraph() else {
+                    continue;
+                };
+                func_calls.extend(subgraph.function_calls().clone());
+            }
+        }
+
+        func_calls
+    }
+
     /// Number of nodes in the subcircuit.
     pub fn node_count(&self, circuit: &ResourceScope<impl HugrView<Node = N>>) -> usize {
-        self.nodes(circuit).count()
+        self.nodes_on_resource_paths(circuit).count()
     }
 
     /// Whether the subcircuit is empty.
@@ -344,12 +563,12 @@ impl<N: HugrNode> Subcircuit<N> {
         &self,
         circuit: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Result<(), InvalidSubgraph<N>> {
-        if !circuit.is_convex(self) {
-            return Err(InvalidSubgraph::NotConvex);
-        }
-
         if self.is_empty() {
             return Err(InvalidSubgraph::EmptySubgraph);
+        }
+
+        if !circuit.is_convex(self) {
+            return Err(InvalidSubgraph::NotConvex);
         }
 
         Ok(())
@@ -396,8 +615,8 @@ impl<N: HugrNode> Subcircuit<N> {
         Ok(SiblingSubgraph::new_unchecked(
             self.input_ports(circuit),
             self.output_ports(circuit),
-            vec![],
-            self.nodes(circuit).collect_vec(),
+            self.function_calls(circuit).into_iter().collect(),
+            self.nodes(circuit).into_iter().collect(),
         ))
     }
 
@@ -420,6 +639,7 @@ impl<N: HugrNode> Subcircuit<N> {
         )
     }
 
+    /// Get the linear input ports of the subcircuit.
     pub fn resource_inputs<'a>(
         &'a self,
         scope: &'a ResourceScope<impl HugrView<Node = N>>,
@@ -429,6 +649,7 @@ impl<N: HugrNode> Subcircuit<N> {
             .filter_map(|interval| interval.incoming_boundary_port(scope))
     }
 
+    /// Get the linear output ports of the subcircuit.
     pub fn resource_outputs<'a>(
         &'a self,
         scope: &'a ResourceScope<impl HugrView<Node = N>>,
@@ -454,11 +675,20 @@ impl<N: HugrNode> Subcircuit<N> {
         }
     }
 
+    /// Get the copyable input ports of the subcircuit.
     pub fn copyable_inputs(
         &self,
         _scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> impl Iterator<Item = (N, IncomingPort)> + '_ {
         self.input_copyable.iter().flatten().copied()
+    }
+
+    /// Get the copyable output ports of the subcircuit.
+    pub fn copyable_outputs(
+        &self,
+        _scope: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> impl Iterator<Item = (N, OutgoingPort)> + '_ {
+        self.output_copyable.iter().copied()
     }
 
     /// Get the indices and values of the subcircuit inputs that can be
@@ -473,6 +703,110 @@ impl<N: HugrNode> Subcircuit<N> {
             Some(((n, p), val.clone()))
         })
     }
+
+    /// Get the copyable expression for the given input port, if it is a
+    /// copyable port of the subcircuit.
+    ///
+    /// This panics if the subcircuit is not valid in `circuit`.
+    pub fn get_copyable_expression(
+        &self,
+        node: N,
+        port: IncomingPort,
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Option<CopyableExpr<N>> {
+        if circuit
+            .get_circuit_unit(node, port)
+            .is_none_or(|unit| unit.is_resource())
+        {
+            // Not a known copyable unit
+            return None;
+        }
+
+        if !self.nodes_on_resource_paths(circuit).contains(&node) {
+            // Node is not on an interval of the subcircuit
+            return None;
+        }
+
+        let value = circuit
+            .hugr()
+            .single_linked_output(node, port)
+            .expect("valid dataflow wire");
+
+        if self.copyable_inputs(circuit).contains(&(node, port)) {
+            return Some(CopyableExpr::Wire(Wire::new(value.0, value.1)));
+        }
+
+        let expr = CopyableExpr::try_new(
+            value,
+            self.copyable_inputs(circuit).collect(),
+            iter::empty().collect(),
+            circuit,
+        )
+        .expect("valid copyable expression");
+
+        Some(expr)
+    }
+}
+
+fn parse_input_boundary<N: HugrNode>(
+    subgraph: &SiblingSubgraph<N>,
+    circuit: &ResourceScope<impl HugrView<Node = N>>,
+) -> Result<(Vec<(N, IncomingPort)>, IncomingPorts<N>), InvalidSubcircuit<N>> {
+    let mut inp_iter = subgraph.incoming_ports().iter().peekable();
+
+    let is_resource = |inps: &&Vec<_>| {
+        let Some(&(node, port)) = inps.into_iter().exactly_one().ok() else {
+            return false;
+        };
+        circuit
+            .get_circuit_unit(node, port)
+            .is_some_and(|unit| unit.is_resource())
+    };
+    let resource_inputs = inp_iter
+        .peeking_take_while(is_resource)
+        .map(|vec| vec[0])
+        .collect_vec();
+    let other_inputs = inp_iter.cloned().collect_vec();
+
+    if other_inputs.iter().flatten().any(|(n, p)| {
+        circuit
+            .get_circuit_unit(*n, *p)
+            .is_none_or(|u| u.is_resource())
+    }) {
+        return Err(InvalidSubcircuit::UnsupportedBoundary(
+            "resource inputs must precede copyable inputs".to_string(),
+        ));
+    }
+
+    Ok((resource_inputs, other_inputs))
+}
+
+fn parse_output_boundary<N: HugrNode>(
+    subgraph: &SiblingSubgraph<N>,
+    circuit: &ResourceScope<impl HugrView<Node = N>>,
+) -> Result<(OutgoingPorts<N>, OutgoingPorts<N>), InvalidSubcircuit<N>> {
+    let mut out_iter = subgraph.outgoing_ports().iter().copied().peekable();
+
+    let resource_outputs = out_iter
+        .peeking_take_while(|&(node, port)| {
+            circuit
+                .get_circuit_unit(node, port)
+                .is_some_and(|unit| unit.is_resource())
+        })
+        .collect_vec();
+    let other_outputs = out_iter.collect_vec();
+
+    if other_outputs.iter().any(|&(node, port)| {
+        circuit
+            .get_circuit_unit(node, port)
+            .is_some_and(|unit| unit.is_resource())
+    }) {
+        return Err(InvalidSubcircuit::UnsupportedBoundary(
+            "resource outputs must precede copyable outputs".to_string(),
+        ));
+    }
+
+    Ok((resource_outputs, other_outputs))
 }
 
 fn extend_unique<E: PartialEq>(vec: &mut Vec<E>, other: impl IntoIterator<Item = E>) {
@@ -481,7 +815,7 @@ fn extend_unique<E: PartialEq>(vec: &mut Vec<E>, other: impl IntoIterator<Item =
 }
 
 impl<H: HugrView> ResourceScope<H> {
-    fn is_convex(&self, subcircuit: &Subcircuit<H::Node>) -> bool {
+    fn is_convex(&self, _subcircuit: &Subcircuit<H::Node>) -> bool {
         unimplemented!("is_convex is not yet implemented")
     }
 }
@@ -580,10 +914,66 @@ impl<N: HugrNode> Subcircuit<N> {
 
         was_changed
     }
+
+    fn reorder_intervals(
+        &mut self,
+        resource_inputs: &[(N, IncomingPort)],
+        resource_outputs: &[(N, OutgoingPort)],
+        circuit: &ResourceScope<impl HugrView<Node = N>>,
+    ) -> Result<(), InvalidSubcircuit<N>> {
+        if self
+            .resource_inputs(circuit)
+            .any(|np| !resource_inputs.contains(&np))
+        {
+            return Err(InvalidSubcircuit::UnsupportedBoundary(
+                "resource inputs in subcircuit do not match subgraph".to_string(),
+            ));
+        }
+
+        let inp_pos = |interval: &Interval<N>| {
+            let (node, port) = interval.incoming_boundary_port(circuit)?;
+            resource_inputs.iter().position(|&np| np == (node, port))
+        };
+        let out_pos = |interval: &Interval<N>| {
+            let (node, port) = interval.outgoing_boundary_port(circuit)?;
+            resource_outputs.iter().position(|&np| np == (node, port))
+        };
+        self.intervals.sort_unstable_by_key(out_pos);
+        // important: use stable sort to preserve output ordering where possible
+        self.intervals.sort_by_key(inp_pos);
+
+        if !self.intervals.iter().is_sorted_by_key(out_pos) {
+            // There is no interval ordering that satisfies both input and output orderings
+            return Err(InvalidSubcircuit::UnsupportedBoundary(
+                "cannot order intervals to match subgraph boundary".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Errors that can occur when removing a copyable input from a subcircuit.
+#[derive(Debug, Clone, PartialEq, Display, Error)]
+pub enum RemoveCopyableInputError<N> {
+    /// The specified input was not found in the subcircuit.
+    #[display("input ({_0:?}, {_1:?}) not found in subcircuit")]
+    InputNotFound(N, IncomingPort),
+    /// The value at the port cannot be expressed as a convex AST.
+    #[display("value at port ({_0:?}, {_1:?}) cannot be expressed as convex AST")]
+    NonConvexAST(N, OutgoingPort),
+    /// The value at the port is a trivial expression that cannot be expanded.
+    #[display("value at port ({_0:?}, {_1:?}) cannot be replaced by non-trivial AST")]
+    TrivialExpression(N, OutgoingPort),
+    /// The subcircuit is missing inputs required to replace the value with the
+    /// AST.
+    #[display("input ({_0:?}, {_1:?}) is required to replace value with AST, but is missing")]
+    MissingInputs(N, IncomingPort),
 }
 
 #[cfg(test)]
 mod tests {
+    use super::expression::tests::hugr_with_midcircuit_meas;
     use super::*;
     use crate::{
         extension::rotation::rotation_type,
@@ -594,6 +984,7 @@ mod tests {
         utils::build_simple_circuit,
         TketOp,
     };
+    use cool_asserts::assert_matches;
     use hugr::{extension::prelude::qb_t, types::Signature, CircuitUnit, Hugr, Node, OutgoingPort};
     use rstest::{fixture, rstest};
 
@@ -618,12 +1009,15 @@ mod tests {
 
         let nodes: Vec<_> = node_indices.into_iter().map(|i| cx_nodes[i]).collect();
 
-        let result = Subcircuit::try_from_nodes(nodes.iter().copied(), &scope);
+        let result = Subcircuit::try_from_resource_nodes(nodes.iter().copied(), &scope);
 
         if should_succeed {
             assert!(result.is_ok(), "Expected success for case: {description}");
             let subcircuit = result.unwrap();
-            assert_eq!(subcircuit.nodes(&scope).collect_vec(), nodes);
+            assert_eq!(
+                subcircuit.nodes_on_resource_paths(&scope).collect_vec(),
+                nodes
+            );
         } else {
             assert!(result.is_err(), "Expected failure for case: {description}");
         }
@@ -634,7 +1028,7 @@ mod tests {
     #[case::singe_h_gate(vec![7], true, 1, 1, 0)]
     #[case::two_h_gates(vec![7, 8], true, 2, 2, 0)]
     #[case::h_and_cx_gate(vec![7, 9], true, 2, 2, 0)]
-    #[case::cx_rz_rz_same_angle(vec![9, 10, 11], true, 2, 2, 1)]
+    #[case::cx_rz_rz_same_angle(vec![9, 10, 11], true, 2, 2, 2)]
     #[case::cx_rz_rz_diff_angle(vec![9, 10, 15], true, 2, 2, 2)]
     fn test_try_from_nodes_cx_rz_circuit(
         #[case] node_indices: Vec<usize>,
@@ -652,12 +1046,15 @@ mod tests {
             .map(|i| Node::from(portgraph::NodeIndex::new(i)))
             .collect();
 
-        let result = Subcircuit::try_from_nodes(selected_nodes.iter().copied(), &scope);
+        let result = Subcircuit::try_from_resource_nodes(selected_nodes.iter().copied(), &scope);
 
         if should_succeed {
             assert!(result.is_ok());
             let subcircuit = result.unwrap();
-            assert_eq!(subcircuit.nodes(&scope).collect_vec(), selected_nodes);
+            assert_eq!(
+                subcircuit.nodes_on_resource_paths(&scope).collect_vec(),
+                selected_nodes
+            );
             assert_eq!(
                 subcircuit.resource_inputs(&scope).count(),
                 expected_input_resources,
@@ -695,19 +1092,16 @@ mod tests {
         // Add first a H gate
         assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), [resources[0]]);
-        assert_eq!(
-            subcircuit.resource_inputs(&circ).collect_vec(),
-            [resources[0]]
-        );
-        assert_eq!(subcircuit.output_resources, [resources[0]]);
+        assert_eq!(subcircuit.resource_inputs(&circ).count(), 1);
+        assert_eq!(subcircuit.resource_outputs(&circ).count(), 1);
         assert_eq!(subcircuit.try_add_node(node(7), &circ), Ok(false));
 
         // Now add a two-qubit CX gate
         assert_eq!(subcircuit.try_add_node(node(9), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, resources);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values, vec![]);
+        assert_eq!(subcircuit.resource_inputs(&circ).count(), 2);
+        assert_eq!(subcircuit.resource_outputs(&circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable, IncomingPorts::new());
         assert_eq!(subcircuit.try_add_node(node(9), &circ), Ok(false));
 
         // Cannot add this non-contiguous rotation
@@ -721,26 +1115,26 @@ mod tests {
         // Now add a contiguous rotation
         assert_eq!(subcircuit.try_add_node(node(10), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, resources);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values.len(), 1);
+        assert_eq!(subcircuit.resource_inputs(&circ).count(), 2);
+        assert_eq!(subcircuit.resource_outputs(&circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable.len(), 1);
         assert_eq!(subcircuit.try_add_node(node(10), &circ), Ok(false));
 
         // One more rotation, same angle
         assert_eq!(subcircuit.try_add_node(node(11), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, resources);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values.len(), 1);
+        assert_eq!(subcircuit.resource_inputs(&circ).count(), 2);
+        assert_eq!(subcircuit.resource_outputs(&circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable.len(), 2);
         assert_eq!(subcircuit.try_add_node(node(11), &circ), Ok(false));
 
         // Last rotation, different angle
         // now the previously non-contiguous rotation is contiguous
         assert_eq!(subcircuit.try_add_node(node(16), &circ), Ok(true));
         assert_eq!(subcircuit.resources(&circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, resources);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values.len(), 2);
+        assert_eq!(subcircuit.resource_inputs(&circ).count(), 2);
+        assert_eq!(subcircuit.resource_outputs(&circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable.len(), 3);
         assert_eq!(subcircuit.try_add_node(node(16), &circ), Ok(false));
 
         assert_eq!(subcircuit.node_count(&circ), 5);
@@ -777,23 +1171,23 @@ mod tests {
         // Add a two-qubit CX gates, as usual => two inputs, two outputs
         assert_eq!(subcircuit.try_add_node(node(5), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, resources);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values, vec![]);
+        assert_eq!(subcircuit.resource_inputs(&ancilla_circ).count(), 2);
+        assert_eq!(subcircuit.resource_outputs(&ancilla_circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable.len(), 0);
 
         // Add the qalloc; now the second qubit is no more an input
         assert_eq!(subcircuit.try_add_node(node(4), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, [resources[0]]);
-        assert_eq!(subcircuit.output_resources, resources);
-        assert_eq!(subcircuit.input_copyable_values, vec![]);
+        assert_eq!(subcircuit.resource_inputs(&ancilla_circ).count(), 1);
+        assert_eq!(subcircuit.resource_outputs(&ancilla_circ).count(), 2);
+        assert_eq!(subcircuit.input_copyable.len(), 0);
 
         // Add the qfree; the second qubit is no longer an output either
         assert_eq!(subcircuit.try_add_node(node(6), &ancilla_circ), Ok(true));
         assert_eq!(subcircuit.resources(&ancilla_circ).collect_vec(), resources);
-        assert_eq!(subcircuit.input_resources, [resources[0]]);
-        assert_eq!(subcircuit.output_resources, [resources[0]]);
-        assert_eq!(subcircuit.input_copyable_values, vec![]);
+        assert_eq!(subcircuit.resource_inputs(&ancilla_circ).count(), 1);
+        assert_eq!(subcircuit.resource_outputs(&ancilla_circ).count(), 1);
+        assert_eq!(subcircuit.input_copyable.len(), 0);
     }
 
     #[test]
@@ -843,10 +1237,8 @@ mod tests {
             vec![
                 vec![(node(7), IncomingPort::from(0))],
                 vec![(node(9), IncomingPort::from(1))],
-                vec![
-                    (node(10), IncomingPort::from(1)),
-                    (node(11), IncomingPort::from(1))
-                ],
+                vec![(node(10), IncomingPort::from(1)),],
+                vec![(node(11), IncomingPort::from(1))],
             ]
         );
         assert_eq!(
@@ -891,6 +1283,112 @@ mod tests {
         assert_eq!(
             subcircuit.try_to_subgraph(&circ),
             Err(InvalidSubgraph::NotConvex)
+        );
+    }
+
+    #[rstest]
+    fn test_remove_expr(hugr_with_midcircuit_meas: Hugr) {
+        let circ = ResourceScope::from_circuit(Circuit::new(hugr_with_midcircuit_meas));
+
+        let mut subcircuit = Subcircuit::try_from_resource_nodes(
+            [
+                Node::from(portgraph::NodeIndex::new(5)),
+                Node::from(portgraph::NodeIndex::new(10)),
+            ],
+            &circ,
+        )
+        .unwrap();
+
+        assert_eq!(subcircuit.copyable_inputs(&circ).count(), 1);
+        assert_eq!(subcircuit.copyable_outputs(&circ).count(), 1);
+
+        let inp = subcircuit
+            .copyable_inputs(&circ)
+            .exactly_one()
+            .ok()
+            .unwrap();
+        assert_matches!(
+            subcircuit
+                .get_copyable_expression(inp.0, inp.1, &circ)
+                .unwrap(),
+            CopyableExpressionAST::Identity { .. }
+        );
+
+        subcircuit
+            .try_remove_copyable_input(inp.0, inp.1, &circ)
+            .unwrap();
+        let CopyableExpressionAST::Composite { subgraph } = subcircuit
+            .get_copyable_expression(inp.0, inp.1, &circ)
+            .unwrap()
+        else {
+            panic!("expected composite expression");
+        };
+        assert_eq!(
+            subgraph.nodes(),
+            (6..=8)
+                .map(|i| Node::from(portgraph::NodeIndex::new(i)),)
+                .collect_vec()
+        )
+    }
+
+    #[rstest]
+    #[case::simple_subgraph(
+        vec![
+            vec![(
+                Node::from(portgraph::NodeIndex::new(5)),
+                IncomingPort::from(0),
+            )],
+            vec![(
+                Node::from(portgraph::NodeIndex::new(6)),
+                IncomingPort::from(1),
+            )],
+        ],
+        vec![(
+            Node::from(portgraph::NodeIndex::new(10)),
+            OutgoingPort::from(0),
+        )],
+    )]
+    #[case::more_complex_subgraph(
+        vec![
+            vec![(
+                Node::from(portgraph::NodeIndex::new(10)),
+                IncomingPort::from(0),
+            )],
+            vec![(
+                Node::from(portgraph::NodeIndex::new(7)),
+                IncomingPort::from(0),
+            )],
+        ],
+        vec![(
+            Node::from(portgraph::NodeIndex::new(10)),
+            OutgoingPort::from(0),
+        )],
+    )]
+    fn test_from_subgraph(
+        hugr_with_midcircuit_meas: Hugr,
+        #[case] inputs: IncomingPorts,
+        #[case] outputs: OutgoingPorts,
+    ) {
+        let circ = ResourceScope::from_circuit(Circuit::new(hugr_with_midcircuit_meas));
+
+        let subgraph = SiblingSubgraph::try_new(inputs, outputs, circ.hugr()).unwrap();
+        let subcircuit = Subcircuit::try_from_subgraph(&subgraph, &circ).unwrap();
+
+        let exp_resource_nodes = subgraph
+            .nodes()
+            .iter()
+            .copied()
+            .filter(|&n| !is_pure_copyable(n, circ.hugr()))
+            .collect_vec();
+        assert_eq!(subgraph.incoming_ports(), &subcircuit.input_ports(&circ));
+        assert_eq!(subgraph.outgoing_ports(), &subcircuit.output_ports(&circ));
+        assert_eq!(
+            subcircuit.nodes_on_resource_paths(&circ).collect_vec(),
+            exp_resource_nodes
+        );
+        assert_eq!(
+            subcircuit.nodes(&circ).into_iter().collect::<BTreeSet<_>>(),
+            subgraph.nodes().iter().copied().collect::<BTreeSet<_>>()
         );
     }
 }

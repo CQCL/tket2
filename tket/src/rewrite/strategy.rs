@@ -12,13 +12,13 @@
 //!      threshold function.
 //!
 //! The exhaustive strategies are parametrised by a strategy cost function:
-//!    - [`LexicographicCostFunction`] allows rewrites that do
-//!      not increase some coarse cost function (e.g. CX count), whilst
-//!      ordering them according to a lexicographic ordering of finer cost
-//!      functions (e.g. total gate count). See
-//!      [`LexicographicCostFunction::default_cx_strategy`]) for a default implementation.
-//!    - [`GammaStrategyCost`] ignores rewrites that increase the cost
-//!      function beyond a percentage given by a f64 parameter gamma.
+//!    - [`LexicographicCostFunction`] allows rewrites that do not increase some
+//!      coarse cost function (e.g. CX count), whilst ordering them according to
+//!      a lexicographic ordering of finer cost functions (e.g. total gate
+//!      count). See [`LexicographicCostFunction::default_cx_strategy`]) for a
+//!      default implementation.
+//!    - [`GammaStrategyCost`] ignores rewrites that increase the cost function
+//!      beyond a percentage given by a f64 parameter gamma.
 
 use std::iter;
 use std::{collections::HashSet, fmt::Debug};
@@ -71,7 +71,8 @@ pub trait RewriteStrategy {
         })
     }
 
-    /// Returns the expected cost of a rewrite's matched subcircuit after replacing it.
+    /// Returns the expected cost of a rewrite's matched subcircuit after
+    /// replacing it.
     fn post_rewrite_cost(&self, rw: &CircuitRewrite) -> Self::Cost {
         rw.replacement().circuit_cost(|op| self.op_cost(op))
     }
@@ -294,7 +295,8 @@ pub trait StrategyCost {
     /// The cost of a single operation.
     type OpCost: CircuitCost;
 
-    /// Returns true if the rewrite is allowed, based on the cost of the pattern and target.
+    /// Returns true if the rewrite is allowed, based on the cost of the pattern
+    /// and target.
     #[inline]
     fn under_threshold(&self, pattern_cost: &Self::OpCost, target_cost: &Self::OpCost) -> bool {
         target_cost.sub_cost(pattern_cost).as_isize() <= 0
@@ -464,7 +466,8 @@ impl GammaStrategyCost<fn(&OpType) -> usize> {
         GammaStrategyCost::with_cost(|op| is_cx(op) as usize)
     }
 
-    /// Exhaustive rewrite strategy with CX count cost function and provided gamma.
+    /// Exhaustive rewrite strategy with CX count cost function and provided
+    /// gamma.
     #[inline]
     pub fn exhaustive_cx_with_gamma(gamma: f64) -> ExhaustiveThresholdStrategy<Self> {
         GammaStrategyCost::new(gamma, |op| is_cx(op) as usize)
@@ -496,16 +499,18 @@ mod tests {
     }
 
     /// Rewrite cx_nodes -> empty
-    fn rw_to_empty(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
-        let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
+    fn rw_to_empty(circ: &Circuit, cx_nodes: impl IntoIterator<Item = Node>) -> CircuitRewrite {
+        let circ: ResourceScope<_> = circ.into();
+        let subcirc = Subcircuit::try_from_resource_nodes(cx_nodes, &circ).unwrap();
         subcirc
             .create_rewrite(circ, n_cx(0))
             .unwrap_or_else(|e| panic!("{}", e))
     }
 
-    /// Rewrite cx_nodes -> 10x CX
-    fn rw_to_full(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
-        let subcirc = Subcircuit::try_from_nodes(cx_nodes, circ).unwrap();
+    /// Rewrite cx_nodes -> two_qb_repl (or 10x CX if None)
+    fn rw_to_full(circ: &Circuit, cx_nodes: impl IntoIterator<Item = Node>) -> CircuitRewrite {
+        let circ: ResourceScope<_> = circ.into();
+        let subcirc = Subcircuit::try_from_resource_nodes(cx_nodes, &circ).unwrap();
         subcirc
             .create_rewrite(circ, n_cx(10))
             .unwrap_or_else(|e| panic!("{}", e))
