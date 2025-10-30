@@ -6,8 +6,6 @@ mod backtracking;
 pub mod badger;
 mod pqueue;
 mod pqueue_worker;
-#[cfg(feature = "badgerv2_unstable")]
-pub mod seadog;
 
 use std::fmt::Debug;
 

@@ -6,7 +6,6 @@ use derive_more::derive::{From, Into};
 use hugr::{
     builder::{DFGBuilder, HugrBuilder},
     hugr::views::sibling_subgraph::InvalidSubgraph,
-    persistent::{Commit, PatchNode},
     types::Signature,
     HugrView,
 };
@@ -22,9 +21,9 @@ use pyo3::{
 use tket::{
     resource::ResourceScope,
     rewrite::{
-        matcher::{CachedWalker, CircuitMatcher, MatchContext, MatchOutcome, Update},
+        matcher::{CircuitMatcher, MatchContext, MatchOutcome, Update},
         replacer::{CircuitReplacer, ReplaceWithIdentity},
-        CircuitRewrite, CombineMatchReplaceRewriter, MatchReplaceRewriter, RewriteName, Rewriter,
+        CircuitRewrite, CombineMatchReplaceRewriter, MatchReplaceRewriter, Rewriter,
     },
     Circuit, Subcircuit, TketOp,
 };
@@ -552,72 +551,6 @@ impl<H: HugrView<Node = hugr::Node>> Rewriter<ResourceScope<H>> for PyMatchRepla
         panic!("Incompatible matcher and replacement");
     }
 }*/
-
-impl<'c> Rewriter<CachedWalker<'c>> for PyMatchReplaceRewriter {
-    type Rewrite = (Commit<'c>, RewriteName);
-
-    fn get_rewrites(
-        &self,
-        circ: &CachedWalker<'c>,
-        root_node: PatchNode,
-    ) -> Vec<(Commit<'c>, RewriteName)> {
-        // Use the actual rewriter based on the variants
-        if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
-            if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter =
-                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
-                return rewriter.get_rewrites(circ, root_node);
-            }
-        }
-        if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
-            if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(
-                    pyobject_matcher,
-                    pyobject_replacement,
-                    self.name.clone(),
-                )
-                .with_hash_match_info(python_hash)
-                .with_hash_partial_match_info(|obj, hasher| {
-                    let obj = obj
-                        .clone()
-                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
-                    python_hash(&obj, hasher)
-                });
-                return rewriter.get_rewrites(circ, root_node);
-            }
-        }
-        panic!("Incompatible matcher and replacement");
-    }
-
-    fn get_all_rewrites(&self, circ: &CachedWalker<'c>) -> Vec<(Commit<'c>, RewriteName)> {
-        // Use the actual rewriter based on the variants
-        if let Some(unit_matcher) = self.matcher.as_unit_matcher() {
-            if let Some(unit_replacement) = self.replacement.as_unit_replacement() {
-                let rewriter =
-                    MatchReplaceRewriter::new(unit_matcher, unit_replacement, self.name.clone());
-                return rewriter.get_all_rewrites(circ);
-            }
-        }
-        if let Some(pyobject_matcher) = self.matcher.as_pyobject_matcher() {
-            if let Some(pyobject_replacement) = self.replacement.as_pyobject_replacement() {
-                let rewriter = MatchReplaceRewriter::new(
-                    pyobject_matcher,
-                    pyobject_replacement,
-                    self.name.clone(),
-                )
-                .with_hash_match_info(python_hash)
-                .with_hash_partial_match_info(|obj, hasher| {
-                    let obj = obj
-                        .clone()
-                        .unwrap_or_else(|| Python::with_gil(|py| py.None()));
-                    python_hash(&obj, hasher)
-                });
-                return rewriter.get_all_rewrites(circ);
-            }
-        }
-        panic!("Incompatible matcher and replacement");
-    }
-}
 
 #[pymethods]
 impl PyMatchReplaceRewriter {

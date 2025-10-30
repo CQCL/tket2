@@ -1240,26 +1240,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "hit"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "derive_more 2.0.1",
- "enum_dispatch",
- "fxhash",
- "hugr",
- "hugr-core",
- "itertools 0.14.0",
- "serde",
- "serde_json",
- "tket",
- "tket-json-rs",
- "toml",
-]
-
-[[package]]
 name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

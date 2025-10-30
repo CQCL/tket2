@@ -5,9 +5,6 @@
 
 use std::time::Instant;
 
-#[cfg(feature = "badgerv2_unstable")]
-use crate::optimiser::seadog::SeadogOptions;
-
 use crate::optimiser::{
     badger::BadgerOptions, pqueue::Entry, Optimiser, OptimiserOptions, OptimiserResult, State,
     StatePQueue,
@@ -53,16 +50,6 @@ impl Default for BacktrackingOptimiser {
 
 impl BacktrackingOptimiser {
     pub(super) fn with_badger_options(options: &BadgerOptions) -> Self {
-        Self {
-            queue_size: options.queue_size,
-            timeout: options.timeout,
-            progress_timeout: options.progress_timeout,
-            max_visited_count: options.max_circuit_count,
-        }
-    }
-
-    #[cfg(feature = "badgerv2_unstable")]
-    pub(super) fn with_seadog_options(options: &SeadogOptions) -> Self {
         Self {
             queue_size: options.queue_size,
             timeout: options.timeout,
