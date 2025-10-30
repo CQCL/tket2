@@ -12,7 +12,7 @@ use priority_queue::PriorityQueue;
 
 use crate::resource::ResourceScope;
 
-/// AST of a copyable value, represented as a hugr subgraph.
+/// Hugr fragment for computing a copyable value - either a subgraph, or a single outport
 ///
 /// The value of the expression is `value` if the expression is
 /// [CopyableExpressionAST::Identity], or is given by the first output of the
