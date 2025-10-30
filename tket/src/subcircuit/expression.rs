@@ -43,7 +43,7 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
     /// Construct an AST for the value at `output` in `circuit`.
     ///
     /// The inputs of the AST will be determined by traversing `circuit`
-    /// backwards as follows. Starting from `output`,
+    /// backwards starting from `output` and stopping as follows:
     /// - any input port that is contained in `allowed_input_ports` is added as
     ///   an input to the AST;
     /// - any input port that is linked to a node in `allowed_input_nodes` is
