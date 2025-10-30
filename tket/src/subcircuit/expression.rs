@@ -56,7 +56,7 @@ impl<N: HugrNode> CopyableExpressionAST<N> {
     /// input. The set of inputs are ordered according to the following
     /// ordering:
     /// 1. first by the order in which they appear in `allowed_input_ports`,
-    /// 2. then by the order in which their nodes appear in
+    /// 2. then by the order in which their source nodes appear in
     ///    `allowed_input_nodes`,
     /// 3. and finally in the order in which they are encountered during
     ///    traversal.
