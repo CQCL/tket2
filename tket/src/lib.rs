@@ -54,6 +54,7 @@ pub mod passes;
 pub mod resource;
 pub mod rewrite;
 pub mod serialize;
+pub mod subcircuit;
 
 #[cfg(feature = "portmatching")]
 pub mod portmatching;
