@@ -7,7 +7,7 @@ use derive_more::derive::{Display, Error};
 use hugr::{core::HugrNode, Direction, HugrView, IncomingPort, OutgoingPort, Port};
 use itertools::{Either, Itertools};
 
-use super::{Position, ResourceId, ResourceScope};
+use crate::resource::{Position, ResourceId, ResourceScope};
 
 /// A non-empty interval on a resource path.
 ///
@@ -448,11 +448,7 @@ mod tests {
     use super::{ResourceScope, *};
     use std::ops::RangeInclusive;
 
-    use crate::{
-        resource::tests::cx_circuit,
-        resource::{Interval, ResourceId},
-        Circuit,
-    };
+    use crate::{resource::tests::cx_circuit, Circuit};
 
     use itertools::Itertools;
     use rstest::{fixture, rstest};
