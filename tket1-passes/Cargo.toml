@@ -29,7 +29,7 @@ itertools.workspace = true
 
 # Used for testing
 hugr = { workspace = true }
-tket = { path = "../tket", version = "0.15.0" }
+tket = { path = "../tket", version = "0.16.0" }
 
 [lints]
 workspace = true
