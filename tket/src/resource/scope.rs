@@ -12,8 +12,8 @@ use crate::resource::types::{CircuitUnit, PortMap};
 use crate::utils::type_is_linear;
 use crate::Circuit;
 use hugr::core::HugrNode;
-use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
-use hugr::hugr::views::SiblingSubgraph;
+use hugr::hugr::views::sibling_subgraph::{IncomingPorts, InvalidSubgraph, OutgoingPorts};
+use hugr::hugr::views::{ExtractionResult, SiblingSubgraph};
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
 use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
@@ -55,6 +55,17 @@ impl<N: HugrNode> NodeCircuitUnits<N> {
         Self {
             port_map: PortMap::with_default(default, signature),
             position: Position::default(),
+        }
+    }
+
+    fn map_nodes<N2: HugrNode>(&self, mut node_map: impl FnMut(N) -> N2) -> NodeCircuitUnits<N2> {
+        let mapped_port_map = self
+            .port_map
+            .clone()
+            .map(|unit| unit.map_node(&mut node_map));
+        NodeCircuitUnits {
+            port_map: mapped_port_map,
+            position: self.position,
         }
     }
 }
@@ -140,9 +151,51 @@ impl<H: HugrView> ResourceScope<H> {
             .map_or(&[], |subgraph| subgraph.nodes())
     }
 
+    /// Ensures the ResourceScope contains an owned HUGR.
+    pub fn to_owned(&self) -> ResourceScope {
+        let (hugr, map) = self.hugr.extract_hugr(self.hugr.module_root());
+        let map_node = |node: H::Node| map.extracted_node(node);
+        let new_circuit_units = self
+            .circuit_units
+            .iter()
+            .map(|(node, units)| (map.extracted_node(*node), units.map_nodes(map_node)))
+            .collect();
+        let subgraph = self.subgraph.as_ref().map(|subgraph| {
+            let new_inputs = map_inputs(subgraph.incoming_ports(), map_node);
+            let new_outputs = map_outputs(subgraph.outgoing_ports(), map_node);
+            let new_function_calls = map_inputs(subgraph.function_calls(), map_node);
+            let new_nodes = subgraph.nodes().iter().map(|&n| map_node(n)).collect_vec();
+            SiblingSubgraph::new_unchecked(new_inputs, new_outputs, new_function_calls, new_nodes)
+        });
+
+        ResourceScope {
+            hugr,
+            subgraph,
+            circuit_units: new_circuit_units,
+        }
+    }
+
     /// Get the underlying HUGR.
     pub fn hugr(&self) -> &H {
         &self.hugr
+    }
+
+    /// Consume the ResourceScope and return the underlying HUGR.
+    pub fn into_hugr(self) -> H {
+        self.hugr
+    }
+
+    pub(crate) fn hugr_mut(&mut self) -> &mut H {
+        &mut self.hugr
+    }
+
+    /// Wrap the underlying HUGR in a Circuit as reference.
+    pub fn as_circuit(&self) -> Circuit<&H> {
+        Circuit::new(self.hugr())
+    }
+
+    pub(crate) fn as_circuit_mut(&mut self) -> Circuit<&mut H> {
+        Circuit::new(self.hugr_mut())
     }
 
     /// Get the underlying subgraph, or `None` if the circuit is empty.
@@ -171,15 +224,35 @@ impl<H: HugrView> ResourceScope<H> {
         Some(port_map.get_slice(direction))
     }
 
-    /// Get the port of node on the given resource path.
+    /// Get the ports of node with the given opvalue in the given direction.
     ///
     /// The returned port will have the direction `dir`.
-    pub fn get_port(&self, node: H::Node, resource_id: ResourceId, dir: Direction) -> Option<Port> {
-        let units = self.get_circuit_units_slice(node, dir)?;
-        let offset = units
-            .iter()
-            .position(|unit| unit.as_resource() == Some(resource_id))?;
-        Some(Port::new(dir, offset))
+    pub fn get_ports(
+        &self,
+        node: H::Node,
+        unit: impl Into<CircuitUnit<H::Node>>,
+        dir: Direction,
+    ) -> impl Iterator<Item = Port> + '_ {
+        let exp_unit = unit.into();
+        let units = self.get_circuit_units_slice(node, dir);
+        let offsets = units
+            .into_iter()
+            .flatten()
+            .positions(move |unit| unit == &exp_unit);
+        offsets.map(move |offset| Port::new(dir, offset))
+    }
+
+    /// Get the port of node with the given resource in the given direction.
+    pub fn get_resource_port(
+        &self,
+        node: H::Node,
+        resource_id: ResourceId,
+        dir: Direction,
+    ) -> Option<Port> {
+        self.get_ports(node, resource_id, dir)
+            .at_most_one()
+            .ok()
+            .expect("linear resource")
     }
 
     /// Get the position of the given node.
@@ -221,10 +294,10 @@ impl<H: HugrView> ResourceScope<H> {
     /// Whether the given node is the first node on the path of the given
     /// resource.
     pub fn is_resource_start(&self, node: H::Node, resource_id: ResourceId) -> bool {
-        self.get_port(node, resource_id, Direction::Outgoing)
+        self.get_resource_port(node, resource_id, Direction::Outgoing)
             .is_some()
             && self
-                .get_port(node, resource_id, Direction::Incoming)
+                .get_resource_port(node, resource_id, Direction::Incoming)
                 .is_none()
     }
 
@@ -259,7 +332,7 @@ impl<H: HugrView> ResourceScope<H> {
         direction: Direction,
     ) -> impl Iterator<Item = H::Node> + '_ {
         iter::successors(Some(start_node), move |&curr_node| {
-            let port = self.get_port(curr_node, resource_id, direction)?;
+            let port = self.get_resource_port(curr_node, resource_id, direction)?;
             let (next_node, _) = self
                 .hugr()
                 .single_linked_port(curr_node, port)
@@ -267,6 +340,37 @@ impl<H: HugrView> ResourceScope<H> {
             self.nodes().contains(&next_node).then_some(next_node)
         })
     }
+
+    /// Check if the given node is in the subgraph.
+    pub fn contains_node(&self, node: H::Node) -> bool {
+        self.subgraph
+            .as_ref()
+            .map_or(false, |subgraph| subgraph.nodes().contains(&node))
+    }
+}
+
+fn map_inputs<N1: Copy, N2: Copy>(
+    incoming_ports: &IncomingPorts<N1>,
+    mut node_map: impl FnMut(N1) -> N2,
+) -> IncomingPorts<N2> {
+    incoming_ports
+        .iter()
+        .map(|uses| {
+            uses.iter()
+                .map(|&(node, port)| (node_map(node), port))
+                .collect_vec()
+        })
+        .collect_vec()
+}
+
+fn map_outputs<N1: Copy, N2: Copy>(
+    outgoing_ports: &OutgoingPorts<N1>,
+    mut node_map: impl FnMut(N1) -> N2,
+) -> OutgoingPorts<N2> {
+    outgoing_ports
+        .iter()
+        .map(|&(node, port)| (node_map(node), port))
+        .collect_vec()
 }
 
 impl<H: Clone + HugrView<Node = hugr::Node>> ResourceScope<H> {

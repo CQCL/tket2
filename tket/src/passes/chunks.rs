@@ -15,8 +15,8 @@ use hugr::hugr::{HugrError, NodeMetadataMap};
 use hugr::ops::handle::DataflowParentID;
 use hugr::ops::OpType;
 use hugr::types::Signature;
-use hugr::{Hugr, HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
-use hugr_core::hugr::internal::{HugrInternals, HugrMutInternals as _};
+use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex, Wire};
+use hugr_core::hugr::internal::HugrMutInternals as _;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use rayon::slice::ParallelSliceMut;
@@ -49,10 +49,10 @@ impl Chunk {
     /// Extract a chunk from a circuit.
     ///
     /// The chunk is extracted from the input wires to the output wires.
-    pub(self) fn extract(
-        circ: &Circuit,
+    pub(self) fn extract<H: HugrView<Node = Node>>(
+        circ: &Circuit<H>,
         nodes: impl IntoIterator<Item = Node>,
-        checker: &TopoConvexChecker<'_, Hugr>,
+        checker: &TopoConvexChecker<'_, H>,
     ) -> Self {
         let subgraph = SiblingSubgraph::try_from_nodes_with_checker(
             nodes.into_iter().collect_vec(),
@@ -260,7 +260,7 @@ impl CircuitChunks {
     ///
     /// The circuit is split into chunks of at most `max_cost`, using the provided cost function.
     pub fn split_with_cost<C: CircuitCost>(
-        circ: &Circuit,
+        circ: &Circuit<impl HugrView<Node = Node>>,
         max_cost: C,
         op_cost: impl Fn(&OpType) -> C,
     ) -> Self {

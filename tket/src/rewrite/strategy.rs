@@ -29,6 +29,7 @@ use hugr::{HugrView, Node};
 use itertools::Itertools;
 
 use crate::circuit::cost::{is_cx, is_quantum, CircuitCost, CostDelta, LexicographicCost};
+use crate::resource::ResourceScope;
 use crate::{op_matches, Circuit, TketOp};
 
 use super::trace::RewriteTrace;
@@ -51,7 +52,7 @@ pub trait RewriteStrategy {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Circuit,
+        circ: &ResourceScope,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>>;
 
     /// The cost of a single operation for this strategy's cost function.
@@ -59,19 +60,22 @@ pub trait RewriteStrategy {
 
     /// The cost of a circuit using this strategy's cost function.
     #[inline]
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Self::Cost {
-        circ.circuit_cost(|op| self.op_cost(op))
+    fn circuit_cost(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> Self::Cost {
+        circ.as_circuit().circuit_cost(|op| self.op_cost(op))
     }
 
     /// Returns the cost of a rewrite's matched subcircuit before replacing it.
     #[inline]
-    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &Circuit) -> Self::Cost {
-        circ.nodes_cost(rw.subgraph().nodes().iter().copied(), |op| self.op_cost(op))
+    fn pre_rewrite_cost(&self, rw: &CircuitRewrite, circ: &ResourceScope) -> Self::Cost {
+        circ.as_circuit()
+            .nodes_cost(rw.to_subgraph(circ).nodes().iter().copied(), |op| {
+                self.op_cost(op)
+            })
     }
 
     /// Returns the expected cost of a rewrite's matched subcircuit after replacing it.
     fn post_rewrite_cost(&self, rw: &CircuitRewrite) -> Self::Cost {
-        rw.replacement().circuit_cost(|op| self.op_cost(op))
+        Circuit::new(rw.replacement()).circuit_cost(|op| self.op_cost(op))
     }
 }
 
@@ -79,7 +83,7 @@ pub trait RewriteStrategy {
 #[derive(Debug, Clone)]
 pub struct RewriteResult<C: CircuitCost> {
     /// The rewritten circuit.
-    pub circ: Circuit,
+    pub circ: ResourceScope,
     /// The cost delta of the rewrite.
     pub cost_delta: C::CostDelta,
 }
@@ -89,6 +93,18 @@ impl<C: CircuitCost, T: HugrView<Node = Node>> From<(Circuit<T>, C::CostDelta)>
 {
     #[inline]
     fn from((circ, cost_delta): (Circuit<T>, C::CostDelta)) -> Self {
+        Self {
+            circ: ResourceScope::from_circuit(circ.to_owned()),
+            cost_delta,
+        }
+    }
+}
+
+impl<C: CircuitCost, T: HugrView<Node = Node>> From<(ResourceScope<T>, C::CostDelta)>
+    for RewriteResult<C>
+{
+    #[inline]
+    fn from((circ, cost_delta): (ResourceScope<T>, C::CostDelta)) -> Self {
         Self {
             circ: circ.to_owned(),
             cost_delta,
@@ -116,26 +132,26 @@ impl RewriteStrategy for GreedyRewriteStrategy {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Circuit,
+        circ: &ResourceScope,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         let rewrites = rewrites
             .into_iter()
-            .sorted_by_key(|rw| rw.node_count_delta())
-            .take_while(|rw| rw.node_count_delta() < 0);
+            .sorted_by_key(|rw| rw.node_count_delta(circ))
+            .take_while(|rw| rw.node_count_delta(circ) < 0);
         let mut changed_nodes = HashSet::new();
         let mut cost_delta = 0;
         let mut circ = circ.clone();
         for rewrite in rewrites {
             if rewrite
-                .subgraph()
+                .to_subgraph(&circ)
                 .nodes()
                 .iter()
                 .any(|n| changed_nodes.contains(n))
             {
                 continue;
             }
-            changed_nodes.extend(rewrite.subgraph().nodes().iter().copied());
-            cost_delta += rewrite.node_count_delta();
+            changed_nodes.extend(rewrite.to_subgraph(&circ).nodes().iter().copied());
+            cost_delta += rewrite.node_count_delta(&circ);
             rewrite
                 .apply(&mut circ)
                 .expect("Could not perform rewrite in greedy strategy");
@@ -143,8 +159,8 @@ impl RewriteStrategy for GreedyRewriteStrategy {
         iter::once((circ, cost_delta).into())
     }
 
-    fn circuit_cost(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Self::Cost {
-        circ.num_operations()
+    fn circuit_cost(&self, circ: &ResourceScope<impl HugrView<Node = Node>>) -> Self::Cost {
+        circ.as_circuit().num_operations()
     }
 
     fn op_cost(&self, _op: &OpType) -> Self::Cost {
@@ -187,7 +203,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Circuit,
+        circ: &ResourceScope,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         // Check only the rewrites that reduce the size of the circuit.
         let rewrites = rewrites
@@ -211,12 +227,12 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveGreedyStrategy<T> {
             for (rewrite, delta) in &rewrites[i..] {
                 if !changed_nodes.is_empty()
                     && rewrite
-                        .invalidation_set()
+                        .invalidation_set(&curr_circ)
                         .any(|n| changed_nodes.contains(&n))
                 {
                     continue;
                 }
-                changed_nodes.extend(rewrite.invalidation_set());
+                changed_nodes.extend(rewrite.invalidation_set(&curr_circ));
                 cost_delta += delta.clone();
 
                 composed_rewrite_count += 1;
@@ -265,7 +281,7 @@ impl<T: StrategyCost> RewriteStrategy for ExhaustiveThresholdStrategy<T> {
     fn apply_rewrites(
         &self,
         rewrites: impl IntoIterator<Item = CircuitRewrite>,
-        circ: &Circuit,
+        circ: &ResourceScope,
     ) -> impl Iterator<Item = RewriteResult<Self::Cost>> {
         rewrites.into_iter().filter_map(|rw| {
             let pattern_cost = self.pre_rewrite_cost(&rw, circ);
@@ -516,7 +532,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_greedy_strategy() {
         let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
@@ -535,6 +550,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
+        let circ: ResourceScope<_> = circ.into();
         let strategy = GreedyRewriteStrategy;
         let rewritten = strategy.apply_rewrites(rws, &circ).collect_vec();
         assert_eq!(rewritten.len(), 1);
@@ -546,7 +562,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_exhaustive_default_strategy() {
         let mut circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
@@ -559,6 +574,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
+        let circ: ResourceScope<_> = circ.into();
         let strategy = LexicographicCostFunction::cx_count().into_greedy_strategy();
         let rewritten = strategy.apply_rewrites(rws, &circ).collect_vec();
         let exp_circ_lens = HashSet::from_iter([3, 7, 9]);
@@ -584,7 +600,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "reason: subcircuit to subgraph conversion is not implemented"]
     fn test_exhaustive_gamma_strategy() {
         let circ = n_cx(10);
         let cx_gates = circ.commands().map(|cmd| cmd.node()).collect_vec();
@@ -596,6 +611,7 @@ mod tests {
             rw_to_empty(&circ, cx_gates[9..10].to_vec()),
         ];
 
+        let circ: ResourceScope = circ.into();
         let strategy = GammaStrategyCost::exhaustive_cx_with_gamma(10.);
         let rewritten = strategy.apply_rewrites(rws, &circ);
         let exp_circ_lens = HashSet::from_iter([8, 17, 6, 9]);
@@ -606,15 +622,17 @@ mod tests {
     #[test]
     fn test_exhaustive_default_cx_cost() {
         let strat = LexicographicCostFunction::cx_count().into_greedy_strategy();
-        let circ = n_cx(3);
+        let circ = ResourceScope::from_circuit(n_cx(3));
         assert_eq!(strat.circuit_cost(&circ), (3, 3).into());
-        let circ = build_simple_circuit(2, |circ| {
+
+        let circ: ResourceScope = build_simple_circuit(2, |circ| {
             circ.append(TketOp::CX, [0, 1])?;
             circ.append(TketOp::X, [0])?;
             circ.append(TketOp::X, [1])?;
             Ok(())
         })
-        .unwrap();
+        .unwrap()
+        .into();
         assert_eq!(strat.circuit_cost(&circ), (1, 3).into());
     }
 

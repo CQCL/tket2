@@ -9,11 +9,14 @@ use std::{
 
 use super::{CircuitPattern, NodeID, PEdge, PNode};
 use derive_more::{Display, Error, From};
-use hugr::hugr::views::sibling_subgraph::{
-    InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
-};
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpType;
+use hugr::{
+    hugr::views::sibling_subgraph::{
+        InvalidReplacement, InvalidSubgraph, InvalidSubgraphBoundary, TopoConvexChecker,
+    },
+    SimpleReplacement,
+};
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, Port, PortIndex};
 use itertools::Itertools;
 use portmatching::{
@@ -215,7 +218,14 @@ impl PatternMatch {
         source: &Circuit<impl HugrView<Node = Node>>,
         target: Circuit,
     ) -> Result<CircuitRewrite, InvalidReplacement> {
-        CircuitRewrite::try_new(&self.subgraph, source.hugr(), target)
+        Ok(
+            SimpleReplacement::try_new(
+                self.subgraph.to_owned(),
+                source.hugr(),
+                target.into_hugr(),
+            )?
+            .into(),
+        )
     }
 }
 

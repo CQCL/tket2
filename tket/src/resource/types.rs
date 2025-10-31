@@ -4,6 +4,7 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
+use derive_more::derive::From;
 use hugr::{
     core::HugrNode, types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire,
 };
@@ -70,15 +71,31 @@ impl Position {
 
 /// A value associated with a dataflow port, identified either by a resource ID
 /// (for linear values) or by its wire (for copyable values).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// This can currently be converted to and from [`hugr::CircuitUnit`], but
+/// linear wires are assigned to resources with typed resource IDs instead of
+/// integers.
+///
+/// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
+/// may expand expressivity, e.g. identifying copyable units by their ASTs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
-    Resource(ResourceId),
+    Resource(#[from] ResourceId),
     /// A copyable value.
-    Copyable(Wire<N>),
+    Copyable(#[from] Wire<N>),
 }
 
 impl<N: HugrNode> CircuitUnit<N> {
+    pub(super) fn map_node<N2: HugrNode>(self, map_fn: impl FnOnce(N) -> N2) -> CircuitUnit<N2> {
+        match self {
+            CircuitUnit::Resource(resource_id) => CircuitUnit::Resource(resource_id),
+            CircuitUnit::Copyable(wire) => {
+                CircuitUnit::Copyable(Wire::new(map_fn(wire.node()), wire.source()))
+            }
+        }
+    }
+
     /// Returns true if this is a resource value.
     pub fn is_resource(&self) -> bool {
         matches!(self, CircuitUnit::Resource(..))
@@ -146,6 +163,13 @@ impl<T> PortMap<T> {
         Self {
             vec: vec![default; num_inputs + num_outputs],
             num_inputs,
+        }
+    }
+
+    pub(super) fn map<U>(self, mut map_fn: impl FnMut(T) -> U) -> PortMap<U> {
+        PortMap {
+            vec: self.vec.into_iter().map(|t| map_fn(t)).collect(),
+            num_inputs: self.num_inputs,
         }
     }
 
