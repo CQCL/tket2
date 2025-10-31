@@ -103,7 +103,7 @@ impl CircuitMatcher for CliffordMatcher {
 fn main() {
     const CIRCUIT: &str = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}, {"args": [["q", [1]]], "op": {"type": "V"}}, {"args": [["q", [0]], ["q", [2]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [2]]], "op": {"type": "S"}}, {"args": [["q", [0]]], "op": {"params": ["0.111"], "type": "Rz"}}, {"args": [["q", [2]]], "op": {"type": "T"}}, {"args": [["q", [1]], ["q", [2]]], "op": {"type": "CX"}}, {"args": [["q", [1]]], "op": {"type": "T"}}, {"args": [["q", [2]]], "op": {"type": "S"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]], [["q", [2]], ["q", [2]]]], "phase": "0.0", "qubits": [["q", [0]], ["q", [1]], ["q", [2]]]}"#;
     let ser_circ: SerialCircuit = serde_json::from_str(CIRCUIT).unwrap();
-    let circuit = ResourceScope::from_circuit(ser_circ.decode().unwrap());
+    let circuit = ResourceScope::from_circuit(ser_circ.decode(Default::default()).unwrap());
 
     let matcher = CliffordMatcher {
         allowed_num_cx: 2..4,

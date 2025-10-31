@@ -575,7 +575,7 @@ mod tests {
         // A circuit with two constant angle Rz gates, one of them is 0.123.
         const CIRC: &str = r#"{"bits": [], "commands": [{"args": [["q", [0]]], "op": {"params": ["0.123"], "type": "Rz"}}, {"args": [["q", [0]]], "op": {"params": ["0.5"], "type": "Rz"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]]], "phase": "0.0", "qubits": [["q", [0]]]}"#;
         let ser_circ: tket_json_rs::SerialCircuit = serde_json::from_str(CIRC).unwrap();
-        let circuit = ResourceScope::from_circuit(ser_circ.decode().unwrap());
+        let circuit = ResourceScope::from_circuit(ser_circ.decode(Default::default()).unwrap());
 
         let matcher = TestRzMatcher.as_hugr_matcher();
         let (match_subcirc, ()) = matcher
