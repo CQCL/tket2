@@ -45,18 +45,16 @@
 
 // Public API exports
 pub use flow::{DefaultResourceFlow, ResourceFlow, UnsupportedOp};
-pub use interval::Interval;
 pub use scope::{ResourceScope, ResourceScopeConfig};
 pub use types::{CircuitUnit, Position, ResourceAllocator, ResourceId};
 
 // Internal modules
 mod flow;
-mod interval;
 mod scope;
 mod types;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,

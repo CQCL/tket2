@@ -160,6 +160,14 @@ impl<H: HugrView> ResourceScope<H> {
         Some(*port_map.get(port))
     }
 
+    /// Get the [`ResourceId`] for a given port.
+    ///
+    /// Return None if the port is not a resource port.
+    pub fn get_resource_id(&self, node: H::Node, port: impl Into<Port>) -> Option<ResourceId> {
+        let unit = self.get_circuit_unit(node, port)?;
+        unit.as_resource()
+    }
+
     /// Get all [`CircuitUnit`]s for either the incoming or outgoing ports of a
     /// node.
     pub fn get_circuit_units_slice(
@@ -625,6 +633,18 @@ pub(crate) mod tests {
     };
 
     pub type PathEl<N> = (Position, N, Port);
+
+    impl<H: HugrView> ResourceScope<H> {
+        /// A test helper to create scopes with modified positions.
+        ///
+        /// The transformation must preserve the order of positions, i.e. if
+        /// pos[n] < pos[m], then map_pos(pos[n]) < map_pos(pos[m]).
+        pub(crate) fn map_positions(&mut self, map_pos: impl Fn(Position) -> Position) {
+            for node_units in self.circuit_units.values_mut() {
+                node_units.position = map_pos(node_units.position);
+            }
+        }
+    }
 
     /// Statistics about a ResourceScope.
     #[derive(Debug, Clone)]
