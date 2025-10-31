@@ -4,7 +4,7 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of circuit units associated with ports.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
@@ -16,7 +16,7 @@ use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
+use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::map::Entry;
 use indexmap::IndexMap;
@@ -274,6 +274,41 @@ impl<H: HugrView> ResourceScope<H> {
                 .expect("linear resource");
             self.nodes().contains(&next_node).then_some(next_node)
         })
+    }
+
+    /// Whether any of the ends are reachable from any of the starts, within
+    /// `self`.
+    ///
+    /// Any nodes outside of `self` are ignored.
+    pub fn any_reachable_from(
+        &self,
+        starts: impl IntoIterator<Item = (H::Node, OutgoingPort)>,
+        ends: impl IntoIterator<Item = (H::Node, IncomingPort)>,
+    ) -> bool {
+        let end_nodes = BTreeSet::from_iter(ends.into_iter().map(|(n, _)| n));
+        let Some(max_end) = end_nodes.iter().filter_map(|&n| self.get_position(n)).max() else {
+            return false;
+        };
+        let mut visited_nodes = BTreeSet::new();
+
+        let mut curr_nodes = VecDeque::from_iter(
+            starts
+                .into_iter()
+                .flat_map(|(n, p)| self.hugr().linked_inputs(n, p))
+                .map(|(n, _)| n),
+        );
+
+        while let Some(node) = curr_nodes.pop_front() {
+            if self.get_position(node).is_none_or(|p| p > max_end) || !visited_nodes.insert(node) {
+                continue;
+            }
+            if end_nodes.contains(&node) {
+                return true;
+            }
+            curr_nodes.extend(self.hugr().output_neighbours(node));
+        }
+
+        false
     }
 }
 
