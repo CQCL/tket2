@@ -817,12 +817,14 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: Fails due to bug in SiblingSubgraph <https://github.com/CQCL/hugr/issues/2654>
-//#[case::nested_opaque(circ_nested_opaque(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
+// Also requires <https://github.com/CQCL/hugr/pull/2655> to be published in hugr 0.24.1
+//#[case::nested_opaque(circ_nested_opaque(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: Fails due to bug in SiblingSubgraph <https://github.com/CQCL/hugr/issues/2654>
-//#[case::independent_subgraph(circ_independent_subgraph(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: Encoding of independent subgraphs needs more debugging.
+// Also requires <https://github.com/CQCL/hugr/pull/2655> to be published in hugr 0.24.1
+//#[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
 //#[case::non_local(circ_non_local(), 1)]
