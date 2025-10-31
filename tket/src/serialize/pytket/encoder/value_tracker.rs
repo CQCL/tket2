@@ -22,7 +22,7 @@ use tket_json_rs::register::ElementId as RegisterUnit;
 use crate::circuit::Circuit;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
-    OpConvertError, PytketEncodeError, RegisterHash, METADATA_B_REGISTERS,
+    PytketEncodeError, PytketEncodeOpError, RegisterHash, METADATA_B_REGISTERS,
     METADATA_INPUT_PARAMETERS,
 };
 
@@ -315,7 +315,7 @@ impl<N: HugrNode> ValueTracker<N> {
         wire: Wire<N>,
         values: impl IntoIterator<Item = Val>,
         circ: &Circuit<impl HugrView<Node = N>>,
-    ) -> Result<(), OpConvertError<N>> {
+    ) -> Result<(), PytketEncodeOpError<N>> {
         let values = values.into_iter().map(|v| v.into()).collect_vec();
 
         // Remove any qubit/bit used here from the unused set.
@@ -337,7 +337,7 @@ impl<N: HugrNode> ValueTracker<N> {
             unexplored_neighbours,
         };
         if self.wires.insert(wire, tracked).is_some() {
-            return Err(OpConvertError::WireAlreadyHasValues { wire });
+            return Err(PytketEncodeOpError::WireAlreadyHasValues { wire });
         }
 
         if unexplored_neighbours == 0 {
@@ -429,7 +429,7 @@ impl<N: HugrNode> ValueTracker<N> {
         self,
         circ: &Circuit<impl HugrView<Node = N>>,
         region: N,
-    ) -> Result<ValueTrackerResult, OpConvertError<N>> {
+    ) -> Result<ValueTrackerResult, PytketEncodeOpError<N>> {
         let output_node = circ.hugr().get_io(region).unwrap()[1];
 
         // Ordered list of qubits and bits at the output of the circuit.
@@ -440,7 +440,7 @@ impl<N: HugrNode> ValueTracker<N> {
             let wire = Wire::new(node, port);
             let values = self
                 .peek_wire_values(wire)
-                .ok_or_else(|| OpConvertError::WireHasNoValues { wire })?;
+                .ok_or_else(|| PytketEncodeOpError::WireHasNoValues { wire })?;
             for value in values {
                 match value {
                     TrackedValue::Qubit(qb) => qubit_outputs.push(self.qubit_register(*qb).clone()),

@@ -8,7 +8,7 @@ use hugr::algorithms::untuple::{UntupleError, UntupleRecursive};
 use hugr::algorithms::{ComposablePass, UntuplePass};
 use hugr::{HugrView, Node};
 
-use crate::serialize::pytket::OpConvertError;
+use crate::serialize::pytket::PytketEncodeOpError;
 use crate::Circuit;
 
 /// Try to lower a circuit to a form that can be encoded as a pytket legacy circuit.
@@ -33,7 +33,7 @@ pub enum PytketLoweringError {
     /// An error occurred during the conversion of an operation.
     #[display("operation conversion error: {_0}")]
     #[from]
-    OpConversionError(OpConvertError),
+    OpConversionError(PytketEncodeOpError),
     /// The circuit is not fully-contained in a region.
     /// Function calls are not supported.
     #[display("Non-local operations found. Function calls are not supported.")]

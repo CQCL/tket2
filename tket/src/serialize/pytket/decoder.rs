@@ -1,6 +1,7 @@
 //! Intermediate structure for decoding [`SerialCircuit`]s into [`Hugr`]s.
 
 mod param;
+mod subgraph;
 mod tracked_elem;
 mod wires;
 
@@ -8,6 +9,8 @@ use hugr::hugr::hugrmut::HugrMut;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
+
+pub(super) use wires::FoundWire;
 
 use std::sync::Arc;
 
@@ -34,23 +37,33 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::{DecodeInsertionTarget, PytketDecodeErrorInner};
+use crate::serialize::pytket::opaque::OpaqueSubgraphs;
+use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner};
 use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
-/// The state of an in-progress [`FunctionBuilder`] being built from a [`SerialCircuit`].
+/// The state of an in-progress [`FunctionBuilder`] being built from a
+/// [`SerialCircuit`].
+///
+/// The generic parameter `H` is the HugrView type of the Hugr that was encoded
+/// into the circuit, if any. This is required when the encoded pytket circuit
+/// contains opaque barriers that reference subgraphs in the original HUGR. See
+/// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload] for more details.
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
     pub builder: DFGBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
-    pub(super) wire_tracker: WireTracker,
-    /// Configuration for decoding commands.
+    pub(super) wire_tracker: Box<WireTracker>,
+    /// Options used when decoding the circuit.
     ///
-    /// Contains custom operation decoders, that define translation of legacy tket
-    /// commands into HUGR operations.
-    config: Arc<PytketDecoderConfig>,
+    /// This contains the decoding parameters specific to the current circuit
+    /// being decoded.
+    options: DecodeOptions,
+    /// A registry of opaque subgraphs from `original_hugr`, that are referenced by opaque barriers in the pytket circuit
+    /// via their [`SubgraphId`].
+    pub(super) opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
 }
 
 impl<'h> PytketDecoderContext<'h> {
@@ -94,13 +107,16 @@ impl<'h> PytketDecoderContext<'h> {
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
         target: DecodeInsertionTarget,
-        fn_name: Option<String>,
-        signature: Option<Signature>,
-        input_params: impl IntoIterator<Item = String>,
-        config: impl Into<Arc<PytketDecoderConfig>>,
+        mut options: DecodeOptions,
     ) -> Result<Self, PytketDecodeError> {
-        let config: Arc<PytketDecoderConfig> = config.into();
-        let signature = signature.unwrap_or_else(|| {
+        // Ensure that the set of decoders is present, use a default one if not.
+        if options.config.is_none() {
+            options = options.with_default_config();
+        }
+
+        // Compute the signature of the decoded region, if not provided, and
+        // initialize the DFG builder.
+        let signature = options.signature.clone().unwrap_or_else(|| {
             let num_qubits = serialcirc.qubits.len();
             let num_bits = serialcirc.bits.len();
             let types: TypeRow = [vec![qb_t(); num_qubits], vec![bool_t(); num_bits]]
@@ -108,11 +124,11 @@ impl<'h> PytketDecoderContext<'h> {
                 .into();
             Signature::new(types.clone(), types)
         });
-        let name = fn_name
-            .or_else(|| serialcirc.name.clone())
-            .unwrap_or_default();
         let mut dfg: DFGBuilder<&mut Hugr> = match target {
-            DecodeInsertionTarget::Function => {
+            DecodeInsertionTarget::Function { fn_name } => {
+                let name = fn_name
+                    .or_else(|| serialcirc.name.clone())
+                    .unwrap_or_default();
                 FunctionBuilder::with_hugr(hugr, name, signature.clone())
                     .unwrap()
                     .into_dfg_builder()
@@ -131,8 +147,8 @@ impl<'h> PytketDecoderContext<'h> {
             serialcirc,
             &mut dfg,
             &signature.input,
-            input_params,
-            &config,
+            options.input_params.iter().cloned(),
+            options.get_config(),
         )?;
 
         if !serialcirc.phase.is_empty() {
@@ -144,8 +160,9 @@ impl<'h> PytketDecoderContext<'h> {
 
         Ok(PytketDecoderContext {
             builder: dfg,
-            wire_tracker,
-            config,
+            wire_tracker: Box::new(wire_tracker),
+            options,
+            opaque_subgraphs: None,
         })
     }
 
@@ -314,7 +331,11 @@ impl<'h> PytketDecoderContext<'h> {
                 };
                 e.hugr_op("Output")
             })?;
+        let output_wire_count = output_wires.register_count();
         let output_wires = output_wires.wires();
+
+        // Qubits not in the output need to be freed.
+        self.add_implicit_qfree_operations(&qubits[output_wire_count.qubits..]);
 
         // Store the name for the input parameter wires
         let input_params = self.wire_tracker.finish();
@@ -332,12 +353,52 @@ impl<'h> PytketDecoderContext<'h> {
             .node())
     }
 
+    /// Add the implicit QFree operations for a list of qubits that are not in the hugr output.
+    ///
+    /// We only do this if there's a wire with type `qb_t` containing the qubit.
+    fn add_implicit_qfree_operations(&mut self, qubits: &[TrackedQubit]) {
+        let qb_type = qb_t();
+        let mut bit_args: &[TrackedBit] = &[];
+        let mut params: &[LoadedParameter] = &[];
+        for q in qubits.iter() {
+            let mut qubit_args: &[TrackedQubit] = std::slice::from_ref(q);
+            let Ok(FoundWire::Register(wire)) = self.wire_tracker.find_typed_wire(
+                self.config(),
+                &qb_type,
+                &mut qubit_args,
+                &mut bit_args,
+                &mut params,
+                None,
+            ) else {
+                continue;
+            };
+
+            self.builder
+                .add_dataflow_op(TketOp::QFree, [wire.wire()])
+                .unwrap()
+                .out_wire(0);
+        }
+    }
+
+    /// Register the set of opaque subgraphs that are present in the HUGR being decoded.
+    ///
+    /// # Arguments
+    /// - `opaque_subgraphs`: A registry of opaque subgraphs from
+    ///   `self.builder.hugr()`, that are referenced by opaque barriers in the
+    ///   pytket circuit via their [`SubgraphId`].
+    pub(super) fn register_opaque_subgraphs(
+        &mut self,
+        opaque_subgraphs: &'h OpaqueSubgraphs<Node>,
+    ) {
+        self.opaque_subgraphs = Some(opaque_subgraphs);
+    }
+
     /// Decode a list of pytket commands.
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
     ) -> Result<(), PytketDecodeError> {
-        let config = self.config.clone();
+        let config = self.config().clone();
         for com in commands {
             let op_type = com.op.op_type;
             self.process_command(com, config.as_ref())
@@ -378,11 +439,6 @@ impl<'h> PytketDecoderContext<'h> {
         }
         Ok(())
     }
-
-    /// Returns the configuration used by the decoder.
-    pub fn config(&self) -> &Arc<PytketDecoderConfig> {
-        &self.config
-    }
 }
 
 /// Public API, used by the [`PytketDecoder`][super::extension::PytketDecoder] implementers.
@@ -420,7 +476,7 @@ impl<'h> PytketDecoderContext<'h> {
         params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
         self.wire_tracker
-            .find_typed_wires(&self.config, types, qubit_args, bit_args, params)
+            .find_typed_wires(self.config(), types, qubit_args, bit_args, params)
     }
 
     /// Connects the input ports of a node using a list of input qubits, bits,
@@ -486,12 +542,12 @@ impl<'h> PytketDecoderContext<'h> {
         let op_input_count: RegisterCount = sig
             .input_types()
             .iter()
-            .map(|ty| self.config.type_to_pytket(ty).unwrap_or_default())
+            .map(|ty| self.config().type_to_pytket(ty).unwrap_or_default())
             .sum();
         let op_output_count: RegisterCount = sig
             .output_types()
             .iter()
-            .map(|ty| self.config.type_to_pytket(ty).unwrap_or_default())
+            .map(|ty| self.config().type_to_pytket(ty).unwrap_or_default())
             .sum();
 
         // Validate input counts
@@ -643,7 +699,7 @@ impl<'h> PytketDecoderContext<'h> {
         let mut port_types = sig.output_ports().zip(sig.output_types().iter());
         while let Some((port, ty)) = port_types.next() {
             let wire = Wire::new(node, port);
-            let counts = self.config.type_to_pytket(ty).unwrap_or_default();
+            let counts = self.config().type_to_pytket(ty).unwrap_or_default();
             reg_count += counts;
 
             // Get the qubits and bits for this wire.
@@ -653,7 +709,7 @@ impl<'h> PytketDecoderContext<'h> {
                 let expected_qubits = reg_count.qubits - counts.qubits + wire_qubits.len();
                 let expected_bits = reg_count.bits - counts.bits + wire_bits.len();
                 return Err(make_unexpected_node_out_error(
-                    &self.config,
+                    self.config(),
                     port_types,
                     reg_count,
                     expected_qubits,
@@ -700,6 +756,16 @@ impl<'h> PytketDecoderContext<'h> {
             .load_half_turns_parameter(&mut self.builder, param, Some(typ))
             .with_type(typ, &mut self.builder)
     }
+
+    /// Returns the configuration used by the decoder.
+    pub fn config(&self) -> &Arc<PytketDecoderConfig> {
+        self.options.get_config()
+    }
+
+    /// Returns the options used by the decoder.
+    pub fn options(&self) -> &DecodeOptions {
+        &self.options
+    }
 }
 
 /// Result of trying to decode pytket operation into a HUGR definition.
@@ -721,7 +787,12 @@ pub enum DecodeStatus {
     Unsupported,
 }
 
-/// Helper to continue exhausting the iterators in [`PytketDecoderContext::register_node_outputs`] until we have the total number of elements to report.
+/// Helper to continue exhausting the iterators in
+/// [`PytketDecoderContext::register_node_outputs`] until we have the total
+/// number of elements to report.
+///
+/// Processes remaining port types and adds them to the partial count of the
+/// number of qubits and bits we expected to have available.
 fn make_unexpected_node_out_error<'ty>(
     config: &PytketDecoderConfig,
     port_types: impl IntoIterator<Item = (OutgoingPort, &'ty Type)>,
