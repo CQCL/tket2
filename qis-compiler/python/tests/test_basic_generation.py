@@ -1,5 +1,3 @@
-import importlib
-import importlib.util
 from pathlib import Path
 
 import pytest
@@ -45,9 +43,6 @@ def test_check() -> None:
 
 def test_unsupported_pytket_ops() -> None:
     """Test the check_hugr function to ensure it flags unsupported pytket ops."""
-    if importlib.util.find_spec("tket") is None:
-        pytest.skip("tket not installed; skipping test of unsupported pytket ops")
-
     hugr_envelope = load("unsupported_pytket_ops")
     with pytest.raises(
         HugrReadError,
@@ -57,74 +52,26 @@ def test_unsupported_pytket_ops() -> None:
         check_hugr(hugr_envelope)
 
 
+@pytest.mark.parametrize(
+    "hugr_file",
+    [
+        "no_results",
+        "flip_some",
+        "discard_qb_array",
+        "measure_qb_array",
+        "print_array",
+        "postselect_exit",
+        "postselect_panic",
+        "rus",
+        "print_current_shot",
+        "rng",
+    ],
+)
 @pytest.mark.parametrize("target_triple", triples)
-def test_llvm_no_results(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("no_results")
+def test_llvm(snapshot: Snapshot, hugr_file: str, target_triple: str) -> None:
+    hugr_envelope = load(hugr_file)
     ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"no_results_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_flip_some(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("flip_some")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"flip_some_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_discard_array(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("discard_array")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"discard_array_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_measure_array(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("measure_array")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"measure_array_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_print_array(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("print_array")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"print_array_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_exit(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("postselect_exit")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"exit_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_panic(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("postselect_panic")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"panic_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_rus(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("rus")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"rus_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_get_current_shot(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("get_current_shot")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"current_shot_{target_triple}")
-
-
-@pytest.mark.parametrize("target_triple", triples)
-def test_llvm_rng(snapshot: Snapshot, target_triple: str) -> None:
-    hugr_envelope = load("rng")
-    ir = compile_to_llvm_ir(hugr_envelope, target_triple=target_triple)  # type: ignore[call-arg]
-    snapshot.assert_match(ir, f"rng_{target_triple}")
+    snapshot.assert_match(ir, f"{hugr_file}_{target_triple}")
 
 
 def test_entry_args() -> None:
