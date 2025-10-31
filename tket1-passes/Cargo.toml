@@ -26,8 +26,9 @@ conan2 = "0.1.8"
 [dev-dependencies]
 rstest.workspace = true
 itertools.workspace = true
+rayon.workspace = true
 
-# Used for testing
+# Used for integration tests
 hugr = { workspace = true }
 tket = { path = "../tket", version = "0.16.0" }
 

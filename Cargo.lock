@@ -2693,6 +2693,7 @@ dependencies = [
  "hugr",
  "itertools 0.14.0",
  "libc",
+ "rayon",
  "rstest 0.26.1",
  "serde",
  "serde_json",
