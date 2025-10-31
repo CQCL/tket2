@@ -2690,11 +2690,14 @@ dependencies = [
  "bindgen",
  "cc",
  "conan2",
+ "hugr",
+ "itertools 0.14.0",
  "libc",
  "rstest 0.26.1",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+ "tket",
  "tket-json-rs",
 ]
 
