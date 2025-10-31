@@ -9,6 +9,7 @@ use hugr::builder::{
     ModuleBuilder, SubContainer,
 };
 use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
+use rayon::iter::ParallelIterator;
 use std::sync::Arc;
 
 use hugr::hugr::hugrmut::HugrMut;
@@ -703,6 +704,28 @@ impl CircuitRoundtripTestConfig {
             }
         }
     }
+}
+
+#[rstest]
+fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
+    let circ = circ_measure_ancilla;
+
+    let encode_options = EncodeOptions::new_with_subcircuits();
+
+    let encoded = EncodedCircuit::new(&circ, encode_options).unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains_circuit(circ.parent()));
+    assert_eq!(encoded.len(), 1);
+    assert!(!encoded.is_empty());
+
+    let (_, serial_circ) = encoded.iter().exactly_one().ok().unwrap();
+    assert_eq!(serial_circ.commands.len(), 2);
+
+    let par_sum: usize = encoded
+        .par_iter()
+        .map(|(_, circ)| circ.commands.len())
+        .sum();
+    assert_eq!(par_sum, 2);
 }
 
 /// Test the standalone serialisation roundtrip from a tket circuit.
