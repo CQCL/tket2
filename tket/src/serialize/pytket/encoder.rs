@@ -593,9 +593,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
             unsupported_nodes.iter().cloned().collect_vec(),
             circ.hugr(),
         )
-        .unwrap_or_else(|_| {
+        .unwrap_or_else(|e| {
             panic!(
-                "Failed to create subgraph from unsupported nodes [{}]",
+                "Failed to create subgraph from unsupported nodes [{}]: {e}",
                 unsupported_nodes.iter().join(", ")
             )
         });
@@ -879,9 +879,20 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     return Ok(EncodeStatus::Success);
                 }
             }
-            OpType::LoadConstant(_) => {
-                self.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
-                return Ok(EncodeStatus::Success);
+            OpType::LoadConstant(constant) => {
+                // If we are loading a supported type, emit a transparent node
+                // by reassigning the input values to the new outputs.
+                //
+                // Otherwise, if we're loading an unsupported type, this node
+                // should be part of an unsupported subgraph.
+                if self
+                    .config()
+                    .type_to_pytket(constant.constant_type())
+                    .is_some()
+                {
+                    self.emit_transparent_node(node, circ, |ps| ps.input_params.to_owned())?;
+                    return Ok(EncodeStatus::Success);
+                }
             }
             OpType::Const(op) => {
                 let config = Arc::clone(&self.config);
