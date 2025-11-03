@@ -58,7 +58,7 @@ jobs:
           SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket-py-v') ) }}
 
   build:
-    name: ${{ matrix.platform.runner }}, ${{ matrix.platform.target }}, ${{ matrix.platform.manylinux }}
+    name: ${{ matrix.platform.target }}, ${{ matrix.platform.manylinux }}
     needs: check-tag
     if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
@@ -67,43 +67,43 @@ jobs:
       matrix:
         platform:
           - runner: ubuntu-22.04
-            target: x86_64
+            target: x86_64-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: x86
+            target: i686-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: aarch64
+            target: aarch64-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: armv7
+            target: armv7-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: s390x
+            target: s390x-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: ppc64le
+            target: ppc64le-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: x86_64
+            target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
-            target: x86
+            target: i686-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
-            target: aarch64
+            target: aarch64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
-            target: armv7
+            target: armv7-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: windows-latest
-            target: x64
+            target: x64-windows
           - runner: windows-latest
-            target: x86
+            target: i686-pc-windows-msvc
           - runner: macos-15-intel
-            target: x86_64
+            target: x86_64-apple-darwin
           - runner: macos-26
-            target: aarch64
+            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -124,6 +124,7 @@ jobs:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Set compatibility flag
         id: compatibility-flag
+        shell: bash
         run: |
           if [ -n "${{ matrix.platform.manylinux }}" ]; then
             WITH_ZIG_FLAG="--with maturin[zig]"
@@ -134,9 +135,10 @@ jobs:
           fi
           echo "COMPATIBILITY_FLAG: $COMPATIBILITY_FLAG"
           echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
-          echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> $GITHUB_OUTPUT
-          echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> $GITHUB_OUTPUT
+          echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> "$GITHUB_OUTPUT"
+          echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> "$GITHUB_OUTPUT"
       - name: Build wheels
+        shell: bash
         run: |
           uv run --python ${{ env.PYTHON_VERSION }} \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
@@ -148,6 +150,7 @@ jobs:
             --strip \
             --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Build free-threaded wheels
+        shell: bash
         run: |
           uv run --python ${{ env.PYTHON_VERSION }}t \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
@@ -176,13 +179,11 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Build sdist
         run: |
-          uv run --python ${{ env.PYTHON_VERSION }} \
+          uv run --no-project \
+            --python ${{ env.PYTHON_VERSION }} \
+            --with maturin \
             maturin sdist \
             --out dist \
             --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
