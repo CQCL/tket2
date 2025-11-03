@@ -192,6 +192,13 @@ jobs:
         with:
           name: wheels-linux-${{ matrix.platform.target }}
           path: dist
+          if-no-files-found: error
+
+      - name: Test installing the built wheels
+        run: |
+          echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
+          uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
+          uvx twine check --strict dist/*
 
   sdist:
     needs: check-tag
@@ -219,6 +226,7 @@ jobs:
         with:
           name: wheels-sdist
           path: dist
+          if-no-files-found: error
 
   release:
     name: Release
@@ -235,12 +243,18 @@ jobs:
       attestations: write
     steps:
       - uses: actions/download-artifact@v5
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "wheels-*/*"
+          path: dist
+          merge-multiple: true
+      - name: Report
+        run: |
+          echo "Publishing to PyPI..."
+          echo "Based on the following workflow variables, this is a new version tag push:"
+          echo "  - event_name: ${{ github.event_name }}"
+          echo "  - ref_type: ${{ github.ref_type }}"
+          echo "  - ref: ${{ github.ref }}"
       - name: Publish to PyPI
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --non-interactive --skip-existing wheels-*/*
+          verbose: true
+          skip-existing: true
