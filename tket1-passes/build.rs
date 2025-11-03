@@ -121,9 +121,9 @@ impl SupportedPlatform {
         // See ./conan-profiles/README.md for more details
         match self {
             SupportedPlatform::MacOsX86 => "macos-15-intel",
-            SupportedPlatform::MacOsArm => "macos-26",
+            SupportedPlatform::MacOsArm => "macos-15",
             SupportedPlatform::WindowsX86 => "windows-2025",
-            SupportedPlatform::LinusX86 => "linux-x86_64-gcc14",
+            SupportedPlatform::LinusX86 => "linux-x86_64-gcc13",
         }
     }
 }
