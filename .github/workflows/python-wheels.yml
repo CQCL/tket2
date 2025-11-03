@@ -120,16 +120,19 @@ jobs:
         # The alternative is to install conan and remove the env var
         run: |
           if [ ${{ matrix.platform.runner }} == 'windows-latest' ]; then
-            echo "TKET_C_API_PATH=$WORKSPACE\tket-c-api" >> $GITHUB_ENV
-            echo "LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib" >> $GITHUB_ENV
+            TKET_C_API_PATH=$WORKSPACE\tket-c-api
+            LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib
           elif [ ${{ matrix.platform.runner }} == 'macos-15' ]; then
-            echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
-            echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+            TKET_C_API_PATH=$WORKSPACE/tket-c-api
+            DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib
           else
-            echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
-            echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+            TKET_C_API_PATH=$WORKSPACE/tket-c-api
+            LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib
           fi
           echo "TKET_C_API_PATH=$TKET_C_API_PATH" >> $GITHUB_OUTPUT
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $GITHUB_OUTPUT
+          echo "TKET_C_API_PATH=$TKET_C_API_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $GITHUB_ENV
         env:
           WORKSPACE: ${{ github.workspace }}
       - name: Install tket-c-api library
