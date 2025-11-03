@@ -13,7 +13,8 @@ def qsystem_chain(q: qubit) -> None:
     rz(q, angle(0.62))
 
 
-# pytket code to generate this example. For optimised version replace the call to AutoRebase with AutoSquash.
+# pytket code to generate this example.
+# For the optimised version replace the call to AutoRebase with AutoSquash.
 
 # from pytket import Circuit, OpType
 # from pytket.passes import AutoSquash, AutoRebase
@@ -26,8 +27,7 @@ def qsystem_chain(q: qubit) -> None:
 # circ.Rx(0.81, 0)
 # circ.Rz(0.62, 0)
 #
-#
-#
+# When you switch to AutoSquash, remove ZZPhase from the set
 # AutoRebase({OpType.Rz, OpType.PhasedX, OpType.ZZPhase}).apply(circ)
 #
 # print(circ.get_commands())
