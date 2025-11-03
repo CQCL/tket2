@@ -20,7 +20,15 @@ fn main() {
 
     let header_path = if let Some(path) = custom_tket_path {
         cargo_set_custom_lib_path(&path.join("lib"), target);
-        path.join("include").join("tket-c-api.h")
+        let header_path = path.join("include").join("tket-c-api.h");
+
+        assert!(
+            header_path.exists(),
+            "TKET_C_API_PATH is set to {} but header was not found at {}",
+            path.display(),
+            header_path.display()
+        );
+        header_path
     } else {
         // Get dependencies from conan
 
@@ -59,12 +67,6 @@ fn main() {
             .find(|header| header.exists())
             .expect("required tket-c-api.h header not found")
     };
-
-    assert!(
-        header_path.exists(),
-        "header not found at {}",
-        header_path.display()
-    );
 
     // Link in standard C++ library.
     if target.is_some_and(|t| t.is_macos()) {

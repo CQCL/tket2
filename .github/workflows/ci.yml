@@ -97,6 +97,12 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
         run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
@@ -287,6 +293,12 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      # This step is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the `TKET_C_API_PATH` env var
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Setup dependencies
