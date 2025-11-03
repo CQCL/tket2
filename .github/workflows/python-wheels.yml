@@ -140,27 +140,27 @@ jobs:
       - name: Build wheels
         shell: bash
         run: |
+          cd ${{ env.MODULE_DIR }}
           uv run --python ${{ env.PYTHON_VERSION }} \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
             ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
             --release \
-            --out dist \
+            --out ../dist \
             --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --strip
       - name: Build free-threaded wheels
         shell: bash
         run: |
+          cd ${{ env.MODULE_DIR }}
           uv run --python ${{ env.PYTHON_VERSION }}t \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
             ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
             --release \
-            --out dist \
+            --out ../dist \
             --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --strip
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -181,12 +181,13 @@ jobs:
           enable-cache: true
       - name: Build sdist
         run: |
+          cd ${{ env.MODULE_DIR }}
           uv run --no-project \
             --python ${{ env.PYTHON_VERSION }} \
             --with maturin \
             maturin sdist \
-            --out dist \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --out ../dist \
+            --manifest-path Cargo.toml
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
