@@ -103,24 +103,24 @@ jobs:
           uv run --python ${{ env.PYTHON_VERSION }} \
             --with maturin[zig] \
             maturin build \
-            --compatibility manylinux2014
+            --compatibility manylinux2014 \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
             --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
             --zig
       - name: Build free-threaded wheels
         run: |
           uv run --python ${{ env.PYTHON_VERSION }}t \
             --with maturin[zig] \
             maturin build \
-            --compatibility manylinux2014
+            --compatibility manylinux2014 \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
             --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
             --zig
       - name: Upload wheels
         uses: actions/upload-artifact@v5
@@ -164,24 +164,24 @@ jobs:
           uv run --python ${{ env.PYTHON_VERSION }} \
             --with maturin[zig] \
             maturin build \
-            --compatibility musllinux_1_2
+            --compatibility musllinux_1_2 \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
             --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
             --zig
       - name: Build free-threaded wheels
         run: |
           uv run --python ${{ env.PYTHON_VERSION }}t \
             --with maturin[zig] \
             maturin build \
-            --compatibility musllinux_1_2
+            --compatibility musllinux_1_2 \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
             --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
             --zig
       - name: Upload wheels
         uses: actions/upload-artifact@v5
