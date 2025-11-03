@@ -32,7 +32,8 @@ env:
   UV_VERSION: "0.9.7"
   UV_FROZEN: 1
   # Python version used to build the wheels
-  PYTHON_VERSION: "3.14"
+  # TODO: pytket doesn't have freethreaded 3.14 wheels yet, so we use 3.13 here
+  PYTHON_VERSION: "3.13"
   # sccache config
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
@@ -77,9 +78,6 @@ jobs:
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: armv7-unknown-linux-gnueabihf
-            manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
-            target: s390x-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: powerpc64le-unknown-linux-gnu
