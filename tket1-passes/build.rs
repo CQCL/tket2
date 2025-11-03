@@ -32,6 +32,12 @@ fn main() {
     } else {
         // Get dependencies from conan
 
+        // 0. Check that conan is installed
+        assert!(
+            Command::new("conan").arg("--version").output().is_ok(),
+            "conan is not installed"
+        );
+
         // 1. Add the conan remote to get the tket-c-api source and binaries
         add_conan_remote_if_missing(CONAN_REMOTE);
 
