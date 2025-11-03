@@ -61,7 +61,7 @@ runs:
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
         echo "Files in CONAN_LIB_FOLDER:"
-        find "$CONAN_LIB_FOLDER" -type f
+        Get-ChildItem -Path "$conanLibFolder" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
         Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
 
     - name: Upload compiled library to cache
