@@ -1,8 +1,7 @@
 use crate::REGISTRY;
 use anyhow::{Error, Result, anyhow};
-use tket::hugr::envelope::get_generator;
+use tket::hugr::envelope::read_described_envelope;
 use tket::hugr::ops::OpType;
-use tket::hugr::package::Package;
 use tket::hugr::types::Term;
 use tket::hugr::{Hugr, HugrView};
 
@@ -13,7 +12,7 @@ use tket::extension::{TKET1_EXTENSION_ID, TKET1_OP_NAME};
 /// Interprets the string as a hugr package and, verifies there is exactly one module in the
 /// package, then extracts and returns that module.
 pub fn read_hugr_envelope(bytes: &[u8]) -> Result<Hugr> {
-    let package = Package::load(bytes, Some(&REGISTRY))
+    let (desc, package) = read_described_envelope(bytes, &REGISTRY)
         .map_err(|e| Error::new(e).context("Error loading HUGR package."))?;
 
     if package.modules.len() != 1 {
@@ -24,7 +23,7 @@ pub fn read_hugr_envelope(bytes: &[u8]) -> Result<Hugr> {
     }
 
     package.validate().map_err(|e| {
-        let generator = get_generator(&package.modules);
+        let generator = desc.generator();
         let any = Error::new(e);
         if let Some(generator) = generator {
             any.context(format!("in package with generator {generator}"))
