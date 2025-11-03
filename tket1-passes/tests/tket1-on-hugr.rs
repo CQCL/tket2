@@ -84,3 +84,45 @@ fn count_quantum_gates(circuit: &Circuit, region: Node) -> usize {
         })
         .count()
 }
+
+#[test]
+fn test_borrow_squash() {
+    let reader = BufReader::new(include_bytes!("../../../test_files/nested_array.hugr").as_slice());
+    let mut h = Hugr::load(reader, Some(&REGISTRY)).unwrap();
+    let array_func = h
+        .children(h.module_root())
+        .find(|n| {
+            h.get_optype(*n)
+                .as_func_defn()
+                .is_some_and(|fd| fd.func_name() == "nested_array")
+        })
+        .unwrap();
+    h.set_entrypoint(array_func);
+
+    ConstantFoldPass::default()
+        .then(BorrowSquashPass::default())
+        .run(&mut h)
+        .unwrap();
+    let circ = Circuit::new(nested_array);
+    let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits()).unwrap();
+
+    for (_, serial_circuit) in encoded.iter_mut() {
+        let mut circuit_ptr = Tket1Circuit::from_serial_circuit(serial_circuit).unwrap();
+        circuit_ptr
+            .clifford_simp(tket_json_rs::OpType::CX, true)
+            .unwrap();
+        *serial_circuit = circuit_ptr.to_serial_circuit().unwrap();
+    }
+
+    encoded.reassemble_inline(circ.hugr_mut(), None).unwrap();
+
+    let h = circ.into_hugr();
+    h.validate().unwrap();
+    assert!(h
+        .nods()
+        .any(|n| h.get_optype(n).as_extension_op().is_some_and(|eop| [
+            TKET_EXTENSION_ID,
+            TKET1_EXTENSION_ID
+        ]
+        .contains(eop.extension_id()))));
+}
