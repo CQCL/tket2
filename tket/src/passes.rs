@@ -7,6 +7,9 @@ pub use commutation::{apply_greedy_commutation, PullForwardError};
 pub mod chunks;
 pub use chunks::CircuitChunks;
 
+pub mod guppy;
+pub use guppy::NormalizeGuppy;
+
 pub mod pytket;
 pub use pytket::lower_to_pytket;
 
