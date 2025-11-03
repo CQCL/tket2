@@ -78,6 +78,8 @@ jobs:
             manylinux: "musllinux_1_2"
           - runner: windows-latest
             target: i686-pc-windows-msvc
+            # Override required since uv defaults to x64
+            python: cpython-3.10-windows-i686-none
           - runner: ubuntu-22.04
             target: i686-unknown-linux-gnu
             manylinux: "manylinux2014"
@@ -163,11 +165,14 @@ jobs:
           echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
           echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> "$GITHUB_OUTPUT"
           echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> "$GITHUB_OUTPUT"
+      - name: Pin python version
+        shell: bash
+        run: uv python pin ${{ matrix.platform.python || env.PYTHON_VERSION }}
       - name: Build wheels
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
-          uv run --python ${{ env.PYTHON_VERSION }} \
+          uv run \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
             ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
@@ -175,13 +180,17 @@ jobs:
             --out ../dist \
             --target ${{ matrix.platform.target }} \
             --strip
+      - name: Pin freethreaded python version
+        if: false
+        shell: bash
+        run: uv python pin ${{ matrix.platform.python || env.PYTHON_VERSION }}+freethreaded
       - name: Build free-threaded wheels
         # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
         if: false
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
-          uv run --python ${{ env.PYTHON_VERSION }}t \
+          uv run \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
             ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
