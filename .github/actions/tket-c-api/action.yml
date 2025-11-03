@@ -5,7 +5,10 @@ inputs:
   install-path:
     description: "Path where the tket-c-api library will be installed"
     required: true
-
+  target:
+    description: "Target platform, used for caching"
+    required: false
+    default: ${{ runner.arch }}
 runs:
   using: composite
   steps:
@@ -14,7 +17,7 @@ runs:
       id: cache
       with:
         path: ${{ inputs.install-path }}
-        key: ${{ runner.os }}-${{ hashFiles('{tket1-passes/conanfile.txt,tket1-passes/conan-profiles/**,.github/actions/tket-c-api/action.yml}') }}
+        key: ${{ runner.os }}-${{ inputs.target }}-${{ hashFiles('tket1-passes/conanfile.txt') }}-${{ hashFiles('tket1-passes/conan-profiles/**') }}-${{ hashFiles('.github/actions/tket-c-api/action.yml') }}
 
     - name: Install conan
       if: steps.cache.outputs.cache-hit != 'true'

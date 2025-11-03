@@ -147,6 +147,7 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ steps.tket-paths.outputs.tket_c_api_path }}
+          target: ${{ matrix.platform.target }}
       - name: Set compatibility flag
         id: compatibility-flag
         shell: bash
