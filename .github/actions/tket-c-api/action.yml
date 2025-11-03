@@ -46,6 +46,8 @@ runs:
         CONAN_OUTPUT=$(conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json)
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
         echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
+        echo "Files in CONAN_LIB_FOLDER:"
+        find "$CONAN_LIB_FOLDER" -type f
         cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
 
     - name: Build and install tket-c-api (Windows)
@@ -58,6 +60,8 @@ runs:
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
+        echo "Files in CONAN_LIB_FOLDER:"
+        find "$CONAN_LIB_FOLDER" -type f
         Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
 
     - name: Upload compiled library to cache
@@ -71,4 +75,4 @@ runs:
       shell: bash
       run: |
         echo "tket-c-api library files:"
-        ls -lR "${{ inputs.install-path }}"
+        find "${{ inputs.install-path }}" -type f
