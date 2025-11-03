@@ -58,17 +58,7 @@ runs:
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
-        # Copy files while translating any embedded forward slashes to Windows directories
-        # This is a workaround for conan installing files with forward slashes on Windows.
-        Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force | ForEach-Object {
-          if ($_.PSIsContainer) { return }
-          $relative = $_.FullName.Substring($sourceRoot.Length).TrimStart('\\','/')
-          $relativeWin = $relative -replace '/', '\\'
-          $destPath = Join-Path "${{ inputs.install-path }}" $relativeWin
-          $destDir = Split-Path -Parent $destPath
-          New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-          Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force
-        }
+        Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'
