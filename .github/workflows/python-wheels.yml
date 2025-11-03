@@ -76,13 +76,13 @@ jobs:
             target: aarch64-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: armv7-unknown-linux-gnu
+            target: armv7-unknown-linux-gnueabihf
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: s390x-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: ppc64le-unknown-linux-gnu
+            target: powerpc64le-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
@@ -97,7 +97,7 @@ jobs:
             target: armv7-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: windows-latest
-            target: x64-windows
+            target: x86_64-pc-windows-msvc
           - runner: windows-latest
             target: i686-pc-windows-msvc
           - runner: macos-15-intel
