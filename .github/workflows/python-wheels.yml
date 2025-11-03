@@ -74,9 +74,6 @@ jobs:
             target: armv7-unknown-linux-gnueabihf
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: powerpc64le-unknown-linux-gnu
-            manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
@@ -112,33 +109,41 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
-      - name: Set tket-c-api library paths
-        id: tket-c-api-paths
+
+        # Set the path to the cached tket-c-api library
+        # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
+        # This config is not required, but speeds up the build by caching the tket-c-api library
+        # The alternative is to install conan and remove the env var
+      - name: Set tket-c-api library paths (linux)
         # Path to the cached tket-c-api library
         # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
         # This config is not required, but speeds up the build by caching the tket-c-api library
         # The alternative is to install conan and remove the env var
         run: |
-          if [ ${{ matrix.platform.runner }} == 'windows-latest' ]; then
-            TKET_C_API_PATH=$WORKSPACE\tket-c-api
-            LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib
-          elif [ ${{ matrix.platform.runner }} == 'macos-15' ]; then
-            TKET_C_API_PATH=$WORKSPACE/tket-c-api
-            DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib
-          else
-            TKET_C_API_PATH=$WORKSPACE/tket-c-api
-            LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib
-          fi
-          echo "TKET_C_API_PATH=$TKET_C_API_PATH" >> $GITHUB_OUTPUT
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $GITHUB_OUTPUT
-          echo "TKET_C_API_PATH=$TKET_C_API_PATH" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+        env:
+          WORKSPACE: ${{ github.workspace }}
+      - name: Set tket-c-api library paths (macos)
+        if: ${{ startsWith(matrix.platform.runner, 'macos-') }}
+        run: |
+          echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+        env:
+          WORKSPACE: ${{ github.workspace }}
+      - name: Set tket-c-api library paths (windows)
+        if: ${{ startsWith(matrix.platform.runner, 'windows-') }}
+        run: |
+          echo "TKET_C_API_PATH=$WORKSPACE\tket-c-api" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib" >> $GITHUB_ENV
         env:
           WORKSPACE: ${{ github.workspace }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
-          install-path: ${{ steps.tket-c-api-paths.outputs.TKET_C_API_PATH }}
+          install-path: ${{ env.TKET_C_API_PATH }}
+        env:
+          TKET_C_API_PATH: ${{ env.TKET_C_API_PATH }}
       - name: Set compatibility flag
         id: compatibility-flag
         shell: bash
