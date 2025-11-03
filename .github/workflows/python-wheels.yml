@@ -307,6 +307,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Build sdist
         run: |
           uv run --python ${{ env.PYTHON_VERSION }} \
