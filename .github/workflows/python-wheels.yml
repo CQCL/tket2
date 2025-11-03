@@ -61,38 +61,40 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
-            target: i686-unknown-linux-gnu
-            manylinux: "manylinux2014"
+          - runner: macos-26
+            target: aarch64-apple-darwin
+
           - runner: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
             manylinux: "manylinux2014"
           - runner: ubuntu-22.04
-            target: armv7-unknown-linux-gnueabihf
-            manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
-            target: x86_64-unknown-linux-musl
-            manylinux: "musllinux_1_2"
-          - runner: ubuntu-22.04
-            target: i686-unknown-linux-musl
-            manylinux: "musllinux_1_2"
-          - runner: ubuntu-22.04
             target: aarch64-unknown-linux-musl
             manylinux: "musllinux_1_2"
+          - runner: ubuntu-22.04
+            target: armv7-unknown-linux-gnueabihf
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: armv7-unknown-linux-musleabihf
             manylinux: "musllinux_1_2"
           - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-          - runner: windows-latest
             target: i686-pc-windows-msvc
+          - runner: ubuntu-22.04
+            target: i686-unknown-linux-gnu
+            manylinux: "manylinux2014"
+          - runner: ubuntu-22.04
+            target: i686-unknown-linux-musl
+            manylinux: "musllinux_1_2"
           - runner: macos-15
             target: x86_64-apple-darwin
-          - runner: macos-26
-            target: aarch64-apple-darwin
+
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            manylinux: "manylinux2014"
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            manylinux: "musllinux_1_2"
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
