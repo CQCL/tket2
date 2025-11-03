@@ -14,7 +14,7 @@ runs:
       id: cache
       with:
         path: ${{ inputs.install-path }}
-        key: ${{ runner.os }}-${{ hashFiles('tket1-passes/tket-c-api') }}
+        key: ${{ runner.os }}-${{ hashFiles('tket1-passes/**') }}-${{ hashFiles('.github/actions/tket-c-api/action.yml') }}
 
     - name: Install conan
       if: steps.cache.outputs.cache-hit != 'true'
@@ -42,7 +42,7 @@ runs:
         mkdir -p ${{ inputs.install-path }}
         CONAN_OUTPUT=$(conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json)
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
-        cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
+        cp -r "$CONAN_LIB_FOLDER/p" "${{ inputs.install-path }}"
 
     - name: Build and install tket-c-api (Windows)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
@@ -53,7 +53,18 @@ runs:
         $conanOutput = conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
-        Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
+        $sourceRoot = Join-Path $conanLibFolder 'p'
+        # Copy files while translating any embedded forward slashes to Windows directories
+        # This is a workaround for conan installing files with forward slashes on Windows.
+        Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force | ForEach-Object {
+          if ($_.PSIsContainer) { return }
+          $relative = $_.FullName.Substring($sourceRoot.Length).TrimStart('\\','/')
+          $relativeWin = $relative -replace '/', '\\'
+          $destPath = Join-Path "${{ inputs.install-path }}" $relativeWin
+          $destDir = Split-Path -Parent $destPath
+          New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+          Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force
+        }
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'
