@@ -120,8 +120,8 @@ impl SupportedPlatform {
         // Corresponds to profiles which have pre-built binaries in the tket-libs conan remote
         // See ./conan-profiles/README.md for more details
         match self {
-            SupportedPlatform::MacOsX86 => "macos-13",
-            SupportedPlatform::MacOsArm => "macos-15",
+            SupportedPlatform::MacOsX86 => "macos-15-intel",
+            SupportedPlatform::MacOsArm => "macos-26",
             SupportedPlatform::WindowsX86 => "windows-2025",
             SupportedPlatform::LinusX86 => "linux-x86_64-gcc14",
         }
