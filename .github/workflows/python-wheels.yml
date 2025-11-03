@@ -42,6 +42,10 @@ env:
   # sccache config
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
+  # different strings for install action and feature name
+  # adapted from https://github.com/TheDan64/inkwell/blob/master/.github/workflows/test.yml
+  LLVM_VERSION: "14.0"
+  LLVM_FEATURE_NAME: "14-0"
 
 jobs:
   # Check if the tag matches the package name,
@@ -86,6 +90,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -143,6 +151,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -196,6 +208,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -247,6 +263,10 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
