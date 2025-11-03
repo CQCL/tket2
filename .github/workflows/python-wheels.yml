@@ -27,7 +27,7 @@ env:
   # This config is not required, but speeds up the build by caching the tket-c-api library
   # The alternative is to install conan and remove the env var
   TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
-  LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
+  #LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
   # Pinned version for the uv package manager
   UV_VERSION: "0.9.7"
   UV_FROZEN: 1
@@ -98,7 +98,7 @@ jobs:
             target: x86_64-pc-windows-msvc
           - runner: windows-latest
             target: i686-pc-windows-msvc
-          - runner: macos-13
+          - runner: macos-15
             target: x86_64-apple-darwin
           - runner: macos-26
             target: aarch64-apple-darwin
@@ -118,6 +118,13 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+      - name: Fix tket-c-api path on windows
+        if: ${{ matrix.platform.runner == 'windows-latest' }}
+        run: |
+          echo "TKET_C_API_PATH=$(cygpath -w ${{ env.TKET_C_API_PATH }})" >> $GITHUB_ENV
+          #echo "LD_LIBRARY_PATH=$(cygpath -w ${{ env.LD_LIBRARY_PATH }})" >> $GITHUB_ENV
+          echo "TKET_C_API_PATH modified to: ${{ env.TKET_C_API_PATH }}"
+          #echo "LD_LIBRARY_PATH modified to: ${{ env.LD_LIBRARY_PATH }}"
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
