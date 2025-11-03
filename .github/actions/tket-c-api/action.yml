@@ -14,7 +14,7 @@ runs:
       id: cache
       with:
         path: ${{ inputs.install-path }}
-        key: ${{ runner.os }}-${{ hashFiles('tket1-passes/**') }}-${{ hashFiles('.github/actions/tket-c-api/action.yml') }}
+        key: ${{ runner.os }}-${{ hashFiles('{tket1-passes/conanfile.txt,tket1-passes/conan-profiles/**,.github/actions/tket-c-api/action.yml}') }}
 
     - name: Install conan
       if: steps.cache.outputs.cache-hit != 'true'
@@ -42,7 +42,8 @@ runs:
         mkdir -p ${{ inputs.install-path }}
         CONAN_OUTPUT=$(conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json)
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
-        cp -r "$CONAN_LIB_FOLDER/p" "${{ inputs.install-path }}"
+        echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
+        cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
 
     - name: Build and install tket-c-api (Windows)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
@@ -53,7 +54,7 @@ runs:
         $conanOutput = conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
-        $sourceRoot = Join-Path $conanLibFolder 'p'
+        echo "CONAN_LIB_FOLDER: $conanLibFolder"
         # Copy files while translating any embedded forward slashes to Windows directories
         # This is a workaround for conan installing files with forward slashes on Windows.
         Get-ChildItem -LiteralPath $sourceRoot -Recurse -Force | ForEach-Object {
