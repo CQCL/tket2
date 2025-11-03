@@ -62,6 +62,7 @@ fn main() {
         }
 
         // 4. Run the conan install command and point cargo to the correct install paths
+        conan_install.verbosity(conan2::ConanVerbosity::Verbose);
         let cargo_instructions = conan_install.run().parse();
         cargo_instructions.emit();
 

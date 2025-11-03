@@ -5,7 +5,12 @@
 #
 #     maturin generate-ci github > .github/workflows/python-wheels.yml
 #
-# And merge the changes into this file.
+# And merge the changes into this file. In particular, we have made the following changes:
+# - Run the action only on `tket-py-v*` tagged releases
+# - Adds a step to install the tket-c-api library
+# - Disables containerization on the maturin-action calls, so we can use the built tket-c-api library
+# - Uploads to PyPI using trusted publishing instead of secret API keys
+#
 name: Python wheels 🐍
 
 on:
@@ -81,6 +86,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -89,6 +95,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
           working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -125,6 +132,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
           working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -133,6 +141,7 @@ jobs:
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
           working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -167,6 +176,7 @@ jobs:
           args: --release --out ../dist
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - uses: actions/setup-python@v6
         with:
           python-version: 3.13t
@@ -176,8 +186,9 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out ../dist -i python3.13t
-          working-directory: ${{ env.MODULE_DIR }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -213,8 +224,9 @@ jobs:
         with:
           target: ${{ matrix.platform.target }}
           args: --release --out ../dist
-          working-directory: ${{ env.MODULE_DIR }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          working-directory: ${{ env.MODULE_DIR }}
+          container: "off"
       - name: Build free-threaded wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -222,6 +234,7 @@ jobs:
           args: --release --out ../dist -i python3.13t
           working-directory: ${{ env.MODULE_DIR }}
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          container: "off"
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
