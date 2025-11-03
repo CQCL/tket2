@@ -117,6 +117,8 @@ jobs:
           path: dist
 
   musllinux:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
