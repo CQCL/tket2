@@ -22,6 +22,12 @@ permissions:
 
 env:
   MODULE_DIR: tket-py
+  # Path to the cached tket-c-api library
+  # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
+  # This config is not required, but speeds up the build by caching the tket-c-api library
+  # The alternative is to install conan and remove the env var
+  TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
+  LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
 
 jobs:
   # Check if the tag matches the package name,
@@ -63,6 +69,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -103,6 +113,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -142,6 +156,10 @@ jobs:
         with:
           python-version: 3.x
           architecture: ${{ matrix.platform.target }}
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -186,6 +204,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
