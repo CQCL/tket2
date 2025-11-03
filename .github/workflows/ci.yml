@@ -100,7 +100,7 @@ jobs:
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
         run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
-        run: uv sync --python ${{ env.PYTHON_LOWEST }} --package tket --exact
+        run: uv sync --python ${{ env.PYTHON_HIGHEST }} --package tket --exact
       - name: Type check with mypy
         run: uv run --no-project mypy .
       - name: Check formatting with ruff
