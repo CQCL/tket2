@@ -23,19 +23,37 @@ runs:
         cache_packages: true
 
     - name: Set up conan remote
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
       shell: bash
       run: |
         conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
 
+    - name: Set up conan remote (Windows)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
+
     - name: Build and install tket-c-api
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
       shell: bash
       run: |
         cd tket1-passes
+        mkdir -p ${{ inputs.install-path }}
         CONAN_OUTPUT=$(conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json)
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
-        cp -r $CONAN_LIB_FOLDER ${{ inputs.install-path }}
+        cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
+
+    - name: Build and install tket-c-api (Windows)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Set-Location tket1-passes
+        New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
+        $conanOutput = conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json
+        $conanJson = $conanOutput | ConvertFrom-Json
+        $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
+        Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'
