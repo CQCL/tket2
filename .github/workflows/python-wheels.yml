@@ -118,6 +118,7 @@ jobs:
         id: tket-paths
         shell: bash
         run: |
+          echo "RUNNER_OS=$RUNNER_OS"
           WORKSPACE="${{ github.workspace }}"
 
           case "$RUNNER_OS" in
