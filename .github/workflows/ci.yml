@@ -13,15 +13,15 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "--cfg=ci_run"
-  MIRIFLAGS: '-Zmiri-permissive-provenance' # Required due to warnings in bitvec 1.0.1
+  MIRIFLAGS: "-Zmiri-permissive-provenance" # Required due to warnings in bitvec 1.0.1
   CI: true # insta snapshots behave differently on ci
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
   # Pinned version for the uv package manager
-  UV_VERSION: "0.8.22"
+  UV_VERSION: "0.9.7"
   UV_FROZEN: 1
   # The highest and lowest supported Python versions, used for testing
-  PYTHON_HIGHEST: "3.13"
+  PYTHON_HIGHEST: "3.14"
   PYTHON_LOWEST: "3.10"
 
   # different strings for install action and feature name
@@ -146,7 +146,7 @@ jobs:
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 'stable'
+          toolchain: "stable"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - uses: taiki-e/install-action@nextest
@@ -196,7 +196,7 @@ jobs:
       matrix:
         # Stable is covered by `tests-stable-no-features` and `tests-stable-all-features`
         # Nightly is covered by `tests-nightly-coverage`
-        rust: ['1.85', beta]
+        rust: ["1.85", beta]
     name: tests (Rust ${{ matrix.rust }})
     steps:
       - uses: actions/checkout@v5
@@ -256,9 +256,9 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation
         run: |
-            cargo llvm-cov clean --workspace
-            cargo llvm-cov --no-report --workspace --no-default-features --doctests
-            cargo llvm-cov --no-report --workspace --all-features --doctests
+          cargo llvm-cov clean --workspace
+          cargo llvm-cov --no-report --workspace --no-default-features --doctests
+          cargo llvm-cov --no-report --workspace --all-features --doctests
       - name: Generate coverage report
         run: cargo llvm-cov --all-features report --codecov --output-path coverage.json
       - name: Upload coverage to codecov.io
@@ -373,25 +373,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0  # Need full history to compare with main
+          fetch-depth: 0 # Need full history to compare with main
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       - name: Check if extension versions are updated
         run: |
-            # Check against latest tag on the target branch
-            # When not on a pull request, base_ref should be empty so we default to HEAD
-            if [ -z "$TARGET_REF" ]; then
-              BASE_SHA="HEAD~1"
-            else
-              BASE_SHA=$(git rev-parse origin/$TARGET_REF)
-            fi
-            echo "Comparing to ref: $BASE_SHA"
+          # Check against latest tag on the target branch
+          # When not on a pull request, base_ref should be empty so we default to HEAD
+          if [ -z "$TARGET_REF" ]; then
+            BASE_SHA="HEAD~1"
+          else
+            BASE_SHA=$(git rev-parse origin/$TARGET_REF)
+          fi
+          echo "Comparing to ref: $BASE_SHA"
 
-            python ./scripts/check_extension_versions.py $BASE_SHA
+          python ./scripts/check_extension_versions.py $BASE_SHA
         env:
           TARGET_REF: ${{ github.base_ref }}
 
@@ -399,7 +399,18 @@ jobs:
   # even if they are skipped due to no changes in the relevant files.
   required-checks:
     name: Required checks 🦀+🐍
-    needs: [changes, check-rs, check-py, tests-rs-stable-no-features, tests-rs-stable-all-features, tests-py, tket-extensions, extension-versions, tests-qis-compiler]
+    needs:
+      [
+        changes,
+        check-rs,
+        check-py,
+        tests-rs-stable-no-features,
+        tests-rs-stable-all-features,
+        tests-py,
+        tket-extensions,
+        extension-versions,
+        tests-qis-compiler,
+      ]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
