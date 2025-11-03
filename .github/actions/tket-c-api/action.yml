@@ -49,6 +49,8 @@ runs:
         echo "Files in CONAN_LIB_FOLDER:"
         find "$CONAN_LIB_FOLDER" -type f
         cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
+        echo "tket-c-api library files:"
+        find "${{ inputs.install-path }}" -type f
 
     - name: Build and install tket-c-api (Windows)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
@@ -63,6 +65,8 @@ runs:
         echo "Files in CONAN_LIB_FOLDER:"
         Get-ChildItem -Path "$conanLibFolder" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
         Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
+        echo "tket-c-api library files:"
+        Get-ChildItem -Path "${{ inputs.install-path }}" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'
@@ -70,9 +74,3 @@ runs:
       with:
         path: ${{ inputs.install-path }}
         key: ${{ steps.cache.outputs.cache-primary-key }}
-
-    - name: List library files
-      shell: bash
-      run: |
-        echo "tket-c-api library files:"
-        find "${{ inputs.install-path }}" -type f
