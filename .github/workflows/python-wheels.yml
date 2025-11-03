@@ -32,8 +32,8 @@ env:
   UV_VERSION: "0.9.7"
   UV_FROZEN: 1
   # Python version used to build the wheels
-  # TODO: pytket doesn't have freethreaded 3.14 wheels yet, so we use 3.13 here
-  PYTHON_VERSION: "3.13"
+  # We use abi3-compatible building, so this still supports newer Python versions
+  PYTHON_VERSION: "3.10"
   # sccache config
   SCCACHE_GHA_ENABLED: "true"
   RUSTC_WRAPPER: "sccache"
@@ -92,13 +92,13 @@ jobs:
             target: aarch64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
-            target: armv7-unknown-linux-musl
+            target: armv7-unknown-linux-musleabihf
             manylinux: "musllinux_1_2"
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
           - runner: windows-latest
             target: i686-pc-windows-msvc
-          - runner: macos-15-intel
+          - runner: macos-13
             target: x86_64-apple-darwin
           - runner: macos-26
             target: aarch64-apple-darwin
