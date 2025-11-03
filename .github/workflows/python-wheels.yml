@@ -6,9 +6,10 @@
 #     maturin generate-ci github > .github/workflows/python-wheels.yml
 #
 # And merge the changes into this file. In particular, we have made the following changes:
+#
 # - Run the action only on `tket-py-v*` tagged releases
 # - Adds a step to install the tket-c-api library
-# - Disables containerization on the maturin-action calls, so we can use the built tket-c-api library
+# - Manually calls `maturin` instead of using the `maturin-action`, so we can setup conan and cache manually.
 # - Uploads to PyPI using trusted publishing instead of secret API keys
 #
 name: Python wheels 🐍
@@ -33,6 +34,14 @@ env:
   # The alternative is to install conan and remove the env var
   TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
   LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
+  # Pinned version for the uv package manager
+  UV_VERSION: "0.9.7"
+  UV_FROZEN: 1
+  # Python version used to build the wheels
+  PYTHON_VERSION: "3.14"
+  # sccache config
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
 
 jobs:
   # Check if the tag matches the package name,
@@ -71,31 +80,36 @@ jobs:
             target: ppc64le
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.x
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: auto
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }} \
+            maturin build \
+            --compatibility manylinux2014
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: auto
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }}t \
+            maturin build \
+            --compatibility manylinux2014
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -117,31 +131,36 @@ jobs:
             target: armv7
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.x
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: musllinux_1_2
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }} \
+            maturin build \
+            --compatibility musllinux_1_2
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          manylinux: musllinux_1_2
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }}t \
+            maturin build \
+            --compatibility musllinux_1_2
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -161,34 +180,34 @@ jobs:
             target: x86
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.x
-          architecture: ${{ matrix.platform.target }}
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
-      - uses: actions/setup-python@v6
-        with:
-          python-version: 3.13t
-          architecture: ${{ matrix.platform.target }}
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }} \
+            maturin build \
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist -i python3.13t
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }}t \
+            maturin build \
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -212,29 +231,34 @@ jobs:
             target: aarch64
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          python-version: 3.x
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          working-directory: ${{ env.MODULE_DIR }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }} \
+            maturin build \
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Build free-threaded wheels
-        uses: PyO3/maturin-action@v1
-        with:
-          target: ${{ matrix.platform.target }}
-          args: --release --out ../dist -i python3.13t
-          working-directory: ${{ env.MODULE_DIR }}
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          container: "off"
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }}t \
+            maturin build \
+            --release \
+            --out dist \
+            --target ${{ matrix.platform.target }} \
+            --strip \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
@@ -247,12 +271,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Build sdist
-        uses: PyO3/maturin-action@v1
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
         with:
-          command: sdist
-          args: --out ../dist
-          working-directory: ${{ env.MODULE_DIR }}
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - name: Build sdist
+        run: |
+          uv run --python ${{ env.PYTHON_VERSION }} \
+            maturin sdist \
+            --out dist \
+            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
       - name: Upload sdist
         uses: actions/upload-artifact@v5
         with:
