@@ -106,3 +106,35 @@ pub enum NormalizeGuppyErrors {
     /// Error while inlining DFG operations.
     Inline(InlineDFGError),
 }
+
+#[cfg(test)]
+mod test {
+    use hugr::builder::{Dataflow, DataflowHugr, FunctionBuilder};
+    use hugr::extension::prelude::qb_t;
+    use hugr::types::Signature;
+
+    use crate::TketOp;
+
+    use super::*;
+
+    /// Running the pass with all options disabled should still work (and do nothing).
+    #[test]
+    fn test_guppy_pass_noop() {
+        let mut b = FunctionBuilder::new("main", Signature::new_endo(vec![qb_t()])).unwrap();
+        let [q] = b.input_wires_arr();
+        let [q] = b.add_dataflow_op(TketOp::H, [q]).unwrap().outputs_arr();
+        let hugr = b.finish_hugr_with_outputs([q]).unwrap();
+
+        let mut hugr2 = hugr.clone();
+        NormalizeGuppy::default()
+            .simplify_cfgs(false)
+            .remove_tuple_untuple(false)
+            .constant_folding(false)
+            .remove_dead_funcs(false)
+            .inline_dfgs(false)
+            .run(&mut hugr2)
+            .unwrap();
+
+        assert_eq!(hugr2, hugr);
+    }
+}
