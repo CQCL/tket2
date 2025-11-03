@@ -1,6 +1,7 @@
 [package]
 name = "tket-py"
 version = "0.0.0"
+description = "Python bindings for TKET"
 edition = { workspace = true }
 rust-version = { workspace = true }
 homepage = { workspace = true }

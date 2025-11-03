@@ -109,6 +109,8 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
