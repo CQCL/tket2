@@ -126,15 +126,18 @@ jobs:
               echo "tket_c_api_path=$WORKSPACE\tket-c-api" >> $GITHUB_OUTPUT
               echo "TKET_C_API_PATH=$WORKSPACE\tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE\tket-c-api\lib" >> $GITHUB_PATH
+              echo "LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib" >> $GITHUB_ENV
               ;;
             macOS)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
               ;;
             Linux)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
               ;;
           esac
