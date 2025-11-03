@@ -48,7 +48,7 @@ runs:
         echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
         echo "Files in CONAN_LIB_FOLDER:"
         find "$CONAN_LIB_FOLDER" -type f
-        cp -r "$CONAN_LIB_FOLDER" "${{ inputs.install-path }}"
+        cp -r "$CONAN_LIB_FOLDER/"* "${{ inputs.install-path }}/"
         echo "tket-c-api library files:"
         find "${{ inputs.install-path }}" -type f
 
@@ -64,7 +64,7 @@ runs:
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
         echo "Files in CONAN_LIB_FOLDER:"
         Get-ChildItem -Path "$conanLibFolder" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
-        Copy-Item -Recurse -Force -Path "$conanLibFolder" -Destination "${{ inputs.install-path }}"
+        Copy-Item -Recurse -Force -Path "$conanLibFolder\*" -Destination "${{ inputs.install-path }}"
         echo "tket-c-api library files:"
         Get-ChildItem -Path "${{ inputs.install-path }}" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
 
