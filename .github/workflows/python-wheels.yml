@@ -53,7 +53,7 @@ jobs:
           SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket-py-v') ) }}
 
   build:
-    name: ${{ matrix.platform.target }}, ${{ matrix.platform.manylinux }}
+    name: ${{ matrix.platform.target }}
     needs: check-tag
     if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
