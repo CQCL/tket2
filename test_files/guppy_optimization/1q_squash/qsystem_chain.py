@@ -1,0 +1,33 @@
+from guppylang import guppy
+from guppy.std.quantum import qubit
+from guppylang.std.qsystem import rz, phased_x
+from guppylang.std.builtins import angle
+
+
+@guppy
+def qsystem_chain(q: qubit) -> None:
+    phased_x(q, angle(0.91), angle(0.5))
+    phased_x(q, angle(0.53), angle(0))
+    phased_x(q, angle(3.29), angle(0.5))
+    phased_x(q, angle(0.81), angle(0))
+    rz(q, angle(0.62))
+
+
+# pytket code to generate this example. For optimised version replace the call to AutoRebase with AutoSquash.
+
+# from pytket import Circuit, OpType
+# from pytket.passes import AutoSquash, AutoRebase
+#
+# circ = Circuit(1)
+#
+# circ.Ry(0.91, 0)
+# circ.Rx(0.53, 0)
+# circ.Ry(-0.71, 0)
+# circ.Rx(0.81, 0)
+# circ.Rz(0.62, 0)
+#
+#
+#
+# AutoRebase({OpType.Rz, OpType.PhasedX, OpType.ZZPhase}).apply(circ)
+#
+# print(circ.get_commands())
