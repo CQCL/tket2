@@ -63,7 +63,8 @@ jobs:
         env:
           SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket-py-v') ) }}
 
-  linux:
+  build:
+    name: Build wheels (${{ matrix.platform.runner }}, ${{ matrix.platform.target }}, ${{ matrix.platform.manylinux }})
     needs: check-tag
     if: ${{ needs.check-tag.outputs.run == 'true' }}
     runs-on: ${{ matrix.platform.runner }}
@@ -72,185 +73,38 @@ jobs:
         platform:
           - runner: ubuntu-22.04
             target: x86_64
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: x86
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: aarch64
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: armv7
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: s390x
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: ppc64le
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
-      - name: Install tket-c-api library
-        uses: ./.github/actions/tket-c-api
-        with:
-          install-path: ${{ env.TKET_C_API_PATH }}
-      - name: Build wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }} \
-            --with maturin[zig] \
-            maturin build \
-            --compatibility manylinux2014 \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
-            --zig
-      - name: Build free-threaded wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }}t \
-            --with maturin[zig] \
-            maturin build \
-            --compatibility manylinux2014 \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
-            --zig
-      - name: Upload wheels
-        uses: actions/upload-artifact@v5
-        with:
-          name: wheels-linux-${{ matrix.platform.target }}
-          path: dist
-
-  musllinux:
-    needs: check-tag
-    if: ${{ needs.check-tag.outputs.run == 'true' }}
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
+            manylinux: "manylinux2014"
           - runner: ubuntu-22.04
             target: x86_64
+            manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
             target: x86
+            manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
             target: aarch64
+            manylinux: "musllinux_1_2"
           - runner: ubuntu-22.04
             target: armv7
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
-      - name: Install tket-c-api library
-        uses: ./.github/actions/tket-c-api
-        with:
-          install-path: ${{ env.TKET_C_API_PATH }}
-      - name: Build wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }} \
-            --with maturin[zig] \
-            maturin build \
-            --compatibility musllinux_1_2 \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
-            --zig
-      - name: Build free-threaded wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }}t \
-            --with maturin[zig] \
-            maturin build \
-            --compatibility musllinux_1_2 \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml \
-            --zig
-      - name: Upload wheels
-        uses: actions/upload-artifact@v5
-        with:
-          name: wheels-musllinux-${{ matrix.platform.target }}
-          path: dist
-
-  windows:
-    needs: check-tag
-    if: ${{ needs.check-tag.outputs.run == 'true' }}
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        platform:
+            manylinux: "musllinux_1_2"
           - runner: windows-latest
             target: x64
           - runner: windows-latest
             target: x86
-    steps:
-      - uses: actions/checkout@v5
-      - uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: ${{ env.UV_VERSION }}
-          enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
-      - name: Install tket-c-api library
-        uses: ./.github/actions/tket-c-api
-        with:
-          install-path: ${{ env.TKET_C_API_PATH }}
-      - name: Build wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }} \
-            maturin build \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
-      - name: Build free-threaded wheels
-        run: |
-          uv run --python ${{ env.PYTHON_VERSION }}t \
-            maturin build \
-            --release \
-            --out dist \
-            --target ${{ matrix.platform.target }} \
-            --strip \
-            --manifest-path ${{ env.MODULE_DIR }}/Cargo.toml
-      - name: Upload wheels
-        uses: actions/upload-artifact@v5
-        with:
-          name: wheels-windows-${{ matrix.platform.target }}
-          path: dist
-
-  macos:
-    needs: check-tag
-    if: ${{ needs.check-tag.outputs.run == 'true' }}
-    runs-on: ${{ matrix.platform.runner }}
-    strategy:
-      matrix:
-        # Overrides the default macos-13 and macos-14 set by maturin generate-ci,
-        # to be in sync with the tket-c-api conan profiles.
-        #
-        # See tket1-passes/conan-profiles/README.md
-        platform:
           - runner: macos-15-intel
             target: x86_64
           - runner: macos-26
@@ -258,6 +112,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
@@ -271,10 +127,26 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+      - name: Set compatibility flag
+        id: compatibility-flag
+        run: |
+          if [ -n "${{ matrix.platform.manylinux }}" ]; then
+            WITH_ZIG_FLAG="--with maturin[zig]"
+            COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
+          else
+            WITH_ZIG_FLAG=""
+            COMPATIBILITY_FLAG=""
+          fi
+          echo "COMPATIBILITY_FLAG: $COMPATIBILITY_FLAG"
+          echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
+          echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> $GITHUB_OUTPUT
+          echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> $GITHUB_OUTPUT
       - name: Build wheels
         run: |
           uv run --python ${{ env.PYTHON_VERSION }} \
+            ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
+            ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
@@ -283,7 +155,9 @@ jobs:
       - name: Build free-threaded wheels
         run: |
           uv run --python ${{ env.PYTHON_VERSION }}t \
+            ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
+            ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
             --release \
             --out dist \
             --target ${{ matrix.platform.target }} \
@@ -292,7 +166,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
-          name: wheels-macos-${{ matrix.platform.target }}
+          name: wheels-linux-${{ matrix.platform.target }}
           path: dist
 
   sdist:
@@ -327,7 +201,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     if: ${{ (github.event_name == 'release' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket-py-v') ) || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/tket-py-v') ) }}
-    needs: [linux, musllinux, windows, macos, sdist]
+    needs: [build, sdist]
     environment: release
     permissions:
       # Use to sign the release artifacts
