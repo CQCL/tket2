@@ -308,8 +308,8 @@ jobs:
         # Add new dependencies as needed if the check fails due to
         # "package `XXX` cannot be built because it requires rustc YYY or newer, while the currently active rustc version is 1.85.0"
         run: |
-          # rm Cargo.lock
-          # cargo add -p tket half@2.4.1
+          rm Cargo.lock
+          # cargo add -p tket insta@2.4.1
       - name: Build with no features
         run: cargo minimal-versions --direct test --verbose  --no-default-features --no-run
       - name: Tests with no features
