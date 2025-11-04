@@ -6,22 +6,23 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Rust interface for tket1-passes library"
+publish = false
 
 [lib]
 name = "tket1_passes"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-libc = "0.2"
-thiserror = "2.0"
+libc.workspace = true
+thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tket-json-rs.workspace = true
 
 [build-dependencies]
-cc = "1.2"
-bindgen = "0.72"
-conan2 = "0.1.8"
+cc.workspace = true
+bindgen.workspace = true
+conan2.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
