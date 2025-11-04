@@ -60,6 +60,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # List of platforms to build the wheels for.
+        #
+        # Each entry defines:
+        # - runner: The github runner to use for the build.
+        # - target: The target platform used when building the rust code.
+        # - manylinux: (optional) If doing manylinux-compatible wheels,
+        #    the manylinux version to use. Setting this option causes the wheels
+        #    to be built with zig.
         platform:
           - runner: macos-26
             target: aarch64-apple-darwin

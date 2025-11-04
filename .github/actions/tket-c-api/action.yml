@@ -26,14 +26,8 @@ runs:
         cache_packages: true
 
     - name: Set up conan remote
-      if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
-
-    - name: Set up conan remote (Windows)
-      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
-      shell: pwsh
       run: |
         conan remote add tket-libs https://quantinuumsw.jfrog.io/artifactory/api/conan/tket1-libs --index 0
 
