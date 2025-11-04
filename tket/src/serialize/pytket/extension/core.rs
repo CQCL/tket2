@@ -88,7 +88,7 @@ impl PytketDecoder for CoreDecoder {
                     options,
                     decoder.opaque_subgraphs,
                 )?;
-                nested_decoder.run_decoder(&serial_circuit.commands)?;
+                nested_decoder.run_decoder(&serial_circuit.commands, None)?;
                 let internal = nested_decoder.finish()?.node();
 
                 decoder

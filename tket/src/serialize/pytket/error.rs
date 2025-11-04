@@ -233,15 +233,12 @@ pub enum PytketDecodeErrorInner {
     ///
     /// We don't do any kind of type conversion, so this depends solely on the last operation to update each register.
     #[display(
-        "The expected output types {expected_types} are not compatible with the actual output types {actual_types}, obtained from decoding the pytket circuit",
+        "The expected output types {expected_types} are not compatible with the pytket circuit definition",
         expected_types = expected_types.iter().join(", "),
-        actual_types = actual_types.iter().join(", "),
     )]
     InvalidOutputSignature {
         /// The expected types of the input wires.
         expected_types: Vec<String>,
-        /// The actual types of the input wires.
-        actual_types: Vec<String>,
     },
     /// A pytket operation had some input registers that couldn't be mapped to hugr wires.
     //

@@ -14,9 +14,7 @@ pub(super) use wires::FoundWire;
 
 use std::sync::Arc;
 
-use hugr::builder::{
-    BuildHandle, Container, DFGBuilder, Dataflow, DataflowSubContainer, FunctionBuilder,
-};
+use hugr::builder::{BuildHandle, Container, DFGBuilder, Dataflow, FunctionBuilder, SubContainer};
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{DataflowOpID, NodeHandle};
 use hugr::ops::{OpParent, OpTrait, OpType, Value, DFG};
@@ -37,7 +35,7 @@ use crate::extension::rotation::rotation_type;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::opaque::OpaqueSubgraphs;
+use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphs, SubgraphId};
 use crate::serialize::pytket::{
     default_decoder_config, DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner,
 };
@@ -297,12 +295,15 @@ impl<'h> PytketDecoderContext<'h> {
     /// caller if required.
     pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
-        let qubits = self
+        let known_qubits = self
             .wire_tracker
             .known_pytket_qubits()
             .cloned()
             .collect_vec();
-        let bits = self.wire_tracker.known_pytket_bits().cloned().collect_vec();
+        let known_bits = self.wire_tracker.known_pytket_bits().cloned().collect_vec();
+        let mut qubits = known_qubits.as_slice();
+        let mut bits = known_bits.as_slice();
+
         let function_type = self
             .builder
             .hugr()
@@ -310,36 +311,66 @@ impl<'h> PytketDecoderContext<'h> {
             .inner_function_type()
             .unwrap();
         let expected_output_types = function_type.output_types().iter().cloned().collect_vec();
+        let output_node = self.builder.output().node();
 
-        let output_wires = self
-            .find_typed_wires(&expected_output_types, &qubits, &bits, &[])
-            .map_err(|e| e.hugr_op("Output"))?;
+        for (ty, port) in expected_output_types
+            .iter()
+            .zip(self.builder.hugr().node_inputs(output_node).collect_vec())
+        {
+            // If the region's output is already connected, leave it alone.
+            // (It's a wire from an unsupported operation)
+            if self.builder.hugr().is_linked(output_node, port) {
+                continue;
+            }
 
-        output_wires
-            .check_types(expected_output_types.as_slice(), 0)
-            .map_err(|mut e| {
-                if let PytketDecodeError {
-                    inner:
-                        PytketDecodeErrorInner::UnexpectedInputWires {
-                            expected_types,
-                            actual_types,
+            // Otherwise, get the tracked wire.
+            let mut params: &[LoadedParameter] = &[];
+            let found_wire = self
+                .wire_tracker
+                .find_typed_wire(
+                    self.config(),
+                    ty,
+                    &mut qubits,
+                    &mut bits,
+                    &mut params,
+                    Some(EncodedEdgeID::default()),
+                )
+                .map_err(|mut e| {
+                    if matches!(
+                        e,
+                        PytketDecodeError {
+                            inner: PytketDecodeErrorInner::NoMatchingWire { .. },
                             ..
-                        },
-                    ..
-                } = e
-                {
-                    e.inner = PytketDecodeErrorInner::InvalidOutputSignature {
-                        expected_types: expected_types.unwrap_or_default(),
-                        actual_types: actual_types.unwrap_or_default(),
-                    };
-                };
-                e.hugr_op("Output")
-            })?;
-        let output_wire_count = output_wires.register_count();
-        let output_wires = output_wires.wires();
+                        }
+                    ) {
+                        e.inner = PytketDecodeErrorInner::InvalidOutputSignature {
+                            expected_types: expected_output_types
+                                .iter()
+                                .map(ToString::to_string)
+                                .collect(),
+                        };
+                    }
+                    e.hugr_op("Output")
+                })?;
+
+            let wire = match found_wire {
+                FoundWire::Register(wire) => wire.wire(),
+
+                FoundWire::Parameter(param) => param.wire(),
+                FoundWire::Unsupported { .. } => {
+                    // Disconnected port with an unsupported type. We just skip
+                    // it, since it must have been disconnected in the original
+                    // hugr too.
+                    continue;
+                }
+            };
+            self.builder
+                .hugr_mut()
+                .connect(wire.node(), wire.source(), output_node, port);
+        }
 
         // Qubits not in the output need to be freed.
-        self.add_implicit_qfree_operations(&qubits[output_wire_count.qubits..]);
+        self.add_implicit_qfree_operations(qubits);
 
         // Store the name for the input parameter wires
         let input_params = self.wire_tracker.finish();
@@ -352,7 +383,7 @@ impl<'h> PytketDecoderContext<'h> {
 
         Ok(self
             .builder
-            .finish_with_outputs(output_wires)
+            .finish_sub_container()
             .map_err(PytketDecodeError::custom)?
             .node())
     }
@@ -385,15 +416,26 @@ impl<'h> PytketDecoderContext<'h> {
     }
 
     /// Decode a list of pytket commands.
+    ///
+    /// # Arguments
+    ///
+    /// - `commands`: The list of pytket commands to decode.
+    /// - `extra_subgraph`: An additional subgraph of the original Hugr that was
+    ///   not encoded as a pytket command, and must be decoded independently.
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
+        extra_subgraph: Option<SubgraphId>,
     ) -> Result<(), PytketDecodeError> {
         let config = self.config().clone();
         for com in commands {
             let op_type = com.op.op_type;
             self.process_command(com, config.as_ref())
                 .map_err(|e| e.pytket_op(&op_type))?;
+        }
+        if let Some(subgraph_id) = extra_subgraph {
+            self.insert_external_subgraph(subgraph_id, &[], &[], &[])
+                .map_err(|e| e.hugr_op("External subgraph"))?;
         }
         Ok(())
     }

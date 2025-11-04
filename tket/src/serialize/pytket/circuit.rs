@@ -57,7 +57,6 @@ pub(super) struct EncodedCircuitInfo {
     pub serial_circuit: SerialCircuit,
     /// A subgraph of the region that does not contain any operation encodable
     /// as a pytket command, and hence was not encoded in [`serial_circuit`].
-    #[expect(unused)]
     pub extra_subgraph: Option<SubgraphId>,
     /// List of parameters in the pytket circuit in the order they appear in the
     /// hugr input.
@@ -162,7 +161,7 @@ impl EncodedCircuit<Node> {
                 options,
                 Some(&self.opaque_subgraphs),
             )?;
-            decoder.run_decoder(&encoded.serial_circuit.commands)?;
+            decoder.run_decoder(&encoded.serial_circuit.commands, encoded.extra_subgraph)?;
             let decoded_node = decoder.finish()?.node();
 
             // Replace the region with the decoded function.
@@ -312,7 +311,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
 
         let mut decoder =
             PytketDecoderContext::new(serial_circuit, &mut hugr, target, options, None)?;
-        decoder.run_decoder(&serial_circuit.commands)?;
+        decoder.run_decoder(&serial_circuit.commands, None)?;
         decoder.finish()?;
         Ok(hugr)
     }

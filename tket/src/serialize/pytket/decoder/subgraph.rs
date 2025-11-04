@@ -53,7 +53,7 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Move the subgraph nodes referenced by an
     /// [`OpaqueSubgraphPayload::External`] into the region being decoded.
-    fn insert_external_subgraph(
+    pub(in crate::serialize::pytket) fn insert_external_subgraph(
         &mut self,
         id: SubgraphId,
         qubits: &[TrackedQubit],
@@ -111,26 +111,20 @@ impl<'h> PytketDecoderContext<'h> {
 
         // Reconnect input wires from parts of/nodes in the region that have been encoded into pytket.
         for (ty, targets) in signature.input().iter().zip_eq(subgraph.incoming_ports()) {
-            let wire = match self.wire_tracker.find_typed_wire(
+            let found_wire = self.wire_tracker.find_typed_wire(
                 self.config(),
                 ty,
                 &mut input_qubits,
                 &mut input_bits,
                 &mut input_params,
-                None,
-            ) {
-                Ok(FoundWire::Register(wire_data)) => wire_data.wire(),
-                Ok(FoundWire::Parameter(param)) => param.wire(),
-                Ok(FoundWire::Unsupported { .. }) => {
-                    unreachable!("`unsupported_wire` not passed to `find_typed_wire`.");
-                }
-                Err(PytketDecodeError {
-                    inner:
-                        PytketDecodeErrorInner::NoMatchingWire { .. }
-                        | PytketDecodeErrorInner::NoMatchingParameter { .. },
-                    ..
-                }) => {
-                    // Not a qubit or bit wire.
+                Some(EncodedEdgeID::default()),
+            )?;
+
+            let wire = match found_wire {
+                FoundWire::Register(wire_data) => wire_data.wire(),
+                FoundWire::Parameter(param) => param.wire(),
+                FoundWire::Unsupported { .. } => {
+                    // Input port with an unsupported type.
                     let Some((neigh, neigh_port)) = targets.first().and_then(|(tgt, port)| {
                         self.builder.hugr().single_linked_output(*tgt, *port)
                     }) else {
@@ -147,7 +141,6 @@ impl<'h> PytketDecoderContext<'h> {
                     // re-wire it to the new region's input.
                     Wire::new(new_input, neigh_port)
                 }
-                Err(e) => return Err(e),
             };
 
             for (tgt, port) in targets {
