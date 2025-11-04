@@ -1,16 +1,19 @@
 //! Test running tket1 passes on hugr circuit.
+use std::io::BufReader;
 
 use tket1_passes::Tket1Circuit;
 
+use hugr::algorithms::const_fold::ConstantFoldPass;
 use hugr::builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
-use hugr::{HugrView, Node};
+use hugr::{Hugr, HugrView, Node};
 use rayon::iter::ParallelIterator;
 use rstest::{fixture, rstest};
-use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
+use tket::extension::{REGISTRY, TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::{Circuit, TketOp};
+use tket::passes::squash_borrow::BorrowSquashPass;
 
 /// A flat quantum circuit inside a function.
 ///
@@ -87,7 +90,7 @@ fn count_quantum_gates(circuit: &Circuit, region: Node) -> usize {
 
 #[test]
 fn test_borrow_squash() {
-    let reader = BufReader::new(include_bytes!("../../../test_files/nested_array.hugr").as_slice());
+    let reader = BufReader::new(include_bytes!("../../test_files/nested_array.hugr").as_slice());
     let mut h = Hugr::load(reader, Some(&REGISTRY)).unwrap();
     let array_func = h
         .children(h.module_root())
@@ -103,7 +106,7 @@ fn test_borrow_squash() {
         .then(BorrowSquashPass::default())
         .run(&mut h)
         .unwrap();
-    let circ = Circuit::new(nested_array);
+    let circ = Circuit::new(h);
     let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits()).unwrap();
 
     for (_, serial_circuit) in encoded.iter_mut() {
@@ -119,7 +122,7 @@ fn test_borrow_squash() {
     let h = circ.into_hugr();
     h.validate().unwrap();
     assert!(h
-        .nods()
+        .nodes()
         .any(|n| h.get_optype(n).as_extension_op().is_some_and(|eop| [
             TKET_EXTENSION_ID,
             TKET1_EXTENSION_ID
