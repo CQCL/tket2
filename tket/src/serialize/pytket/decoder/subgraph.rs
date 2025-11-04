@@ -179,8 +179,9 @@ impl<'h> PytketDecoderContext<'h> {
             // to track new qubits and bits, re-connect it to some output, or
             // leave it untouched.
             let wire = Wire::new(*src, *src_port);
-            if let Some(counts) = self.config().type_to_pytket(ty) {
+            if let Some(counts) = self.config().type_to_pytket(ty).filter(|c| c.params == 0) {
                 // This port declares new outputs to be tracked by the decoder.
+                // Output parameters from a subgraph are always marked as not supported (they don't map to any pytket argument variable).
 
                 // Make sure to disconnect the old wire.
                 self.builder.hugr_mut().disconnect(*src, *src_port);
@@ -402,8 +403,11 @@ impl<'h> PytketDecoderContext<'h> {
         {
             let node = *insertion_result.node_map.get(&to_insert_node).unwrap();
             let wire = Wire::new(node, port);
-            match self.config().type_to_pytket(ty) {
+            match self.config().type_to_pytket(ty).filter(|c| c.params == 0) {
                 Some(counts) => {
+                    // Track the registers in the subgraph output wires.
+                    // Output parameters from a subgraph are always marked as not supported (they don't map to any pytket argument variable).
+                    // We only track qubit/bit wires here.
                     let wire_qubits = split_off(&mut output_qubits, ..counts.qubits);
                     let wire_bits = split_off(&mut output_bits, ..counts.bits);
                     if wire_qubits.is_none() || wire_bits.is_none() {

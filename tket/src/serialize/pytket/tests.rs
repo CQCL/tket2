@@ -582,27 +582,44 @@ fn circ_nested_dfgs() -> Circuit {
 // A circuit with some simple circuit and an unsupported subgraph that does not interact with it.
 #[fixture]
 fn circ_independent_subgraph() -> Circuit {
-    let input_t = vec![
-        qb_t(),
-        qb_t(),
-        option_type(rotation_type()).into(),
-        option_type(qb_t()).into(),
-    ];
-    let output_t = vec![qb_t(), qb_t(), rotation_type(), option_type(qb_t()).into()];
+    let input_t = vec![qb_t(), qb_t(), option_type(bool_t()).into()];
+    let output_t = vec![qb_t(), qb_t(), bool_t()];
     let mut h =
         FunctionBuilder::new("independent_subgraph", Signature::new(input_t, output_t)).unwrap();
 
-    let [q1, q2, maybe_rot, maybe_q] = h.input_wires_arr();
+    let [q1, q2, maybe_b] = h.input_wires_arr();
 
     let [q1, q2] = h
         .add_dataflow_op(TketOp::CX, [q1, q2])
         .unwrap()
         .outputs_arr();
-    let [rot] = h
-        .build_unwrap_sum(1, option_type(rotation_type()), maybe_rot)
+    let [maybe_b] = h
+        .build_unwrap_sum(1, option_type(bool_t()), maybe_b)
         .unwrap();
 
-    let hugr = h.finish_hugr_with_outputs([q1, q2, rot, maybe_q]).unwrap();
+    let hugr = h.finish_hugr_with_outputs([q1, q2, maybe_b]).unwrap();
+    hugr.into()
+}
+
+// A circuit with an unsupported wire from the input to the output.
+#[fixture]
+fn circ_unsupported_io_wire() -> Circuit {
+    let input_t = vec![qb_t(), qb_t(), option_type(qb_t()).into()];
+    let output_t = vec![qb_t(), qb_t(), option_type(qb_t()).into()];
+    let mut h = FunctionBuilder::new(
+        "unsupported_input_to_output",
+        Signature::new(input_t, output_t),
+    )
+    .unwrap();
+
+    let [q1, q2, maybe_q] = h.input_wires_arr();
+
+    let [q1, q2] = h
+        .add_dataflow_op(TketOp::CX, [q1, q2])
+        .unwrap()
+        .outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2, maybe_q]).unwrap();
     hugr.into()
 }
 
@@ -847,8 +864,9 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 //#[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: Encoding of independent subgraphs needs more debugging.
-//#[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
+#[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
+// TODO: An unsupported wire from the input to the output causes an error.
+//#[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
 //#[case::non_local(circ_non_local(), 1)]
