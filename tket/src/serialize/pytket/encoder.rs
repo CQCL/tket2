@@ -218,7 +218,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// * An [`EncodedCircuitInfo`] containing the final [`SerialCircuit`] and some additional metadata.
     /// * The set of opaque subgraphs that were referenced (from/inside) pytket barriers.
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub(super) fn finish(
         mut self,
         circ: &Circuit<H>,

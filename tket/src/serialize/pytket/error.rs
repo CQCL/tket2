@@ -74,7 +74,6 @@ pub enum PytketEncodeOpError<N: HugrNode = hugr::Node> {
 /// Error type for conversion between tket ops and pytket operations.
 #[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
-#[debug(bounds(N: HugrNode))]
 pub enum PytketEncodeError<N: HugrNode = hugr::Node> {
     /// Tried to encode a non-dataflow region.
     #[display("Cannot encode non-dataflow region at {region} with type {optype}.")]
@@ -355,8 +354,8 @@ pub enum PytketDecodeErrorInner {
         /// The bit registers expected in the wire.
         bit_args: Vec<String>,
     },
-    /// We couldn't find a parameter for the required input type.
-    #[display("Could not find a parameter for the required input type '{ty}'")]
+    /// We couldn't find a parameter of the required input type.
+    #[display("Could not find a parameter of the required input type '{ty}'")]
     NoMatchingParameter {
         /// The type that couldn't be found.
         ty: String,
@@ -425,16 +424,14 @@ pub enum PytketDecodeErrorInner {
         id: SubgraphId,
     },
     /// The stored subgraph payload was not a valid flat subgraph in a dataflow region of the target hugr.
-    #[display("The stored subgraph {id} was not a valid flat subgraph in a dataflow region of the target hugr. {context}")]
-    InvalidExternalSubgraph {
+    #[display("The stored subgraph {id} was not a valid flat subgraph in a dataflow region of the target hugr.")]
+    ExternalSubgraphWasModified {
         /// The ID of the opaque subgraph.
         id: SubgraphId,
-        /// Additional context about the error.
-        context: String,
     },
     /// Cannot decode Hugr from an unsupported subgraph payload in a pytket barrier operation.
-    #[display("Cannot decode Hugr from an opaque subgraph payload in a pytket barrier operation. {source}")]
-    UnsupportedSubgraphPayload {
+    #[display("Cannot decode Hugr from an inline subgraph payload in a pytket barrier operation. {source}")]
+    UnsupportedSubgraphInlinePayload {
         /// The envelope decoding error.
         source: EnvelopeError,
     },

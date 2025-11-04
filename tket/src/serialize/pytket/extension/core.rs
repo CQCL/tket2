@@ -45,14 +45,10 @@ impl PytketDecoder for CoreDecoder {
                 data: Some(payload),
                 ..
             } if opgroup == Some(OPGROUP_OPAQUE_HUGR) => {
-                let Ok(payload) = OpaqueSubgraphPayload::load_str(
+                let payload = OpaqueSubgraphPayload::load_str(
                     payload,
                     decoder.options().extension_registry(),
-                ) else {
-                    // Payload is invalid. We don't error here to avoid
-                    // panicking on corrupted/old user submissions.
-                    return Ok(DecodeStatus::Unsupported);
-                };
+                )?;
                 decoder.insert_subgraph_from_payload(qubits, bits, params, &payload)
             }
             PytketOperation {
@@ -90,10 +86,8 @@ impl PytketDecoder for CoreDecoder {
                     decoder.builder.hugr_mut(),
                     target,
                     options,
+                    decoder.opaque_subgraphs,
                 )?;
-                if let Some(opaque_subgraphs) = decoder.opaque_subgraphs {
-                    nested_decoder.register_opaque_subgraphs(opaque_subgraphs);
-                }
                 nested_decoder.run_decoder(&serial_circuit.commands)?;
                 let internal = nested_decoder.finish()?.node();
 

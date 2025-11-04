@@ -111,18 +111,6 @@ impl DecodeOptions {
             .as_ref()
             .unwrap_or(&crate::extension::REGISTRY)
     }
-
-    /// Returns the [`PytketDecoderConfig`] to use when decoding the circuit.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the option is `None`. Use [`DecodeOptions::with_config`] or
-    /// [`DecodeOptions::with_default_config`] to set it.
-    pub(super) fn get_config(&self) -> &Arc<PytketDecoderConfig> {
-        self.config
-            .as_ref()
-            .expect("DecodeOptions::config is not set")
-    }
 }
 
 /// Where to insert the decoded circuit when calling
@@ -192,12 +180,6 @@ impl<H: HugrView> EncodeOptions<H> {
         Self::default()
     }
 
-    /// Create a new [`EncodeOptions`] that will encode subcircuits for subregions of the HUGR
-    /// that are descendants of unsupported operations.
-    pub fn new_with_subcircuits() -> Self {
-        Self::new().encode_subcircuits(true)
-    }
-
     /// Set a encoder configuration.
     pub fn with_config(mut self, config: impl Into<Arc<PytketEncoderConfig<H>>>) -> Self {
         self.config = Some(config.into());
@@ -206,7 +188,7 @@ impl<H: HugrView> EncodeOptions<H> {
 
     /// Set whether to encode independent subcircuits for subregions of the HUGR
     /// that are descendants of unsupported operations.
-    pub fn encode_subcircuits(mut self, encode_subcircuits: bool) -> Self {
+    pub fn with_subcircuits(mut self, encode_subcircuits: bool) -> Self {
         self.encode_subcircuits = encode_subcircuits;
         self
     }

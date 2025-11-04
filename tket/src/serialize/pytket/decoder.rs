@@ -38,18 +38,19 @@ use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
 use crate::serialize::pytket::opaque::OpaqueSubgraphs;
-use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner};
+use crate::serialize::pytket::{
+    default_decoder_config, DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner,
+};
 use crate::TketOp;
 
 /// State of the tket circuit being decoded.
 ///
-/// The state of an in-progress [`FunctionBuilder`] being built from a
-/// [`SerialCircuit`].
+/// The state of a DFG being built from a [`SerialCircuit`] into a Hugr.
 ///
-/// The generic parameter `H` is the HugrView type of the Hugr that was encoded
-/// into the circuit, if any. This is required when the encoded pytket circuit
-/// contains opaque barriers that reference subgraphs in the original HUGR. See
-/// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload] for more details.
+/// The lifetime parameter `'h` is the lifetime of the target Hugr, as well
+/// as the lifetime of the external subgraphs referenced by
+/// [`OpaqueSubgraphPayload`][super::opaque::OpaqueSubgraphPayload]s in the
+/// pytket circuit.
 #[derive(Debug)]
 pub struct PytketDecoderContext<'h> {
     /// The Hugr being built.
@@ -61,7 +62,12 @@ pub struct PytketDecoderContext<'h> {
     /// This contains the decoding parameters specific to the current circuit
     /// being decoded.
     options: DecodeOptions,
-    /// A registry of opaque subgraphs from `original_hugr`, that are referenced by opaque barriers in the pytket circuit
+    // A register containing custom operation decoders.
+    ///
+    /// This is a copy of the configuration in `options`, if present, or
+    /// [`default_decoder_config`][super::default_decoder_config] if not.
+    config: Arc<PytketDecoderConfig>,
+    /// A registry of opaque subgraphs from the original Hugr, that may be referenced by opaque barriers in the pytket circuit
     /// via their [`SubgraphId`].
     pub(super) opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
 }
@@ -76,43 +82,40 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// - `serialcirc`: The serialised circuit to decode.
     /// - `hugr`: The [`Hugr`] to define the new function in.
-    /// - `fn_name`: The name of the function to create. If `None`, we will use
-    ///   the name of the circuit, or "main" if the circuit has no name.
-    /// - `signature`: The signature of the function to create. If `None`, we
-    ///   will use qubits and bools.
-    /// - `input_params`: A list of parameter names to add to the function
-    ///   input. If additional parameters are found in the circuit, they will be
-    ///   added after these.
-    /// - `config`: The configuration for the decoder, containing custom
-    ///   operation decoders.
+    /// - `target`: The target to insert the decoded circuit into.
+    /// - `options`: The options for the decoder.
+    /// - `opaque_subgraphs`: A registry of opaque subgraphs from `hugr`, that
+    ///   are referenced by opaque barriers in the pytket circuit via their
+    ///   [`SubgraphId`].
     ///
     /// # Defining the function signature
     ///
-    /// If `signature` is not provided, we default to a sequence of qubit types
-    /// followed by bool types, according to the qubit and bit counts in the
-    /// circuit.
+    /// If the options do not define a `signature`, we default to a sequence of
+    /// qubit types followed by bool types, according to the qubit and bit
+    /// counts in the circuit.
     ///
-    /// If provided, we produce a hugr with the given signature instead. The
-    /// amount of qubit and bit registers in the `serialcirc` must match the
-    /// count in the signature input types, as defined by the type translators
-    /// in the [`PytketDecoderConfig`].
+    /// If provided, we produce a hugr with the given signature instead.
+    /// Leftover qubits will be `QAlloc`d, and `QFree`d, as required. Bit values
+    /// not in the input will be initialized to `false`.
     ///
     /// The signature may include bare parameter wires (e.g. `float64` or
     /// `rotation`) mixed between the value types. These will be associated with
-    /// the `input_params` names if possible. Any remaining parameter in
-    /// `input_params` will be added as additional inputs with type
+    /// the `input_params` names in the options if possible. Any remaining
+    /// parameters will be added as additional inputs with type
     /// [`rotation_type`]. Additional parameter inputs may be added during
     /// runtime, as new free variables are found in the command arguments.
     pub(super) fn new(
         serialcirc: &SerialCircuit,
         hugr: &'h mut Hugr,
         target: DecodeInsertionTarget,
-        mut options: DecodeOptions,
+        options: DecodeOptions,
+        opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
     ) -> Result<Self, PytketDecodeError> {
         // Ensure that the set of decoders is present, use a default one if not.
-        if options.config.is_none() {
-            options = options.with_default_config();
-        }
+        let config = options
+            .config
+            .clone()
+            .unwrap_or_else(|| Arc::new(default_decoder_config()));
 
         // Compute the signature of the decoded region, if not provided, and
         // initialize the DFG builder.
@@ -148,7 +151,7 @@ impl<'h> PytketDecoderContext<'h> {
             &mut dfg,
             &signature.input,
             options.input_params.iter().cloned(),
-            options.get_config(),
+            &config,
         )?;
 
         if !serialcirc.phase.is_empty() {
@@ -162,7 +165,8 @@ impl<'h> PytketDecoderContext<'h> {
             builder: dfg,
             wire_tracker: Box::new(wire_tracker),
             options,
-            opaque_subgraphs: None,
+            config,
+            opaque_subgraphs,
         })
     }
 
@@ -378,19 +382,6 @@ impl<'h> PytketDecoderContext<'h> {
                 .unwrap()
                 .out_wire(0);
         }
-    }
-
-    /// Register the set of opaque subgraphs that are present in the HUGR being decoded.
-    ///
-    /// # Arguments
-    /// - `opaque_subgraphs`: A registry of opaque subgraphs from
-    ///   `self.builder.hugr()`, that are referenced by opaque barriers in the
-    ///   pytket circuit via their [`SubgraphId`].
-    pub(super) fn register_opaque_subgraphs(
-        &mut self,
-        opaque_subgraphs: &'h OpaqueSubgraphs<Node>,
-    ) {
-        self.opaque_subgraphs = Some(opaque_subgraphs);
     }
 
     /// Decode a list of pytket commands.
@@ -759,7 +750,7 @@ impl<'h> PytketDecoderContext<'h> {
 
     /// Returns the configuration used by the decoder.
     pub fn config(&self) -> &Arc<PytketDecoderConfig> {
-        self.options.get_config()
+        &self.config
     }
 
     /// Returns the options used by the decoder.

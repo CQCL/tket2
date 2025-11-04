@@ -47,7 +47,8 @@ fn circ_flat_quantum() -> Circuit {
 #[rstest]
 #[case(circ_flat_quantum(), 0)]
 fn test_clifford_simp(#[case] circ: Circuit, #[case] num_remaining_gates: usize) {
-    let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits()).unwrap();
+    let mut encoded =
+        EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
 
     encoded
         .par_iter_mut()
@@ -61,7 +62,7 @@ fn test_clifford_simp(#[case] circ: Circuit, #[case] num_remaining_gates: usize)
 
     let mut new_circ = circ.clone();
     let updated_regions = encoded
-        .reassemble_inline(new_circ.hugr_mut(), None)
+        .reassemble_inplace(new_circ.hugr_mut(), None)
         .unwrap();
 
     let quantum_ops: usize = updated_regions

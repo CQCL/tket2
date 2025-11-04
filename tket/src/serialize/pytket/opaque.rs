@@ -35,6 +35,8 @@ pub(super) struct OpaqueSubgraphs<N> {
     /// Note that the IDs in `opaque_subgraphs` may include instances with
     /// different tracker IDs if `merge` has been called.
     id: usize,
+    /// Next local ID to assign to a new subgraph.
+    next_local_id: usize,
     /// Sets of subgraphs in the HUGR that have been encoded as opaque barriers
     /// in the pytket circuit.
     ///
@@ -68,6 +70,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     pub fn new(id: usize) -> Self {
         Self {
             id,
+            next_local_id: 0,
             opaque_subgraphs: BTreeMap::new(),
         }
     }
@@ -77,10 +80,11 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     /// Returns and ID that can be used to identify the subgraph in the pytket circuit.
     pub fn register_opaque_subgraph(&mut self, subgraph: SiblingSubgraph<N>) -> SubgraphId {
         let id = SubgraphId {
-            local_id: self.opaque_subgraphs.len(),
+            local_id: self.next_local_id,
             tracker_id: self.id,
         };
         self.opaque_subgraphs.insert(id, subgraph);
+        self.next_local_id += 1;
         id
     }
 
@@ -114,7 +118,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     /// # Errors
     ///
     /// Returns an error if a barrier operation with the [`OPGROUP_OPAQUE_HUGR`] opgroup has an invalid payload.
-    pub(super) fn inline_payload(
+    pub(super) fn inline_if_payload(
         &self,
         command: &mut tket_json_rs::circuit_json::Command,
         hugr: &impl HugrView<Node = N>,
@@ -130,7 +134,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
             )));
         };
 
-        let Some(subgraph_id) = parse_external_payload(&payload)? else {
+        let Some(subgraph_id) = parse_external_payload_id(&payload)? else {
             // Inline payload, nothing to do.
             return Ok(());
         };
@@ -158,6 +162,7 @@ impl<N> Default for OpaqueSubgraphs<N> {
     fn default() -> Self {
         Self {
             id: 0,
+            next_local_id: 0,
             opaque_subgraphs: BTreeMap::new(),
         }
     }
@@ -165,13 +170,12 @@ impl<N> Default for OpaqueSubgraphs<N> {
 
 /// Parse an external payload from a string payload.
 ///
-/// Returns `None` if the payload is inline. We avoid fully decoding the payload
-/// in this case to avoid allocating a new String for the encoded envelope.
+/// Returns `None` if the payload is inline.
 ///
 /// # Errors
 ///
 /// Returns an error if the payload is invalid.
-fn parse_external_payload<N: HugrNode>(
+fn parse_external_payload_id<N: HugrNode>(
     payload: &str,
 ) -> Result<Option<SubgraphId>, PytketEncodeError<N>> {
     // Check if the payload is inline, without fully copying it to memory.
@@ -181,6 +185,8 @@ fn parse_external_payload<N: HugrNode>(
         pub id: Option<SubgraphId>,
     }
 
+    // Don't do the full deserialization of the payload to avoid allocating a new String for the
+    // encoded envelope.
     let partial_payload: PartialPayload =
         serde_json::from_str(payload).map_err(|e: serde_json::Error| {
             PytketEncodeError::custom(format!(

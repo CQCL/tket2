@@ -48,6 +48,9 @@ pub struct EncodedEdgeID(u64);
 
 impl EncodedEdgeID {
     /// Create a new subgraph hyper edge ID by hashing a Hugr wire.
+    ///
+    /// This is one of the few operations that can be done on arbitrary
+    /// `HugrNode`s.
     pub fn new<N: HugrNode>(wire: Wire<N>) -> Self {
         let hash = fxhash::hash64(&wire);
         Self(hash)
@@ -58,7 +61,7 @@ impl EncodedEdgeID {
 /// an opaque HUGR subgraph.
 ///
 /// The payload may be encoded inline, embedding the HUGR subgraph as an
-/// envelope in the operation's date, or be a reference to a subgraph tracked
+/// envelope in the operation's metadata, or be a reference to a subgraph tracked
 /// inside a [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
 /// structure.
 ///
@@ -83,11 +86,12 @@ pub enum OpaqueSubgraphPayload {
         hugr_envelope: String,
         /// Input types of the subgraph.
         ///
-        /// Each input is assigned a unique edge identifier, so we can reconstruct
-        /// the connections that are not encoded in the pytket circuit.
+        /// Each input is assigned a unique edge identifier, so we can
+        /// reconstruct the connections that are not encoded in the pytket
+        /// circuit.
         ///
-        /// The types can also be inferred from the encoded hugr or linked
-        /// subcircuit, but we store them here to be robust.
+        /// The types can also be inferred from the encoded hugr, but we store
+        /// them here for ease of inspection.
         inputs: Vec<(Type, EncodedEdgeID)>,
         /// Output types of the subgraph.
         ///
@@ -111,9 +115,14 @@ impl OpaqueSubgraphPayload {
     ///
     /// Encodes the subgraph into a hugr envelope.
     ///
+    /// If the subgraph has non-local edges, they will be ignored. Re-inserting
+    /// the subgraph into a Hugr may produce invalid disconnected ports in such
+    /// cases.
+    ///
     /// # Errors
     ///
-    /// Returns an error if a node in the subgraph has children or non-local const edges.
+    /// Returns an error if a node in the subgraph has children or calls a
+    /// global function.
     pub fn new_inline<N: HugrNode>(
         subgraph: &SiblingSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
@@ -124,7 +133,7 @@ impl OpaqueSubgraphPayload {
             || subgraph
                 .nodes()
                 .iter()
-                .any(|n| hugr.children(*n).next().is_some())
+                .any(|n| hugr.first_child(*n).is_some())
         {
             return Err(PytketEncodeOpError::UnsupportedStandaloneSubgraph {
                 nodes: subgraph.nodes().to_vec(),
@@ -147,7 +156,6 @@ impl OpaqueSubgraphPayload {
             .iter()
             .map(|(n, p)| EncodedEdgeID::new(Wire::new(*n, *p)));
 
-        // TODO: This should include descendants of the subgraph. It doesn't.
         let opaque_hugr = subgraph.extract_subgraph(hugr, "");
         let hugr_envelope = Package::from_hugr(opaque_hugr)
             .store_str(EnvelopeConfig::text())
@@ -165,7 +173,7 @@ impl OpaqueSubgraphPayload {
     /// Updates weak extension references inside the definition after loading.
     pub fn load_str(json: &str, extensions: &ExtensionRegistry) -> Result<Self, PytketDecodeError> {
         let mut payload: Self = serde_json::from_str(json).map_err(|e| {
-            PytketDecodeErrorInner::UnsupportedSubgraphPayload {
+            PytketDecodeErrorInner::UnsupportedSubgraphInlinePayload {
                 source: EnvelopeError::SerdeError { source: e },
             }
             .wrap()
@@ -186,7 +194,8 @@ impl OpaqueSubgraphPayload {
                     let envelope_e = EnvelopeError::ExtensionLoad {
                         source: registry_load_e,
                     };
-                    PytketDecodeErrorInner::UnsupportedSubgraphPayload { source: envelope_e }.wrap()
+                    PytketDecodeErrorInner::UnsupportedSubgraphInlinePayload { source: envelope_e }
+                        .wrap()
                 })?;
             }
         }

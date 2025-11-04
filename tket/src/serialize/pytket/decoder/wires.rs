@@ -4,10 +4,11 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
 use hugr::builder::{DFGBuilder, Dataflow as _};
+use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use hugr::types::Type;
-use hugr::{Hugr, Wire};
+use hugr::{Hugr, IncomingPort, Node, Wire};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use tket_json_rs::circuit_json::ImplicitPermutation;
@@ -355,6 +356,12 @@ pub(crate) struct WireTracker {
     ///
     /// See [`EncodedEdgeID`].
     unsupported_wires: IndexMap<EncodedEdgeID, Wire>,
+    /// Pending edge targets for an `EncodedEdgeID` that hasn't been associated
+    /// to a [`Wire`] yet.
+    ///
+    /// This is used when decoding unsupported inline subgraphs out-of-order,
+    /// where we may see the inputs before the outputs.
+    pending_edge_targets: IndexMap<EncodedEdgeID, Vec<(Node, IncomingPort)>>,
 }
 
 impl WireTracker {
@@ -373,6 +380,7 @@ impl WireTracker {
             parameter_vars: IndexSet::new(),
             output_qubit_permutation: Vec::with_capacity(qubit_count),
             unsupported_wires: IndexMap::new(),
+            pending_edge_targets: IndexMap::new(),
         }
     }
 
@@ -567,14 +575,14 @@ impl WireTracker {
         Ok((qubit_args, bit_args))
     }
 
-    /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
-    /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
+    /// Returns a tracked wire of the given type, containing registers from the
+    /// [`TrackedQubit`]s, [`TrackedBit`]s, and [`LoadedParameter`]s in their
+    /// given order.
     ///
-    /// Returns an error if a valid set of wires with the given types cannot be
-    /// found.
+    /// Returns an error if a valid wire cannot be found.
     ///
-    /// The qubit and bit arguments are only consumed as required by the types.
-    /// Some registers may be left unused.
+    /// The qubit and bit arguments are only consumed as required by the type,
+    /// some registers may be left unused.
     ///
     /// # Arguments
     ///
@@ -591,15 +599,7 @@ impl WireTracker {
     ///
     /// # Errors
     ///
-    /// - [`PytketDecodeErrorInner::OutdatedQubit`] if a qubit in `qubit_args`
-    ///   was marked as outdated.
-    /// - [`PytketDecodeErrorInner::OutdatedBit`] if a bit in `bit_args` was
-    ///   marked as outdated.
-    /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types`
-    ///   cannot be mapped to a [`RegisterCount`] and `unsupported_wire` was not
-    ///   provided.
-    /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with
-    ///   the requested type for the given qubit/bit arguments.
+    /// See [`WireTracker::find_typed_wires`] for possible errors.
     pub(in crate::serialize::pytket) fn find_typed_wire(
         &self,
         config: &PytketDecoderConfig,
@@ -627,16 +627,16 @@ impl WireTracker {
         }
 
         // Translate the wire type to a pytket register count.
-        let reg_count = match (config.type_to_pytket(ty), unsupported_wire) {
-            (Some(reg_count), _) => reg_count,
-            (None, Some(id)) => return Ok(FoundWire::Unsupported { id }),
-            (None, None) => {
-                let err = PytketDecodeErrorInner::UnexpectedInputType {
-                    unknown_type: ty.to_string(),
-                    all_types: vec![ty.to_string()],
-                };
-                return Err(err.wrap());
-            }
+        let Some(reg_count) = config.type_to_pytket(ty) else {
+            return unsupported_wire
+                .map(|id| FoundWire::Unsupported { id })
+                .ok_or_else(|| {
+                    PytketDecodeErrorInner::UnexpectedInputType {
+                        unknown_type: ty.to_string(),
+                        all_types: vec![ty.to_string()],
+                    }
+                    .wrap()
+                });
         };
 
         // List candidate wires that contain the qubits and bits we need.
@@ -712,7 +712,7 @@ impl WireTracker {
         Ok(FoundWire::Register(self.wires[&wire].clone()))
     }
 
-    /// Returns a new set of [TrackedWires] for a list of [`TrackedQubit`]s,
+    /// Returns a new [TrackedWires] set for a list of [`TrackedQubit`]s,
     /// [`TrackedBit`]s, and [`LoadedParameter`]s following the required types.
     ///
     /// Returns an error if a valid set of wires with the given types cannot be
@@ -765,7 +765,7 @@ impl WireTracker {
                 Ok(FoundWire::Unsupported { .. }) => {
                     unreachable!("unsupported_wire was not defined")
                 }
-                // Add additional context to errors UnexpectedInputType errors.
+                // Add additional context to UnexpectedInputType errors.
                 Err(PytketDecodeError {
                     inner: PytketDecodeErrorInner::UnexpectedInputType { unknown_type, .. },
                     pytket_op,
@@ -984,23 +984,53 @@ impl WireTracker {
         self.unused_parameter_inputs.push_back(loaded);
     }
 
-    /// Returns a tracked unsupported wire by its [`EncodedEdgeID`].
+    /// Declare an `EncodeEdgeID` for a wire target into an inline subgraph
+    /// payload's input.
     ///
-    /// These are **not** associated with pytket registers or parameters, and
-    /// are used to track connections between unsupported subgraphs and HUGR
-    /// input/output nodes that got encoded as opaque barriers in the pytket
-    /// circuit.
+    /// If the `EncodedEdgeID` has been registered before with
+    /// [`Self::connect_unsupported_wire_source`], make the connection.
     ///
-    /// See [`EncodedEdgeID`].
-    pub fn get_unsupported_wire(&self, id: EncodedEdgeID) -> Option<&Wire> {
-        self.unsupported_wires.get(&id)
+    /// Otherwise, register the edge id and the targets to be connected
+    /// later.
+    pub fn connect_unsupported_wire_targets(
+        &mut self,
+        id: EncodedEdgeID,
+        targets: impl IntoIterator<Item = (Node, IncomingPort)>,
+        hugr: &mut Hugr,
+    ) {
+        match self.unsupported_wires.get(&id) {
+            Some(wire) => {
+                for (node, port) in targets {
+                    hugr.connect(wire.node(), wire.source(), node, port);
+                }
+            }
+            None => {
+                self.pending_edge_targets
+                    .entry(id)
+                    .or_default()
+                    .extend(targets);
+            }
+        }
     }
 
-    /// Register a new unsupported wire.
+    /// Declare an `EncodeEdgeID` for a wire source from an inline subgraph
+    /// payload's output.
     ///
-    /// See [`WireTracker::get_unsupported_wire`].
-    pub fn register_unsupported_wire(&mut self, id: EncodedEdgeID, wire: Wire) {
+    /// If any wire targets have been registered with
+    /// [`Self::connect_unsupported_wire_target`], make the connections.
+    pub fn connect_unsupported_wire_source(
+        &mut self,
+        id: EncodedEdgeID,
+        wire: Wire,
+        hugr: &mut Hugr,
+    ) {
         self.unsupported_wires.insert(id, wire);
+
+        if let Some(targets) = self.pending_edge_targets.swap_remove(&id) {
+            for (node, port) in targets {
+                hugr.connect(wire.node(), wire.source(), node, port);
+            }
+        }
     }
 }
 

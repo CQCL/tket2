@@ -306,15 +306,16 @@ fn circ_tk1_ops() -> Circuit {
     hugr.into()
 }
 
-/// A circuit with a nested unsupported operation.
+/// A circuit with a non-flat unsupported subgraph.
 ///
 /// Tries to allocate a qubit, and panics if it fails.
 /// This creates an unsupported conditional inside the region.
 #[fixture]
-fn circ_nested_opaque() -> Circuit {
+fn circ_unsupported_subtree() -> Circuit {
     let input_t = vec![];
     let output_t = vec![qb_t()];
-    let mut h = FunctionBuilder::new("nested_opaque", Signature::new(input_t, output_t)).unwrap();
+    let mut h =
+        FunctionBuilder::new("unsupported_subtree", Signature::new(input_t, output_t)).unwrap();
 
     let [maybe_q] = h
         .add_dataflow_op(TketOp::TryQAlloc, [])
@@ -710,7 +711,7 @@ impl CircuitRoundtripTestConfig {
 fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
     let circ = circ_measure_ancilla;
 
-    let encode_options = EncodeOptions::new_with_subcircuits();
+    let encode_options = EncodeOptions::new().with_subcircuits(true);
 
     let encoded = EncodedCircuit::new(&circ, encode_options).unwrap_or_else(|e| panic!("{e}"));
 
@@ -751,7 +752,9 @@ fn circuit_standalone_roundtrip(
     let decode_options = DecodeOptions::new()
         .with_signature(circ_signature.clone())
         .with_config(config.decoder_config());
-    let encode_options = EncodeOptions::new_with_subcircuits().with_config(config.encoder_config());
+    let encode_options = EncodeOptions::new()
+        .with_subcircuits(true)
+        .with_config(config.encoder_config());
 
     let encoded = EncodedCircuit::new_standalone(&circ, encode_options.clone())
         .unwrap_or_else(|e| panic!("{e}"));
@@ -797,7 +800,7 @@ fn circuit_standalone_roundtrip(
 
 /// Test that more complex unsupported subgraphs (nested structure, non-local edges) are rejected when encoding a standalone circuit.
 #[rstest]
-#[case::nested_opaque(circ_nested_opaque())]
+#[case::unsupported_subtree(circ_unsupported_subtree())]
 #[case::global_defs(circ_global_defs())]
 #[case::recursive(circ_recursive())]
 fn reject_standalone_complex_subgraphs(#[case] circ: Circuit) {
@@ -813,7 +816,7 @@ fn reject_standalone_complex_subgraphs(#[case] circ: Circuit) {
 /// Test that modifying the hugr before reassembling an EncodedCircuit fails.
 #[rstest]
 fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
-    let encoded = EncodedCircuit::new(&circ_tk1_ops, EncodeOptions::new_with_subcircuits())
+    let encoded = EncodedCircuit::new(&circ_tk1_ops, EncodeOptions::new().with_subcircuits(true))
         .unwrap_or_else(|e| panic!("{e}"));
 
     let mut a_new_hugr = ModuleBuilder::new();
@@ -822,7 +825,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
         .unwrap();
     let mut a_new_hugr = a_new_hugr.finish_hugr().unwrap();
 
-    let try_reassemble = encoded.reassemble_inline(&mut a_new_hugr, None);
+    let try_reassemble = encoded.reassemble_inplace(&mut a_new_hugr, None);
 
     assert_matches!(
         try_reassemble,
@@ -842,7 +845,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
 // Also requires <https://github.com/CQCL/hugr/pull/2655> to be published in hugr 0.24.1
-//#[case::nested_opaque(circ_nested_opaque(), 3, CircuitRoundtripTestConfig::Default)]
+//#[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: Encoding of independent subgraphs needs more debugging.
@@ -857,7 +860,9 @@ fn encoded_circuit_roundtrip(
     #[case] config: CircuitRoundtripTestConfig,
 ) {
     let circ_signature = circ.circuit_signature().into_owned();
-    let encode_options = EncodeOptions::new_with_subcircuits().with_config(config.encoder_config());
+    let encode_options = EncodeOptions::new()
+        .with_subcircuits(true)
+        .with_config(config.encoder_config());
 
     let encoded = EncodedCircuit::new(&circ, encode_options).unwrap_or_else(|e| panic!("{e}"));
 
@@ -866,7 +871,7 @@ fn encoded_circuit_roundtrip(
 
     let mut deser = circ.clone();
     encoded
-        .reassemble_inline(deser.hugr_mut(), Some(Arc::new(config.decoder_config())))
+        .reassemble_inplace(deser.hugr_mut(), Some(Arc::new(config.decoder_config())))
         .unwrap_or_else(|e| panic!("{e}"));
 
     deser.hugr().validate().unwrap_or_else(|e| panic!("{e}"));

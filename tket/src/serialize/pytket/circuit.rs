@@ -17,8 +17,9 @@ use tket_json_rs::circuit_json::{Command as PytketCommand, SerialCircuit};
 use crate::serialize::pytket::decoder::PytketDecoderContext;
 use crate::serialize::pytket::opaque::SubgraphId;
 use crate::serialize::pytket::{
-    default_encoder_config, DecodeInsertionTarget, DecodeOptions, EncodeOptions, PytketDecodeError,
-    PytketDecodeErrorInner, PytketDecoderConfig, PytketEncodeError, PytketEncoderContext,
+    default_decoder_config, default_encoder_config, DecodeInsertionTarget, DecodeOptions,
+    EncodeOptions, PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig,
+    PytketEncodeError, PytketEncoderContext,
 };
 use crate::Circuit;
 
@@ -99,13 +100,15 @@ impl EncodedCircuit<Node> {
     }
 
     /// Reassemble the encoded circuits into the original [`Hugr`], replacing
-    /// the existing regions that were encoded as subcircuits.
+    /// the existing regions that were encoded in `self` as subcircuits.
     ///
     ///
     ///
     /// # Arguments
     ///
-    /// - `hugr`: The [`Hugr`] to reassemble the circuits in.
+    /// - `hugr`: The [`Hugr`] to reassemble the circuits in. This should
+    ///   contain all the original subgraphs referenced as external opaque
+    ///   barriers in the pytket circuit.
     /// - `config`: The set of extension decoders used to convert the pytket
     ///   commands into HUGR operations.
     ///
@@ -124,15 +127,16 @@ impl EncodedCircuit<Node> {
     /// Returns an error if a circuit being decoded is invalid. See
     /// [`PytketDecodeErrorInner`][super::error::PytketDecodeErrorInner] for
     /// more details.
-    pub fn reassemble_inline(
+    pub fn reassemble_inplace(
         &self,
         hugr: &mut Hugr,
         config: Option<Arc<PytketDecoderConfig>>,
     ) -> Result<Vec<hugr::Node>, PytketDecodeError> {
-        let options = match &config {
-            Some(config) => DecodeOptions::new().with_config(config.clone()),
-            None => DecodeOptions::new().with_default_config(),
-        };
+        let options = DecodeOptions::new().with_config(
+            config
+                .clone()
+                .unwrap_or_else(|| Arc::new(default_decoder_config())),
+        );
 
         for (&original_region, encoded) in &self.circuits {
             // Decode the circuit into a temporary function node.
@@ -156,8 +160,8 @@ impl EncodedCircuit<Node> {
                 hugr,
                 DecodeInsertionTarget::Function { fn_name: None },
                 options,
+                Some(&self.opaque_subgraphs),
             )?;
-            decoder.register_opaque_subgraphs(&self.opaque_subgraphs);
             decoder.run_decoder(&encoded.serial_circuit.commands)?;
             let decoded_node = decoder.finish()?.node();
 
@@ -186,10 +190,11 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     ///
     /// The circuit may contain opaque barriers encoding opaque subgraphs in the
     /// original HUGR. These are encoded completely as Hugr envelopes in the
-    /// barrier operations metadata.
+    /// barrier operations' metadata.
     ///
     /// When encoding a `Hugr`, prefer using [`EncodedCircuit::new`] instead to
-    /// avoid unnecessary copying of the opaque subgraphs.
+    /// avoid unnecessary copying of the opaque subgraphs and preserve non-local
+    /// edges and function calls.
     ///
     /// See [`EncodeOptions`] for the options used by the encoder.
     pub fn new_standalone<H: HugrView<Node = Node>>(
@@ -212,12 +217,9 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     ///
     /// Auxiliary method for [`Self::new`] and [`Self::new_standalone`].
     ///
-    /// TODO: Add an option in [EncodeOptions] to run the subcircuit encoders in parallel.
+    // TODO: Add an option in [EncodeOptions] to run the subcircuit encoders in parallel.
     fn encode_circuits<H: HugrView<Node = Node>>(
         &mut self,
-        // This is already in [`self.hugr`], but we pass it since wrapping it
-        // again results in a `Circuit<&H>`, which doesn't play well with
-        // `config`.
         circuit: &Circuit<H>,
         mut options: EncodeOptions<H>,
     ) -> Result<(), PytketEncodeError<H::Node>> {
@@ -227,10 +229,10 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
         // any node with children that we should traverse recursively until we
         // find a dataflow region.
         let mut candidate_nodes = VecDeque::from([circuit.parent()]);
-        let config = match options.config.take() {
-            Some(config) => config,
-            None => default_encoder_config().into(),
-        };
+        let config = options
+            .config
+            .take()
+            .unwrap_or_else(|| Arc::new(default_encoder_config()));
 
         // Add a node to the list of candidates if it's a region parent.
         let add_candidate = |node: H::Node, queue: &mut VecDeque<H::Node>| {
@@ -241,15 +243,6 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
 
         // Add all container nodes from the new opaque subgraphs to the list of
         // candidates.
-        let add_subgraph_candidates =
-            |subgraphs: &OpaqueSubgraphs<H::Node>, queue: &mut VecDeque<H::Node>| {
-                for subgraph_id in subgraphs.ids() {
-                    for &node in subgraphs[subgraph_id].nodes() {
-                        add_candidate(node, queue);
-                    }
-                }
-            };
-
         let mut encoder_count = 0;
         while let Some(node) = candidate_nodes.pop_front() {
             let node_op = circuit.hugr().get_optype(node);
@@ -267,7 +260,11 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
             let (encoded, opaque_subgraphs) = encoder.finish(circuit, node)?;
 
             if options.encode_subcircuits {
-                add_subgraph_candidates(&opaque_subgraphs, &mut candidate_nodes);
+                for subgraph_id in opaque_subgraphs.ids() {
+                    for &node in opaque_subgraphs[subgraph_id].nodes() {
+                        add_candidate(node, &mut candidate_nodes);
+                    }
+                }
             }
 
             self.circuits.insert(node, encoded);
@@ -313,7 +310,8 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
         let mut hugr = Hugr::new();
         let target = DecodeInsertionTarget::Function { fn_name };
 
-        let mut decoder = PytketDecoderContext::new(serial_circuit, &mut hugr, target, options)?;
+        let mut decoder =
+            PytketDecoderContext::new(serial_circuit, &mut hugr, target, options, None)?;
         decoder.run_decoder(&serial_circuit.commands)?;
         decoder.finish()?;
         Ok(hugr)
@@ -344,7 +342,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
             hugr: &impl HugrView<Node = N>,
         ) -> Result<(), PytketEncodeError<N>> {
             for command in commands.iter_mut() {
-                subgraphs.inline_payload(command, hugr)?;
+                subgraphs.inline_if_payload(command, hugr)?;
 
                 if let Some(tket_json_rs::opbox::OpBox::CircBox { circuit, .. }) =
                     &mut command.op.op_box
