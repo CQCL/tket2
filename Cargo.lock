@@ -2656,6 +2656,7 @@ dependencies = [
  "tket",
  "tket-json-rs",
  "tket-qsystem",
+ "tket1-passes",
 ]
 
 [[package]]

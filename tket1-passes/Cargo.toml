@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Rust interface for tket1-passes library"
+publish = false
 
 [lib]
 name = "tket1_passes"
