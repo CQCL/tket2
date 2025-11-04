@@ -95,6 +95,7 @@ impl<'h> PytketDecoderContext<'h> {
     /// Rewire the inputs of an external subgraph moved to the new region.
     ///
     /// Helper for [`Self::insert_external_subgraph`].
+    #[expect(clippy::too_many_arguments)]
     fn rewire_external_subgraph_inputs(
         &mut self,
         subgraph: &SiblingSubgraph<Node>,
