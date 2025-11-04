@@ -49,9 +49,9 @@ large_enum_variant = "allow"
 [workspace.dependencies]
 
 # Make sure to run `just recompile-eccs` if the hugr serialisation format changes.
-hugr = "0.24.1"
-hugr-core = "0.24.1"
-hugr-cli = "0.24.1"
+hugr = "0.24.2"
+hugr-core = "0.24.2"
+hugr-cli = "0.24.2"
 portgraph = "0.15.2"
 pyo3 = ">= 0.23.4, < 0.27"
 pyo3-build-config = ">= 0.23.4, < 0.28"
@@ -83,7 +83,7 @@ rstest = "0.26.1"
 serde = "1.0"
 serde_json = "1.0"
 serde_with = "3.15.1"
-smol_str = "0.3.2" # Later versions require rustc version 1.89.
+smol_str = "0.3.2"                                                   # Later versions require rustc version 1.89.
 strum = "0.27"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.20"
