@@ -25,7 +25,7 @@ def normalize_guppy(
     *,
     simplify_cfgs: bool = True,
     untuple: bool = True,
-    constant_fold: bool = True,
+    constant_fold: bool = False,
     dead_funcs: bool = True,
     inline: bool = True,
 ) -> CircuitClass:

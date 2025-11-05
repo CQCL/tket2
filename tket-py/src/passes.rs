@@ -65,7 +65,7 @@ create_py_exception!(
 /// - dead_funcs: Whether to remove dead functions.
 /// - inline: Whether to inline DFG operations.
 #[pyfunction]
-#[pyo3(signature = (circ, *, simplify_cfgs = true, untuple = true, constant_fold = true, dead_funcs = true, inline = true))]
+#[pyo3(signature = (circ, *, simplify_cfgs = true, untuple = true, constant_fold = false, dead_funcs = true, inline = true))]
 fn normalize_guppy<'py>(
     circ: &Bound<'py, PyAny>,
     simplify_cfgs: bool,
