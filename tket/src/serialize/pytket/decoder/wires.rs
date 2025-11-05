@@ -354,14 +354,29 @@ pub(crate) struct WireTracker {
     output_qubit_permutation: Vec<usize>,
     /// Wires with unsupported types, created from the input node or from decoded opaque barriers.
     ///
-    /// See [`EncodedEdgeID`].
-    unsupported_wires: IndexMap<EncodedEdgeID, Wire>,
-    /// Pending edge targets for an `EncodedEdgeID` that hasn't been associated
-    /// to a [`Wire`] yet.
+    /// See [`EncodedEdgeID`], [`UnsupportedWireState`]
+    unsupported_wires: IndexMap<EncodedEdgeID, UnsupportedWireState>,
+}
+
+/// Possible states for the entries in [`WireTracker::unsupported_wires`].
+#[derive(Debug, Clone)]
+enum UnsupportedWireState {
+    /// The wire has been associated with a [`Wire`].
+    Associated(Wire),
+    /// The wire has not been associated with a [`Wire`] yet.
+    ///
+    /// We store target ports that need to be connected once the source is
+    /// added.
     ///
     /// This is used when decoding unsupported inline subgraphs out-of-order,
     /// where we may see the inputs before the outputs.
-    pending_edge_targets: IndexMap<EncodedEdgeID, Vec<(Node, IncomingPort)>>,
+    Pending(Vec<(Node, IncomingPort)>),
+}
+
+impl Default for UnsupportedWireState {
+    fn default() -> Self {
+        Self::Pending(Vec::new())
+    }
 }
 
 impl WireTracker {
@@ -380,7 +395,6 @@ impl WireTracker {
             parameter_vars: IndexSet::new(),
             output_qubit_permutation: Vec::with_capacity(qubit_count),
             unsupported_wires: IndexMap::new(),
-            pending_edge_targets: IndexMap::new(),
         }
     }
 
@@ -998,17 +1012,14 @@ impl WireTracker {
         targets: impl IntoIterator<Item = (Node, IncomingPort)>,
         hugr: &mut Hugr,
     ) {
-        match self.unsupported_wires.get(&id) {
-            Some(wire) => {
+        match self.unsupported_wires.entry(id).or_default() {
+            UnsupportedWireState::Associated(wire) => {
                 for (node, port) in targets {
                     hugr.connect(wire.node(), wire.source(), node, port);
                 }
             }
-            None => {
-                self.pending_edge_targets
-                    .entry(id)
-                    .or_default()
-                    .extend(targets);
+            UnsupportedWireState::Pending(existing_targets) => {
+                existing_targets.extend(targets);
             }
         }
     }
@@ -1024,11 +1035,20 @@ impl WireTracker {
         wire: Wire,
         hugr: &mut Hugr,
     ) {
-        self.unsupported_wires.insert(id, wire);
-
-        if let Some(targets) = self.pending_edge_targets.swap_remove(&id) {
-            for (node, port) in targets {
-                hugr.connect(wire.node(), wire.source(), node, port);
+        match self
+            .unsupported_wires
+            .insert(id, UnsupportedWireState::Associated(wire))
+        {
+            None => {}
+            Some(UnsupportedWireState::Pending(targets)) => {
+                for (node, port) in targets {
+                    hugr.connect(wire.node(), wire.source(), node, port);
+                }
+            }
+            Some(UnsupportedWireState::Associated(existing_wire)) => {
+                panic!(
+                    "Tried to associate unsupported wire {id} with {wire}, but it has already been associated with {existing_wire}"
+                );
             }
         }
     }

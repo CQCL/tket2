@@ -45,10 +45,8 @@ impl PytketDecoder for CoreDecoder {
                 data: Some(payload),
                 ..
             } if opgroup == Some(OPGROUP_OPAQUE_HUGR) => {
-                let payload = OpaqueSubgraphPayload::load_str(
-                    payload,
-                    decoder.options().extension_registry(),
-                )?;
+                let payload =
+                    OpaqueSubgraphPayload::load_str(payload, decoder.extension_registry())?;
                 decoder.insert_subgraph_from_payload(qubits, bits, params, &payload)
             }
             PytketOperation {

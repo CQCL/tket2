@@ -213,7 +213,8 @@ impl<'h> PytketDecoderContext<'h> {
                     .collect_vec()
                 {
                     if tgt == old_output {
-                        // TODO: We should only disconnect the specific edge here, but HugrMut doesn't have a method for that?
+                        // We only need to disconnect the specific edge here,
+                        // but there should only be one incoming value edge.
                         self.builder.hugr_mut().disconnect(old_output, tgt_port);
                         self.builder
                             .hugr_mut()
@@ -236,7 +237,7 @@ impl<'h> PytketDecoderContext<'h> {
         bits: &[TrackedBit],
         params: &[LoadedParameter],
     ) -> Result<DecodeStatus, PytketDecodeError> {
-        let to_insert_hugr = Hugr::load_str(hugr_envelope, Some(self.options.extension_registry()))
+        let to_insert_hugr = Hugr::load_str(hugr_envelope, Some(self.extension_registry()))
             .map_err(|e| PytketDecodeErrorInner::UnsupportedSubgraphInlinePayload { source: e })?;
         let to_insert_signature = to_insert_hugr.inner_function_type().unwrap();
 

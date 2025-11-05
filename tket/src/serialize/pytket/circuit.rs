@@ -56,7 +56,8 @@ pub(super) struct EncodedCircuitInfo {
     /// The serial circuit encoded from the region.
     pub serial_circuit: SerialCircuit,
     /// A subgraph of the region that does not contain any operation encodable
-    /// as a pytket command, and hence was not encoded in [`serial_circuit`].
+    /// as a pytket command, and has no qubit/bits in its boundary that could be
+    /// used to emit an opaque barrier command in the [`serial_circuit`].
     pub extra_subgraph: Option<SubgraphId>,
     /// List of parameters in the pytket circuit in the order they appear in the
     /// hugr input.
@@ -193,7 +194,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     ///
     /// When encoding a `Hugr`, prefer using [`EncodedCircuit::new`] instead to
     /// avoid unnecessary copying of the opaque subgraphs and preserve non-local
-    /// edges and function calls.
+    /// edges (like function references).
     ///
     /// See [`EncodeOptions`] for the options used by the encoder.
     pub fn new_standalone<H: HugrView<Node = Node>>(

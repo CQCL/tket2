@@ -754,17 +754,13 @@ fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
 /// Standalone circuit do not currently support unsupported subgraphs with
 /// nested structure or non-local edges.
 #[rstest]
-#[case::meas_ancilla(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::preset_qubits(circ_preset_qubits(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::tk1_ops(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::missing_decoders(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::NoStd)]
-fn circuit_standalone_roundtrip(
-    #[case] circ: Circuit,
-    #[case] num_circuits: usize,
-    #[case] config: CircuitRoundtripTestConfig,
-) {
+#[case::meas_ancilla(circ_measure_ancilla(), CircuitRoundtripTestConfig::Default)]
+#[case::preset_qubits(circ_preset_qubits(), CircuitRoundtripTestConfig::Default)]
+#[case::preset_parameterized(circ_parameterized(), CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), CircuitRoundtripTestConfig::Default)]
+#[case::tk1_ops(circ_tk1_ops(), CircuitRoundtripTestConfig::Default)]
+#[case::missing_decoders(circ_measure_ancilla(), CircuitRoundtripTestConfig::NoStd)]
+fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] config: CircuitRoundtripTestConfig) {
     let circ_signature = circ.circuit_signature().into_owned();
     let decode_options = DecodeOptions::new()
         .with_signature(circ_signature.clone())
@@ -777,7 +773,7 @@ fn circuit_standalone_roundtrip(
         .unwrap_or_else(|e| panic!("{e}"));
 
     assert!(encoded.contains_circuit(circ.parent()));
-    assert_eq!(encoded.len(), num_circuits);
+    assert_eq!(encoded.len(), 1);
 
     // Re-encode the EncodedCircuit
     let extracted_from_circ = encoded
@@ -861,15 +857,20 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
-//#[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
+#[should_panic(expected = "has an unconnected port")]
+#[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 // TODO: An unsupported wire from the input to the output causes an error.
-//#[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+//#[should_panic]
+#[should_panic(expected = "assertion failed")]
+#[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
-//#[case::non_local(circ_non_local(), 1)]
+#[should_panic(expected = "Could not find a parameter of the required input type")]
+#[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
+
 fn encoded_circuit_roundtrip(
     #[case] circ: Circuit,
     #[case] num_circuits: usize,

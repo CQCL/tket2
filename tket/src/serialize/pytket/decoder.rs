@@ -5,6 +5,7 @@ mod subgraph;
 mod tracked_elem;
 mod wires;
 
+use hugr::extension::ExtensionRegistry;
 use hugr::hugr::hugrmut::HugrMut;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
@@ -55,16 +56,16 @@ pub struct PytketDecoderContext<'h> {
     pub builder: DFGBuilder<&'h mut Hugr>,
     /// A tracker keeping track of the generated wires and their corresponding types.
     pub(super) wire_tracker: Box<WireTracker>,
-    /// Options used when decoding the circuit.
-    ///
-    /// This contains the decoding parameters specific to the current circuit
-    /// being decoded.
-    options: DecodeOptions,
-    // A register containing custom operation decoders.
+    // A registry containing custom operation decoders.
     ///
     /// This is a copy of the configuration in `options`, if present, or
     /// [`default_decoder_config`][super::default_decoder_config] if not.
     config: Arc<PytketDecoderConfig>,
+    /// The extensions to use when loading the HUGR envelope.
+    ///
+    /// When `None`, we will use a default registry that includes the prelude,
+    /// std, TKET1, and TketOps extensions.
+    pub extensions: Option<ExtensionRegistry>,
     /// A registry of opaque subgraphs from the original Hugr, that may be referenced by opaque barriers in the pytket circuit
     /// via their [`SubgraphId`].
     pub(super) opaque_subgraphs: Option<&'h OpaqueSubgraphs<Node>>,
@@ -88,7 +89,7 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// # Defining the function signature
     ///
-    /// If the options do not define a `signature`, we default to a sequence of
+    /// If `options` do not define a `signature`, we default to a sequence of
     /// qubit types followed by bool types, according to the qubit and bit
     /// counts in the circuit.
     ///
@@ -98,7 +99,7 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The signature may include bare parameter wires (e.g. `float64` or
     /// `rotation`) mixed between the value types. These will be associated with
-    /// the `input_params` names in the options if possible. Any remaining
+    /// the [`DecodeOptions::input_params`] names, if possible. Any remaining
     /// parameters will be added as additional inputs with type
     /// [`rotation_type`]. Additional parameter inputs may be added during
     /// runtime, as new free variables are found in the command arguments.
@@ -112,7 +113,6 @@ impl<'h> PytketDecoderContext<'h> {
         // Ensure that the set of decoders is present, use a default one if not.
         let config = options
             .config
-            .clone()
             .unwrap_or_else(|| Arc::new(default_decoder_config()));
 
         // Compute the signature of the decoded region, if not provided, and
@@ -162,8 +162,8 @@ impl<'h> PytketDecoderContext<'h> {
         Ok(PytketDecoderContext {
             builder: dfg,
             wire_tracker: Box::new(wire_tracker),
-            options,
             config,
+            extensions: options.extensions,
             opaque_subgraphs,
         })
     }
@@ -361,6 +361,12 @@ impl<'h> PytketDecoderContext<'h> {
                     // Disconnected port with an unsupported type. We just skip
                     // it, since it must have been disconnected in the original
                     // hugr too.
+                    debug_assert!(self
+                        .builder
+                        .hugr()
+                        .get_optype(output_node)
+                        .port_kind(port)
+                        .is_none_or(|kind| !kind.is_value()));
                     continue;
                 }
             };
@@ -795,9 +801,14 @@ impl<'h> PytketDecoderContext<'h> {
         &self.config
     }
 
-    /// Returns the options used by the decoder.
-    pub fn options(&self) -> &DecodeOptions {
-        &self.options
+    /// Returns the extensions to use when decoding HUGR envelopes.
+    ///
+    /// If the option is `None`, we will use a default registry that includes
+    /// the prelude, std, TKET1, and TketOps extensions.
+    pub fn extension_registry(&self) -> &ExtensionRegistry {
+        self.extensions
+            .as_ref()
+            .unwrap_or(&crate::extension::REGISTRY)
     }
 }
 
