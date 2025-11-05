@@ -5,8 +5,6 @@ mod unsupported_tracker;
 mod value_tracker;
 
 use hugr::core::HugrNode;
-use hugr::hugr::views::sibling_subgraph::{IncomingPorts, OutgoingPorts};
-use hugr::hugr::views::SiblingSubgraph;
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use tket_json_rs::clexpr::InputClRegister;
 use tket_json_rs::opbox::BoxID;
@@ -34,7 +32,9 @@ use crate::circuit::Circuit;
 use crate::serialize::pytket::circuit::EncodedCircuitInfo;
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::opaque::{OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
+use crate::serialize::pytket::opaque::{
+    OpaqueSubgraph, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR,
+};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
@@ -228,25 +228,25 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut extra_subgraph: Option<BTreeSet<H::Node>> = None;
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
-            let opaque_subgraphs = self.unsupported.extract_component(node);
-            match self.emit_unsupported(opaque_subgraphs.clone(), circ) {
+            let opaque_subgraphs = self.unsupported.extract_component(node, circ.hugr())?;
+            match self.emit_unsupported(&opaque_subgraphs, circ) {
                 Ok(()) => (),
                 Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {}) => {
                     // We'll store the nodes in the `extra_subgraph` field of the `EncodedCircuitInfo`.
                     // So the decoder can reconstruct the original subgraph.
                     extra_subgraph
                         .get_or_insert_default()
-                        .extend(opaque_subgraphs);
+                        .extend(opaque_subgraphs.nodes().iter().cloned());
                 }
                 Err(e) => return Err(e),
             }
         }
-        let extra_subgraph = extra_subgraph.map(|nodes| {
-            let subgraph =
-                SiblingSubgraph::try_from_nodes(nodes.into_iter().collect_vec(), circ.hugr())
-                    .expect("Failed to create subgraph from unsupported nodes");
-            self.opaque_subgraphs.register_opaque_subgraph(subgraph)
-        });
+        let extra_subgraph = extra_subgraph
+            .map(|nodes| -> Result<_, PytketEncodeError<H::Node>> {
+                let subgraph = OpaqueSubgraph::try_from_nodes(nodes, circ.hugr())?;
+                Ok(self.opaque_subgraphs.register_opaque_subgraph(subgraph))
+            })
+            .transpose()?;
 
         let tracker_result = self.values.finish(circ, region)?;
 
@@ -306,8 +306,10 @@ impl<H: HugrView> PytketEncoderContext<H> {
         //
         // We need to emit the unsupported node here before returning the values.
         if self.unsupported.is_unsupported(wire.node()) {
-            let unsupported_nodes = self.unsupported.extract_component(wire.node());
-            self.emit_unsupported(unsupported_nodes, circ)?;
+            let unsupported_nodes = self
+                .unsupported
+                .extract_component(wire.node(), circ.hugr())?;
+            self.emit_unsupported(&unsupported_nodes, circ)?;
             debug_assert!(!self.unsupported.is_unsupported(wire.node()));
             return self.get_wire_values(wire, circ);
         }
@@ -340,7 +342,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
     ) -> Result<TrackedValues, PytketEncodeError<H::Node>> {
-        self.get_input_values_internal(node, circ, |_| true)
+        self.get_input_values_internal(node, circ, |_| true)?
             .try_into_tracked_values()
     }
 
@@ -354,7 +356,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         node: H::Node,
         circ: &Circuit<H>,
         wire_filter: impl Fn(Wire<H::Node>) -> bool,
-    ) -> NodeInputValues<H::Node> {
+    ) -> Result<NodeInputValues<H::Node>, PytketEncodeError<H::Node>> {
         let mut tracked_values = TrackedValues::default();
         let mut unknown_values = Vec::new();
 
@@ -380,15 +382,13 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 Err(PytketEncodeError::OpEncoding(PytketEncodeOpError::WireHasNoValues {
                     wire,
                 })) => unknown_values.push(wire),
-                Err(e) => panic!(
-                    "get_wire_values should only return WireHasNoValues errors, but got: {e}"
-                ),
+                Err(e) => return Err(e),
             }
         }
-        NodeInputValues {
+        Ok(NodeInputValues {
             tracked_values,
             unknown_values,
-        }
+        })
     }
 
     /// Helper to emit a new tket1 command corresponding to a single HUGR node.
@@ -575,34 +575,17 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     /// ## Arguments
     ///
-    /// - `unsupported_nodes`: The list of nodes to encode as an opaque subgraph.
+    /// - `subgraph`: The subgraph of unsupported nodes to encode as an opaque subgraph.
     /// - `circ`: The circuit containing the unsupported nodes.
     fn emit_unsupported(
         &mut self,
-        unsupported_nodes: BTreeSet<H::Node>,
+        subgraph: &OpaqueSubgraph<H::Node>,
         circ: &Circuit<H>,
     ) -> Result<(), PytketEncodeError<H::Node>> {
-        let subcircuit_id = format!("tk{}", unsupported_nodes.iter().min().unwrap());
-
-        // TODO: Use a cached topo checker here instead of traversing the full graph each time we create a `SiblingSubgraph`.
-        //
-        // TopoConvexChecker likes to borrow the hugr, so it'd be too invasive to store in the `Context`.
-        let subgraph = SiblingSubgraph::try_from_nodes(
-            unsupported_nodes.iter().cloned().collect_vec(),
-            circ.hugr(),
-        )
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to create subgraph from unsupported nodes [{}]: {e}",
-                unsupported_nodes.iter().join(", ")
-            )
-        });
-        let subgraph_incoming_ports: IncomingPorts<H::Node> = subgraph.incoming_ports().clone();
-        let subgraph_outgoing_ports: OutgoingPorts<H::Node> = subgraph.outgoing_ports().clone();
-        let subgraph_signature = subgraph.signature(circ.hugr());
-
         // Encode a payload referencing the subgraph in the Hugr.
-        let subgraph_id = self.opaque_subgraphs.register_opaque_subgraph(subgraph);
+        let subgraph_id = self
+            .opaque_subgraphs
+            .register_opaque_subgraph(subgraph.clone());
         let payload = OpaqueSubgraphPayload::new_external(subgraph_id);
 
         // Collects the input values for the subgraph.
@@ -610,14 +593,10 @@ impl<H: HugrView> PytketEncoderContext<H> {
         // The [`UnsupportedTracker`] ensures that at this point all local input wires must come from
         // already-encoded nodes, and not from other unsupported nodes not in `unsupported_nodes`.
         let mut op_values = TrackedValues::default();
-        for incoming in subgraph_incoming_ports.iter() {
-            let Some((first_node, first_port)) = incoming.first() else {
-                continue;
-            };
-
+        for (node, port) in subgraph.incoming_ports().iter() {
             let (neigh, neigh_out) = circ
                 .hugr()
-                .single_linked_output(*first_node, *first_port)
+                .single_linked_output(*node, *port)
                 .expect("Dataflow input port should have a single neighbour");
             let wire = Wire::new(neigh, neigh_out);
 
@@ -640,9 +619,10 @@ impl<H: HugrView> PytketEncoderContext<H> {
         // Output parameters are mapped to a fresh variable, that can be tracked
         // back to the encoded subcircuit's function name.
         let mut out_param_count = 0;
-        for ((out_node, out_port), ty) in subgraph_outgoing_ports
+        for ((out_node, out_port), ty) in subgraph
+            .outgoing_ports()
             .iter()
-            .zip(subgraph_signature.output().iter())
+            .zip(subgraph.signature().output().iter())
         {
             if self.config().type_to_pytket(ty).is_none() {
                 // Do not try to register ports with unsupported types.
@@ -658,9 +638,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 EmitCommandOptions::new().output_params(|p| {
                     let range = out_param_count..out_param_count + p.expected_count;
                     out_param_count += p.expected_count;
-                    range
-                        .map(|i| format!("{subcircuit_id}_out{i}"))
-                        .collect_vec()
+                    range.map(|i| format!("{subgraph_id}_out{i}")).collect_vec()
                 }),
             )?;
             op_values.append(new_outputs);
