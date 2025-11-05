@@ -20,9 +20,23 @@ fn main() {
 
     let header_path = if let Some(path) = custom_tket_path {
         cargo_set_custom_lib_path(&path.join("lib"), target);
-        path.join("include").join("tket-c-api.h")
+        let header_path = path.join("include").join("tket-c-api.h");
+
+        assert!(
+            header_path.exists(),
+            "TKET_C_API_PATH is set to {} but header was not found at {}",
+            path.display(),
+            header_path.display()
+        );
+        header_path
     } else {
         // Get dependencies from conan
+
+        // 0. Check that conan is installed
+        assert!(
+            Command::new("conan").arg("--version").output().is_ok(),
+            "conan is not installed"
+        );
 
         // 1. Add the conan remote to get the tket-c-api source and binaries
         add_conan_remote_if_missing(CONAN_REMOTE);
@@ -48,6 +62,7 @@ fn main() {
         }
 
         // 4. Run the conan install command and point cargo to the correct install paths
+        conan_install.verbosity(conan2::ConanVerbosity::Verbose);
         let cargo_instructions = conan_install.run().parse();
         cargo_instructions.emit();
 
@@ -59,12 +74,6 @@ fn main() {
             .find(|header| header.exists())
             .expect("required tket-c-api.h header not found")
     };
-
-    assert!(
-        header_path.exists(),
-        "header not found at {}",
-        header_path.display()
-    );
 
     // Link in standard C++ library.
     if target.is_some_and(|t| t.is_macos()) {
@@ -120,10 +129,10 @@ impl SupportedPlatform {
         // Corresponds to profiles which have pre-built binaries in the tket-libs conan remote
         // See ./conan-profiles/README.md for more details
         match self {
-            SupportedPlatform::MacOsX86 => "macos-13",
+            SupportedPlatform::MacOsX86 => "macos-15-intel",
             SupportedPlatform::MacOsArm => "macos-15",
             SupportedPlatform::WindowsX86 => "windows-2025",
-            SupportedPlatform::LinusX86 => "linux-x86_64-gcc14",
+            SupportedPlatform::LinusX86 => "linux-x86_64-gcc13",
         }
     }
 }

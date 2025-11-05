@@ -10,7 +10,7 @@ on:
   pull_request:
     # check builds work if qis-compiler build config changes
     paths:
-      - 'qis-compiler/pyproject.toml'
+      - "qis-compiler/pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +20,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   CACHE_CARGO: true
-  UV_VERSION: "0.8.22"
+  UV_VERSION: "0.9.7"
 jobs:
   build_qis_compiler_wheels:
     strategy:
@@ -66,7 +66,6 @@ jobs:
       # that wheels are built in an isolated environment. We use
       # /tmp/ci-cache for caching, which is then accessed as
       # /host/tmp/ci-cache within the container.
-
 
       # if the hugr_qis compiler has changed, we build it.
       - name: Build selene-hugr-qis-compiler wheel
