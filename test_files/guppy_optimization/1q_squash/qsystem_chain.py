@@ -1,3 +1,6 @@
+from pathlib import Path
+from sys import argv
+
 from guppylang import guppy
 from guppy.std.quantum import qubit
 from guppylang.std.qsystem import rz, phased_x
@@ -12,6 +15,9 @@ def qsystem_chain(q: qubit) -> None:
     phased_x(q, angle(0.81), angle(0))
     rz(q, angle(0.62))
 
+
+program = qsystem_chain.compile()
+Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())
 
 # pytket code to generate this example.
 # For the optimised version replace the call to AutoRebase with AutoSquash.
