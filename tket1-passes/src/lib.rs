@@ -164,6 +164,17 @@ impl Tket1Circuit {
 
         Ok(())
     }
+
+    /// Apply TKET1's squash_phasedx_rz transform to the circuit
+    pub fn squash_phasedx_rz(&mut self) -> Result<(), PassError> {
+        let error_code = unsafe { ffi::tket_squash_phasedx_rz(self.inner) };
+
+        if let Ok(pass_error) = error_code.try_into() {
+            return Err(pass_error);
+        }
+
+        Ok(())
+    }
 }
 
 impl Drop for Tket1Circuit {

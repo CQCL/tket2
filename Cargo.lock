@@ -2701,6 +2701,7 @@ dependencies = [
  "num_cpus",
  "portmatching",
  "pyo3",
+ "rayon",
  "rstest",
  "serde",
  "serde_json",
