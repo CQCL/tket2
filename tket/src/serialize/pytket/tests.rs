@@ -3,15 +3,18 @@
 use std::collections::{HashMap, HashSet};
 use std::io::BufReader;
 
+use cool_asserts::assert_matches;
 use hugr::builder::{
     Container, Dataflow, DataflowHugr, DataflowSubContainer, FunctionBuilder, HugrBuilder,
     ModuleBuilder, SubContainer,
 };
-use hugr::extension::prelude::{bool_t, qb_t};
+use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
+use rayon::iter::ParallelIterator;
+use std::sync::Arc;
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
-use hugr::ops::{OpParent, Value};
+use hugr::ops::{OpParent, OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
 use hugr::types::Signature;
 use hugr::HugrView;
@@ -27,7 +30,13 @@ use crate::extension::bool::BoolOp;
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
-use crate::serialize::pytket::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
+use crate::serialize::pytket::extension::{CoreDecoder, OpaqueTk1Op, PreludeEmitter};
+use crate::serialize::pytket::PytketEncodeError;
+use crate::serialize::pytket::{
+    default_decoder_config, default_encoder_config, DecodeInsertionTarget, DecodeOptions,
+    EncodeOptions, EncodedCircuit, PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig,
+    PytketEncodeOpError, PytketEncoderConfig,
+};
 use crate::TketOp;
 
 const SIMPLE_JSON: &str = r#"{
@@ -272,6 +281,49 @@ fn circ_parameterized() -> Circuit {
         serde_json::json!(["alpha", "beta"]),
     );
 
+    hugr.into()
+}
+
+/// A circuit with a TK1 opaque operation.
+#[fixture]
+fn circ_tk1_ops() -> Circuit {
+    let input_t = vec![qb_t(), qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
+    let mut h = FunctionBuilder::new("tk1_ops", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2] = h.input_wires_arr();
+
+    // An unsupported tk1-only operation.
+    let mut tk1op = tket_json_rs::circuit_json::Operation::default();
+    tk1op.op_type = tket_json_rs::optype::OpType::CH;
+    tk1op.n_qb = Some(2);
+    let op: OpType = OpaqueTk1Op::new_from_op(&tk1op, 2, 0)
+        .as_extension_op()
+        .into();
+    let [q1, q2] = h.add_dataflow_op(op, [q1, q2]).unwrap().outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
+/// A circuit with a non-flat unsupported subgraph.
+///
+/// Tries to allocate a qubit, and panics if it fails.
+/// This creates an unsupported conditional inside the region.
+#[fixture]
+fn circ_unsupported_subtree() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![qb_t()];
+    let mut h =
+        FunctionBuilder::new("unsupported_subtree", Signature::new(input_t, output_t)).unwrap();
+
+    let [maybe_q] = h
+        .add_dataflow_op(TketOp::TryQAlloc, [])
+        .unwrap()
+        .outputs_arr();
+    let [q] = h.build_unwrap_sum(1, option_type(qb_t()), maybe_q).unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([q]).unwrap();
     hugr.into()
 }
 
@@ -527,6 +579,50 @@ fn circ_nested_dfgs() -> Circuit {
     h.finish_hugr_with_outputs([bool]).unwrap().into()
 }
 
+// A circuit with some simple circuit and an unsupported subgraph that does not interact with it.
+#[fixture]
+fn circ_independent_subgraph() -> Circuit {
+    let input_t = vec![qb_t(), qb_t(), option_type(bool_t()).into()];
+    let output_t = vec![qb_t(), qb_t(), bool_t()];
+    let mut h =
+        FunctionBuilder::new("independent_subgraph", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2, maybe_b] = h.input_wires_arr();
+
+    let [q1, q2] = h
+        .add_dataflow_op(TketOp::CX, [q1, q2])
+        .unwrap()
+        .outputs_arr();
+    let [maybe_b] = h
+        .build_unwrap_sum(1, option_type(bool_t()), maybe_b)
+        .unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2, maybe_b]).unwrap();
+    hugr.into()
+}
+
+// A circuit with an unsupported wire from the input to the output.
+#[fixture]
+fn circ_unsupported_io_wire() -> Circuit {
+    let input_t = vec![qb_t(), qb_t(), option_type(qb_t()).into()];
+    let output_t = vec![qb_t(), qb_t(), option_type(qb_t()).into()];
+    let mut h = FunctionBuilder::new(
+        "unsupported_input_to_output",
+        Signature::new(input_t, output_t),
+    )
+    .unwrap();
+
+    let [q1, q2, maybe_q] = h.input_wires_arr();
+
+    let [q1, q2] = h
+        .add_dataflow_op(TketOp::CX, [q1, q2])
+        .unwrap()
+        .outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2, maybe_q]).unwrap();
+    hugr.into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -592,25 +688,110 @@ fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     compare_serial_circs(&ser, &reser);
 }
 
-/// Test the serialisation roundtrip from a tket circuit.
-///
-/// Note: this is not a pure roundtrip as the encoder may add internal qubits/bits to the circuit.
-#[rstest]
-#[case::meas_ancilla(circ_measure_ancilla())]
-#[case::preset_qubits(circ_preset_qubits())]
-#[case::preset_parameterized(circ_parameterized())]
-#[case::nested_dfgs(circ_nested_dfgs())]
-#[case::global_defs(circ_global_defs())]
-#[case::recursive(circ_recursive())]
-#[case::non_local(circ_non_local())]
-fn circuit_roundtrip(#[case] circ: Circuit) {
-    let circ_signature = circ.circuit_signature().into_owned();
+/// Test parameter to select which decoders/encoders to enable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CircuitRoundtripTestConfig {
+    // Use the default decoder/encoder configuration.
+    Default,
+    // Use only the prelude and core decoders/encoders, with no std ones.
+    NoStd,
+}
 
-    let ser: SerialCircuit =
-        SerialCircuit::encode(&circ, EncodeOptions::new()).unwrap_or_else(|e| panic!("{e}"));
-    let deser: Circuit = ser
-        .decode(DecodeOptions::new().with_signature(circ_signature.clone()))
+impl CircuitRoundtripTestConfig {
+    fn decoder_config(&self) -> PytketDecoderConfig {
+        match self {
+            CircuitRoundtripTestConfig::Default => default_decoder_config(),
+            CircuitRoundtripTestConfig::NoStd => {
+                let mut config = PytketDecoderConfig::new();
+                config.add_decoder(CoreDecoder);
+                config.add_decoder(PreludeEmitter);
+                config.add_type_translator(PreludeEmitter);
+                config
+            }
+        }
+    }
+
+    fn encoder_config<H: HugrView>(&self) -> PytketEncoderConfig<H> {
+        match self {
+            CircuitRoundtripTestConfig::Default => default_encoder_config(),
+            CircuitRoundtripTestConfig::NoStd => {
+                let mut config = PytketEncoderConfig::new();
+                config.add_emitter(PreludeEmitter);
+                config.add_type_translator(PreludeEmitter);
+                config
+            }
+        }
+    }
+}
+
+#[rstest]
+fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
+    let circ = circ_measure_ancilla;
+
+    let encode_options = EncodeOptions::new().with_subcircuits(true);
+
+    let encoded = EncodedCircuit::new(&circ, encode_options).unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains_circuit(circ.parent()));
+    assert_eq!(encoded.len(), 1);
+    assert!(!encoded.is_empty());
+
+    let (_, serial_circ) = encoded.iter().exactly_one().ok().unwrap();
+    assert_eq!(serial_circ.commands.len(), 2);
+
+    let par_sum: usize = encoded
+        .par_iter()
+        .map(|(_, circ)| circ.commands.len())
+        .sum();
+    assert_eq!(par_sum, 2);
+}
+
+/// Test the standalone serialisation roundtrip from a tket circuit.
+///
+/// This is not a pure roundtrip as the encoder may add internal qubits/bits to
+/// the circuit.
+///
+/// Standalone circuit do not currently support unsupported subgraphs with
+/// nested structure or non-local edges.
+#[rstest]
+#[case::meas_ancilla(circ_measure_ancilla(), CircuitRoundtripTestConfig::Default)]
+#[case::preset_qubits(circ_preset_qubits(), CircuitRoundtripTestConfig::Default)]
+#[case::preset_parameterized(circ_parameterized(), CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), CircuitRoundtripTestConfig::Default)]
+#[case::tk1_ops(circ_tk1_ops(), CircuitRoundtripTestConfig::Default)]
+#[case::missing_decoders(circ_measure_ancilla(), CircuitRoundtripTestConfig::NoStd)]
+fn circuit_standalone_roundtrip(#[case] circ: Circuit, #[case] config: CircuitRoundtripTestConfig) {
+    let circ_signature = circ.circuit_signature().into_owned();
+    let decode_options = DecodeOptions::new()
+        .with_signature(circ_signature.clone())
+        .with_config(config.decoder_config());
+    let encode_options = EncodeOptions::new()
+        .with_subcircuits(true)
+        .with_config(config.encoder_config());
+
+    let encoded = EncodedCircuit::new_standalone(&circ, encode_options.clone())
         .unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains_circuit(circ.parent()));
+    assert_eq!(encoded.len(), 1);
+
+    // Re-encode the EncodedCircuit
+    let extracted_from_circ = encoded
+        .reassemble(
+            circ.parent(),
+            Some("main".to_string()),
+            decode_options.clone(),
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+    extracted_from_circ
+        .validate()
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    // Extract the head pytket circuit, and re-encode it on its own.
+    let ser: &SerialCircuit = &encoded[circ.parent()];
+    let deser: Circuit = ser.decode(decode_options).unwrap_or_else(|e| panic!("{e}"));
+
+    deser.hugr().validate().unwrap_or_else(|e| panic!("{e}"));
 
     let deser_sig = deser.circuit_signature();
     assert_eq!(
@@ -624,9 +805,105 @@ fn circuit_roundtrip(#[case] circ: Circuit) {
         &circ_signature, &deser_sig
     );
 
-    let reser = SerialCircuit::encode(&deser, EncodeOptions::new()).unwrap();
+    let reser = SerialCircuit::encode(&deser, encode_options).unwrap();
+
     validate_serial_circ(&reser);
-    compare_serial_circs(&ser, &reser);
+    compare_serial_circs(ser, &reser);
+}
+
+/// Test that more complex unsupported subgraphs (nested structure, non-local edges) are rejected when encoding a standalone circuit.
+#[rstest]
+#[case::unsupported_subtree(circ_unsupported_subtree())]
+#[case::global_defs(circ_global_defs())]
+#[case::recursive(circ_recursive())]
+fn reject_standalone_complex_subgraphs(#[case] circ: Circuit) {
+    let try_encoded = EncodedCircuit::new_standalone(&circ, EncodeOptions::new());
+    assert_matches!(
+        try_encoded,
+        Err(PytketEncodeError::OpEncoding(
+            PytketEncodeOpError::UnsupportedStandaloneSubgraph { .. }
+        ))
+    );
+}
+
+/// Test that modifying the hugr before reassembling an EncodedCircuit fails.
+#[rstest]
+fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
+    let encoded = EncodedCircuit::new(&circ_tk1_ops, EncodeOptions::new().with_subcircuits(true))
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    let mut a_new_hugr = ModuleBuilder::new();
+    a_new_hugr
+        .declare("decl", Signature::new_endo(vec![qb_t()]).into())
+        .unwrap();
+    let mut a_new_hugr = a_new_hugr.finish_hugr().unwrap();
+
+    let try_reassemble = encoded.reassemble_inplace(&mut a_new_hugr, None);
+
+    assert_matches!(
+        try_reassemble,
+        Err(PytketDecodeError {
+            inner: PytketDecodeErrorInner::IncompatibleTargetRegion { .. },
+            ..
+        })
+    );
+}
+
+/// Test the serialisation roundtrip from a tket circuit into an EncodedCircuit and back.
+#[rstest]
+#[case::meas_ancilla(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::preset_qubits(circ_preset_qubits(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
+#[should_panic(expected = "has an unconnected port")]
+#[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
+#[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
+// TODO: An unsupported wire from the input to the output causes an error.
+//#[should_panic]
+#[should_panic(expected = "assertion failed")]
+#[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
+// to/from the input of the head region being encoded...
+#[should_panic(expected = "Could not find a parameter of the required input type")]
+#[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
+
+fn encoded_circuit_roundtrip(
+    #[case] circ: Circuit,
+    #[case] num_circuits: usize,
+    #[case] config: CircuitRoundtripTestConfig,
+) {
+    let circ_signature = circ.circuit_signature().into_owned();
+    let encode_options = EncodeOptions::new()
+        .with_subcircuits(true)
+        .with_config(config.encoder_config());
+
+    let encoded = EncodedCircuit::new(&circ, encode_options).unwrap_or_else(|e| panic!("{e}"));
+
+    assert!(encoded.contains_circuit(circ.parent()));
+    assert_eq!(encoded.len(), num_circuits);
+
+    let mut deser = circ.clone();
+    encoded
+        .reassemble_inplace(deser.hugr_mut(), Some(Arc::new(config.decoder_config())))
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    deser.hugr().validate().unwrap_or_else(|e| panic!("{e}"));
+
+    let deser_sig = deser.circuit_signature();
+    assert_eq!(
+        &circ_signature.input, &deser_sig.input,
+        "Input signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &circ_signature, &deser_sig
+    );
+    assert_eq!(
+        &circ_signature.output, &deser_sig.output,
+        "Output signature mismatch\n  Expected: {}\n  Actual:   {}",
+        &circ_signature, &deser_sig
+    );
 }
 
 /// Test serialisation of circuits with a symbolic expression.
@@ -662,7 +939,7 @@ fn test_inplace_decoding() {
     let func1 = serial
         .decode_inplace(
             builder.hugr_mut(),
-            DecodeInsertionTarget::Function,
+            DecodeInsertionTarget::Function { fn_name: None },
             DecodeOptions::new(),
         )
         .unwrap();

@@ -26,6 +26,12 @@ conan2.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+itertools.workspace = true
+rayon.workspace = true
+
+# Used for integration tests
+hugr = { workspace = true }
+tket = { path = "../tket", version = "0.16.0" }
 
 [lints]
 workspace = true
