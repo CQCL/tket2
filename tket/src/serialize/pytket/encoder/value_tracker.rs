@@ -457,14 +457,15 @@ impl<N: HugrNode> ValueTracker<N> {
             for (src_node, src_port) in circ.hugr().linked_outputs(output_node, tgt_port) {
                 let wire = Wire::new(src_node, src_port);
                 let Some(values) = self.peek_wire_values(wire) else {
+                    // If the wire originates from the input node, track it as a straight through wire.
+                    // Otherwise, ignore it (it originates in an unsupported subgraph)
                     if src_node == input_node {
                         straight_through_wires.push(StraightThroughWire {
                             input_source: src_port,
                             output_target: tgt_port,
                         });
-                        continue;
                     }
-                    return Err(PytketEncodeOpError::WireHasNoValues { wire });
+                    continue;
                 };
                 for value in values {
                     match value {

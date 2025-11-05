@@ -599,6 +599,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         });
         let subgraph_incoming_ports: IncomingPorts<H::Node> = subgraph.incoming_ports().clone();
         let subgraph_outgoing_ports: OutgoingPorts<H::Node> = subgraph.outgoing_ports().clone();
+        let subgraph_signature = subgraph.signature(circ.hugr());
 
         // Encode a payload referencing the subgraph in the Hugr.
         let subgraph_id = self.opaque_subgraphs.register_opaque_subgraph(subgraph);
@@ -639,7 +640,14 @@ impl<H: HugrView> PytketEncoderContext<H> {
         // Output parameters are mapped to a fresh variable, that can be tracked
         // back to the encoded subcircuit's function name.
         let mut out_param_count = 0;
-        for (out_node, out_port) in &subgraph_outgoing_ports {
+        for ((out_node, out_port), ty) in subgraph_outgoing_ports
+            .iter()
+            .zip(subgraph_signature.output().iter())
+        {
+            if self.config().type_to_pytket(ty).is_none() {
+                // Do not try to register ports with unsupported types.
+                continue;
+            }
             let new_outputs = self.register_port_output(
                 *out_node,
                 *out_port,
@@ -732,6 +740,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     // TODO: Support output parameters in subcircuits. This may require
     // substituting variables in the parameter expressions.
+    #[expect(unused)]
     fn emit_subcircuit(
         &mut self,
         node: H::Node,
@@ -765,6 +774,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///
     // TODO: Support output parameters in subcircuits. This may require
     // substituting variables in the parameter expressions.
+    #[expect(unused)]
     fn emit_function_call(
         &mut self,
         node: H::Node,
@@ -900,6 +910,15 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     return Ok(EncodeStatus::Success);
                 }
             }
+            // TODO: DFG and function call emissions are temporarily disabled,
+            // since we cannot track additional metadata associated with the
+            // nested circuit in a `CircuitBox` as we'd do for the root one in
+            // [`EncodedCircuitInfo`].
+            //
+            // See the `unsupported_extras_in_circ_box` case in
+            // `tests::encoded_circuit_roundtrip` for a failing case when this
+            // is enabled.
+            /*
             OpType::DFG(_) => return self.emit_subcircuit(node, circ),
             OpType::Call(call) => {
                 let (fn_node, _) = circ
@@ -912,6 +931,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
                     return Ok(EncodeStatus::Success);
                 }
             }
+            */
             OpType::Input(_) | OpType::Output(_) => {
                 // I/O nodes are handled by the container's encoder.
                 return Ok(EncodeStatus::Success);

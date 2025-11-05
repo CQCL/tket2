@@ -811,6 +811,8 @@ fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), CircuitRoundtripTestConfig::Default)]
+// TODO: Should pass once CircBox encoding of DFGs is re-enabled.
+#[should_panic(expected = "Cannot encode subgraphs with nested structure")]
 #[case::nested_dfgs(circ_nested_dfgs(), CircuitRoundtripTestConfig::Default)]
 #[case::tk1_ops(circ_tk1_ops(), CircuitRoundtripTestConfig::Default)]
 #[case::missing_decoders(circ_measure_ancilla(), CircuitRoundtripTestConfig::NoStd)]
@@ -908,7 +910,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), 2, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
 #[should_panic(expected = "has an unconnected port")]
@@ -917,17 +919,18 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too.
-#[should_panic(expected = "Could not find values associated with")]
+// TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
+// have temporarily disabled encoding of DFG and function calls as CircBoxes to
+// avoid an error here.
 #[case::unsupported_extras_in_circ_box(
     circ_unsupported_extras_in_circ_box(),
-    1,
+    4,
     CircuitRoundtripTestConfig::Default
 )]
 #[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
-#[should_panic(expected = "Could not find a parameter of the required input type")]
+#[should_panic(expected = "Unsupported edge kind")]
 #[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
 
 fn encoded_circuit_roundtrip(
