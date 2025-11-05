@@ -225,9 +225,6 @@ impl<H: HugrView> PytketEncoderContext<H> {
         region: H::Node,
     ) -> Result<(EncodedCircuitInfo, OpaqueSubgraphs<H::Node>), PytketEncodeError<H::Node>> {
         // Add any remaining unsupported nodes
-        //
-        // TODO: Test that opaque subgraphs that don't affect any qubit/bit registers
-        // are correctly encoded in pytket commands.
         let mut extra_subgraph: Option<BTreeSet<H::Node>> = None;
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
@@ -251,7 +248,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             self.opaque_subgraphs.register_opaque_subgraph(subgraph)
         });
 
-        let final_values = self.values.finish(circ, region)?;
+        let (final_values, straight_through_wires) = self.values.finish(circ, region)?;
 
         let mut ser = SerialCircuit::new(self.name, self.phase);
 
@@ -266,6 +263,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
             input_params: final_values.params,
             output_params: vec![],
             extra_subgraph,
+            straight_through_wires,
         };
 
         Ok((info, self.opaque_subgraphs))

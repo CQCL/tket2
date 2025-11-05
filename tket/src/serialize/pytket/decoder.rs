@@ -33,6 +33,7 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::circuit::StraightThroughWire;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
@@ -293,7 +294,16 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The original Hugr entrypoint is _not_ modified, it must be set by the
     /// caller if required.
-    pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
+    ///
+    /// # Arguments
+    ///
+    /// - `straight_through_wires`: A list of wires that directly connected the
+    ///   input node to the output node in the original region, and were not
+    ///   encoded in the pytket circuit or unsupported graphs.
+    pub(super) fn finish(
+        mut self,
+        straight_through_wires: &[StraightThroughWire],
+    ) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let known_qubits = self
             .wire_tracker
@@ -311,14 +321,26 @@ impl<'h> PytketDecoderContext<'h> {
             .inner_function_type()
             .unwrap();
         let expected_output_types = function_type.output_types().iter().cloned().collect_vec();
-        let output_node = self.builder.output().node();
+        let [input_node, output_node] = self.builder.io();
+
+        // First re-connect the straight through wires.
+        for StraightThroughWire {
+            input_source,
+            output_target,
+        } in straight_through_wires
+        {
+            self.builder
+                .hugr_mut()
+                .connect(input_node, *input_source, output_node, *output_target);
+        }
 
         for (ty, port) in expected_output_types
             .iter()
             .zip(self.builder.hugr().node_inputs(output_node).collect_vec())
         {
             // If the region's output is already connected, leave it alone.
-            // (It's a wire from an unsupported operation)
+            // (It's a wire from an unsupported operation, or was a connected
+            // straight through wire)
             if self.builder.hugr().is_linked(output_node, port) {
                 continue;
             }

@@ -623,6 +623,40 @@ fn circ_unsupported_io_wire() -> Circuit {
     hugr.into()
 }
 
+/// A circuit that requires tracking info in `extra_subgraph` or `straight_through_wires`
+/// (see `EncodedCircuitInfo`), for a nested circuit in a CircBox.
+#[fixture]
+fn circ_unsupported_extras_in_circ_box() -> Circuit {
+    let input_t = vec![option_type(bool_t()).into(), option_type(qb_t()).into()];
+    let output_t = vec![bool_t(), option_type(qb_t()).into()];
+    let mut h = FunctionBuilder::new(
+        "unsupported_input_to_output",
+        Signature::new(input_t.clone(), output_t.clone()),
+    )
+    .unwrap();
+
+    let [maybe_b, maybe_q] = h.input_wires_arr();
+
+    let [maybe_b, maybe_q] = {
+        let mut nested = h
+            .dfg_builder(Signature::new(input_t, output_t), [maybe_b, maybe_q])
+            .unwrap();
+        let [maybe_b, maybe_q] = nested.input_wires_arr();
+
+        let [maybe_b] = nested
+            .build_unwrap_sum(1, option_type(bool_t()), maybe_b)
+            .unwrap();
+
+        nested
+            .finish_with_outputs([maybe_b, maybe_q])
+            .unwrap()
+            .outputs_arr()
+    };
+
+    let hugr = h.finish_hugr_with_outputs([maybe_b, maybe_q]).unwrap();
+    hugr.into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -862,10 +896,14 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
-// TODO: An unsupported wire from the input to the output causes an error.
-//#[should_panic]
-#[should_panic(expected = "assertion failed")]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too.
+#[should_panic(expected = "assertion failed")]
+#[case::unsupported_extras_in_circ_box(
+    circ_unsupported_extras_in_circ_box(),
+    1,
+    CircuitRoundtripTestConfig::Default
+)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
 #[should_panic(expected = "Could not find a parameter of the required input type")]
