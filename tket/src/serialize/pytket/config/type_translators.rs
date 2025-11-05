@@ -61,6 +61,13 @@ impl TypeTranslatorSet {
     /// Only tuple sums, bools, and custom types are supported.
     /// Other types will return `None`.
     pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
+        self.type_to_pytket_internal(typ).filter(|c| !c.is_empty())
+    }
+
+    /// Recursive call for [`Self::type_to_pytket`].
+    ///
+    /// This allows returning empty register counts, for types that may be included inside other types.
+    fn type_to_pytket_internal(&self, typ: &Type) -> Option<RegisterCount> {
         let cache = self.type_cache.read().ok();
         if let Some(count) = cache.and_then(|c| c.get(typ).cloned()) {
             return count;
@@ -79,7 +86,7 @@ impl TypeTranslatorSet {
                         .iter()
                         .map(|ty| {
                             match ty.clone().try_into() {
-                                Ok(ty) => self.type_to_pytket(&ty),
+                                Ok(ty) => self.type_to_pytket_internal(&ty),
                                 // Sum types with row variables (variable tuple lengths) are not supported.
                                 Err(_) => None,
                             }
@@ -161,10 +168,10 @@ mod tests {
     }
 
     #[rstest::rstest]
-    #[case::empty(SumType::new_unary(0).into(), Some(RegisterCount::default()))]
+    #[case::empty(SumType::new_unary(0).into(), None)]
     #[case::native_bool(SumType::new_unary(2).into(), Some(RegisterCount::only_bits(1)))]
     #[case::simple(bool_t(), Some(RegisterCount::only_bits(1)))]
-    #[case::tuple(SumType::new_tuple(vec![bool_t(), qb_t(), bool_t()]).into(), Some(RegisterCount::new(1, 2, 0)))]
+    #[case::tuple(SumType::new_tuple(vec![bool_t(), qb_t(), bool_t(), SumType::new_unary(1).into()]).into(), Some(RegisterCount::new(1, 2, 0)))]
     #[case::unsupported(SumType::new([vec![bool_t(), qb_t()], vec![bool_t()]]).into(), None)]
     fn test_translations(
         translator_set: TypeTranslatorSet,

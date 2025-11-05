@@ -93,6 +93,10 @@ impl PreludeEmitter {
         let args = op.args().first();
         match args {
             Some(TypeArg::Tuple(elems)) | Some(TypeArg::List(elems)) => {
+                if elems.is_empty() {
+                    return Ok(EncodeStatus::Unsupported);
+                }
+
                 for arg in elems {
                     let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
