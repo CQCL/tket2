@@ -24,10 +24,10 @@ def normalize_guppy(
     circ: CircuitClass,
     *,
     simplify_cfgs: bool = True,
-    untuple: bool = True,
-    constant_fold: bool = False,
-    dead_funcs: bool = True,
-    inline: bool = True,
+    remove_tuple_untuple: bool = True,
+    constant_folding: bool = False,
+    remove_dead_funcs: bool = True,
+    inline_dfgs: bool = True,
 ) -> CircuitClass:
     """Flatten the structure of a Guppy-generated program to enable additional optimisations.
 
@@ -35,10 +35,10 @@ def normalize_guppy(
 
     Parameters:
     - simplify_cfgs: Whether to simplify CFG control flow.
-    - untuple: Whether to remove tuple/untuple operations.
-    - constant_fold: Whether to constant fold the program.
-    - dead_funcs: Whether to remove dead functions.
-    - inline: Whether to inline DFG operations.
+    - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+    - constant_folding: Whether to constant fold the program.
+    - remove_dead_funcs: Whether to remove dead functions.
+    - inline_dfgs: Whether to inline DFG operations.
     """
 
 def greedy_depth_reduce(circ: CircuitClass) -> tuple[CircuitClass, int]:

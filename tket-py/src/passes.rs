@@ -60,29 +60,29 @@ create_py_exception!(
 ///
 /// Parameters:
 /// - simplify_cfgs: Whether to simplify CFG control flow.
-/// - untuple: Whether to remove tuple/untuple operations.
-/// - constant_fold: Whether to constant fold the program.
-/// - dead_funcs: Whether to remove dead functions.
-/// - inline: Whether to inline DFG operations.
+/// - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+/// - constant_folding: Whether to constant fold the program.
+/// - remove_dead_funcs: Whether to remove dead functions.
+/// - inline_dfgs: Whether to inline DFG operations.
 #[pyfunction]
-#[pyo3(signature = (circ, *, simplify_cfgs = true, untuple = true, constant_fold = false, dead_funcs = true, inline = true))]
+#[pyo3(signature = (circ, *, simplify_cfgs = true, remove_tuple_untuple = true, constant_folding = false, remove_dead_funcs = true, inline_dfgs = true))]
 fn normalize_guppy<'py>(
     circ: &Bound<'py, PyAny>,
     simplify_cfgs: bool,
-    untuple: bool,
-    constant_fold: bool,
-    dead_funcs: bool,
-    inline: bool,
+    remove_tuple_untuple: bool,
+    constant_folding: bool,
+    remove_dead_funcs: bool,
+    inline_dfgs: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let py = circ.py();
     try_with_circ(circ, |mut circ, typ| {
         let mut pass = tket::passes::NormalizeGuppy::default();
 
         pass.simplify_cfgs(simplify_cfgs)
-            .remove_tuple_untuple(untuple)
-            .constant_folding(constant_fold)
-            .remove_dead_funcs(dead_funcs)
-            .inline_dfgs(inline);
+            .remove_tuple_untuple(remove_tuple_untuple)
+            .constant_folding(constant_folding)
+            .remove_dead_funcs(remove_dead_funcs)
+            .inline_dfgs(inline_dfgs);
 
         pass.run(circ.hugr_mut()).convert_pyerrs()?;
 
