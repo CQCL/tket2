@@ -27,16 +27,17 @@ tket = { path = "../tket", version = "0.16.0", features = [
 tket-qsystem = { path = "../tket-qsystem", version = "0.22.0" }
 tket1-passes = { path = "../tket1-passes", version = "0.0.0" }
 
+derive_more = { workspace = true, features = ["into", "from"] }
+hugr = { workspace = true }
+itertools = { workspace = true }
+num_cpus = { workspace = true }
+portmatching = { workspace = true }
+pyo3 = { workspace = true, features = ["py-clone", "abi3-py310"] }
+rayon = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-tket-json-rs = { workspace = true, features = ["pyo3"] }
-hugr = { workspace = true }
-pyo3 = { workspace = true, features = ["py-clone", "abi3-py310"] }
-num_cpus = { workspace = true }
-derive_more = { workspace = true, features = ["into", "from"] }
-itertools = { workspace = true }
-portmatching = { workspace = true }
 strum = { workspace = true }
+tket-json-rs = { workspace = true, features = ["pyo3"] }
 
 [dev-dependencies]
 rstest = { workspace = true }

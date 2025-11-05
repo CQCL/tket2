@@ -20,6 +20,27 @@ class CircuitChunks:
 class PullForwardError(Exception):
     """Error from a `PullForward` operation."""
 
+def normalize_guppy(
+    circ: CircuitClass,
+    *,
+    simplify_cfgs: bool = True,
+    untuple: bool = True,
+    constant_fold: bool = True,
+    dead_funcs: bool = True,
+    inline: bool = True,
+) -> CircuitClass:
+    """Flatten the structure of a Guppy-generated program to enable additional optimisations.
+
+    This should normally be called first before other optimisations.
+
+    Parameters:
+    - simplify_cfgs: Whether to simplify CFG control flow.
+    - untuple: Whether to remove tuple/untuple operations.
+    - constant_fold: Whether to constant fold the program.
+    - dead_funcs: Whether to remove dead functions.
+    - inline: Whether to inline DFG operations.
+    """
+
 def greedy_depth_reduce(circ: CircuitClass) -> tuple[CircuitClass, int]:
     """Greedy depth reduction of a circuit.
 
@@ -64,3 +85,32 @@ def badger_optimise(
 
 def chunks(c: Circuit | Tk2Circuit, max_chunk_size: int) -> CircuitChunks:
     """Split a circuit into chunks of at most `max_chunk_size` gates."""
+
+def clifford_simp(
+    circ: CircuitClass,
+    *,
+    allow_swaps: bool = True,
+    traverse_subcircuits: bool = True,
+) -> CircuitClass:
+    """Apply a number of rewrite rules for simplifying Clifford gate sequences,
+    similar to Duncan & Fagan (https://arxiv.org/abs/1901.10114). Produces a
+    circuit comprising TK1 and CX gates.
+
+    Parameters:
+    - allow_swaps: whether the rewriting may introduce implicit wire swaps.
+    - traverse_subcircuits: Whether to apply the optimisation to subregions
+      nested inside other subregions of the circuit.
+    """
+
+def squash_phasedx_rz(
+    circ: CircuitClass,
+    *,
+    traverse_subcircuits: bool = True,
+) -> CircuitClass:
+    """Squash single qubit gates into PhasedX and Rz gates. Also remove identity
+    gates. Commute Rz gates to the back if possible.
+
+    Parameters:
+    - traverse_subcircuits: Whether to apply the optimisation to subregions
+      nested inside other subregions of the circuit.
+    """

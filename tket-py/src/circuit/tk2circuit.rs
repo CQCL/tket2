@@ -25,6 +25,7 @@ use derive_more::From;
 use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket::circuit::CircuitHash;
+use tket::modifier::qubit_types_utils::contain_qubit_term;
 use tket::passes::pytket::lower_to_pytket;
 use tket::passes::CircuitChunks;
 use tket::serialize::pytket::{DecodeOptions, EncodeOptions};
@@ -221,6 +222,7 @@ impl Tk2Circuit {
     pub fn circuit_cost<'py>(&self, cost_fn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
+            // TODO: We should ignore non-tket operations instead.
             let Some(tk2_op) = op.cast::<TketOp>() else {
                 let op_name = op.to_string();
                 return Err(PyErr::new::<PyValueError, _>(format!(
