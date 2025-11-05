@@ -248,22 +248,22 @@ impl<H: HugrView> PytketEncoderContext<H> {
             self.opaque_subgraphs.register_opaque_subgraph(subgraph)
         });
 
-        let (final_values, straight_through_wires) = self.values.finish(circ, region)?;
+        let tracker_result = self.values.finish(circ, region)?;
 
         let mut ser = SerialCircuit::new(self.name, self.phase);
 
         ser.commands = self.commands;
-        ser.qubits = final_values.qubits.into_iter().map_into().collect();
-        ser.bits = final_values.bits.into_iter().map_into().collect();
-        ser.implicit_permutation = final_values.qubit_permutation;
+        ser.qubits = tracker_result.qubits.into_iter().map_into().collect();
+        ser.bits = tracker_result.bits.into_iter().map_into().collect();
+        ser.implicit_permutation = tracker_result.qubit_permutation;
         ser.number_of_ws = None;
 
         let info = EncodedCircuitInfo {
             serial_circuit: ser,
-            input_params: final_values.params,
-            output_params: vec![],
+            input_params: tracker_result.input_params,
+            output_params: tracker_result.params,
             extra_subgraph,
-            straight_through_wires,
+            straight_through_wires: tracker_result.straight_through_wires,
         };
 
         Ok((info, self.opaque_subgraphs))

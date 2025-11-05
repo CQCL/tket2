@@ -9,6 +9,7 @@ use hugr::builder::{
     ModuleBuilder, SubContainer,
 };
 use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
+use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use rayon::iter::ParallelIterator;
 use std::sync::Arc;
 
@@ -630,7 +631,7 @@ fn circ_unsupported_extras_in_circ_box() -> Circuit {
     let input_t = vec![option_type(bool_t()).into(), option_type(qb_t()).into()];
     let output_t = vec![bool_t(), option_type(qb_t()).into()];
     let mut h = FunctionBuilder::new(
-        "unsupported_input_to_output",
+        "unsupported_extras_in_circ_box",
         Signature::new(input_t.clone(), output_t.clone()),
     )
     .unwrap();
@@ -654,6 +655,25 @@ fn circ_unsupported_extras_in_circ_box() -> Circuit {
     };
 
     let hugr = h.finish_hugr_with_outputs([maybe_b, maybe_q]).unwrap();
+    hugr.into()
+}
+
+// A circuit with an output parameter wire.
+#[fixture]
+fn circ_output_parameter_wire() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![float64_type()];
+    let mut h =
+        FunctionBuilder::new("output_parameter_wire", Signature::new(input_t, output_t)).unwrap();
+
+    let pi = h.add_load_value(ConstF64::new(std::f64::consts::PI));
+    let two = h.add_load_value(ConstF64::new(2.0));
+    let two_pi = h
+        .add_dataflow_op(FloatOps::fmul, [pi, two])
+        .unwrap()
+        .out_wire(0);
+
+    let hugr = h.finish_hugr_with_outputs([two_pi]).unwrap();
     hugr.into()
 }
 
@@ -898,12 +918,13 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too.
-#[should_panic(expected = "assertion failed")]
+#[should_panic(expected = "Could not find values associated with")]
 #[case::unsupported_extras_in_circ_box(
     circ_unsupported_extras_in_circ_box(),
     1,
     CircuitRoundtripTestConfig::Default
 )]
+#[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
 #[should_panic(expected = "Could not find a parameter of the required input type")]

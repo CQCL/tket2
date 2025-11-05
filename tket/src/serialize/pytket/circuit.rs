@@ -180,7 +180,9 @@ impl EncodedCircuit<Node> {
                 Some(&self.opaque_subgraphs),
             )?;
             decoder.run_decoder(&encoded.serial_circuit.commands, encoded.extra_subgraph)?;
-            let decoded_node = decoder.finish(&encoded.straight_through_wires)?.node();
+            let decoded_node = decoder
+                .finish(&encoded.straight_through_wires, &encoded.output_params)?
+                .node();
 
             // Replace the region with the decoded function.
             //
@@ -330,7 +332,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
         let mut decoder =
             PytketDecoderContext::new(serial_circuit, &mut hugr, target, options, None)?;
         decoder.run_decoder(&serial_circuit.commands, None)?;
-        decoder.finish(&[])?;
+        decoder.finish(&[], &[])?;
         Ok(hugr)
     }
 

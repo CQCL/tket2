@@ -134,7 +134,7 @@ impl TKETDecode for SerialCircuit {
     ) -> Result<Node, Self::DecodeError> {
         let mut decoder = PytketDecoderContext::new(self, hugr, target, options, None)?;
         decoder.run_decoder(&self.commands, None)?;
-        Ok(decoder.finish(&[])?.node())
+        Ok(decoder.finish(&[], &[])?.node())
     }
 
     fn encode(circuit: &Circuit, options: EncodeOptions) -> Result<Self, Self::EncodeError> {

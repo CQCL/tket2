@@ -67,6 +67,12 @@ pub struct ValueTracker<N> {
     qubit_reg_generator: RegisterUnitGenerator,
     /// A generator of new registers units to use for bit wires.
     bit_reg_generator: RegisterUnitGenerator,
+
+    /// The parameter names in the region's input.
+    ///
+    /// This list contains entries from the circuit's [`METADATA_INPUT_PARAMETERS`] metadata,
+    /// plus fresh variable names generated as needed.
+    input_params: Vec<String>,
 }
 
 /// A lightweight identifier for a qubit value.
@@ -183,6 +189,11 @@ pub struct ValueTrackerResult {
     pub params: Vec<String>,
     /// The implicit permutation of the qubit registers.
     pub qubit_permutation: Vec<circuit_json::ImplicitPermutation>,
+    /// A list of parameter variables seen at the input node of the region.
+    pub input_params: Vec<String>,
+    /// A list of wires that were not tracked but originated directly
+    /// from the input node (so they don't appear in an unsupported graph).
+    pub straight_through_wires: Vec<StraightThroughWire>,
 }
 
 impl<N: HugrNode> ValueTracker<N> {
@@ -213,6 +224,7 @@ impl<N: HugrNode> ValueTracker<N> {
             unused_bits: BTreeSet::new(),
             qubit_reg_generator: RegisterUnitGenerator::default(),
             bit_reg_generator: RegisterUnitGenerator::default(),
+            input_params: Vec::with_capacity(param_variable_names.len()),
         };
 
         tracker.unused_qubits = (0..tracker.qubits.len()).map(TrackedQubit).collect();
@@ -260,7 +272,9 @@ impl<N: HugrNode> ValueTracker<N> {
                 wire_values.push(TrackedValue::Bit(bit));
             }
             for _ in 0..count.params {
-                let param = tracker.new_param(param_gen.next().unwrap());
+                let param_name = param_gen.next().unwrap();
+                tracker.input_params.push(param_name.clone());
+                let param = tracker.new_param(param_name);
                 wire_values.push(TrackedValue::Param(param));
             }
 
@@ -427,14 +441,11 @@ impl<N: HugrNode> ValueTracker<N> {
     ///
     /// Looks at the circuit's output node to determine the final order of
     /// output.
-    ///
-    /// Returns a list of wires that were not tracked but originated directly
-    /// from the input node (so they don't appear in an unsupported graph).
     pub(super) fn finish(
         self,
         circ: &Circuit<impl HugrView<Node = N>>,
         region: N,
-    ) -> Result<(ValueTrackerResult, Vec<StraightThroughWire>), PytketEncodeOpError<N>> {
+    ) -> Result<ValueTrackerResult, PytketEncodeOpError<N>> {
         let [input_node, output_node] = circ.hugr().get_io(region).unwrap();
 
         // Ordered list of qubits and bits at the output of the circuit.
@@ -472,15 +483,14 @@ impl<N: HugrNode> ValueTracker<N> {
         // Compute the final register permutations.
         let qubit_permutation = compute_final_permutation(qubit_outputs, &self.qubits);
 
-        Ok((
-            ValueTrackerResult {
-                qubits: self.qubits,
-                bits: bit_outputs,
-                params: param_outputs,
-                qubit_permutation,
-            },
+        Ok(ValueTrackerResult {
+            qubits: self.qubits,
+            bits: bit_outputs,
+            params: param_outputs,
+            qubit_permutation,
+            input_params: self.input_params,
             straight_through_wires,
-        ))
+        })
     }
 }
 

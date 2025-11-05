@@ -300,9 +300,12 @@ impl<'h> PytketDecoderContext<'h> {
     /// - `straight_through_wires`: A list of wires that directly connected the
     ///   input node to the output node in the original region, and were not
     ///   encoded in the pytket circuit or unsupported graphs.
+    /// - `output_params`: A list of output parameter expressions to associate
+    ///   with the region's outputs.
     pub(super) fn finish(
         mut self,
         straight_through_wires: &[StraightThroughWire],
+        output_params: &[String],
     ) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let known_qubits = self
@@ -313,6 +316,13 @@ impl<'h> PytketDecoderContext<'h> {
         let known_bits = self.wire_tracker.known_pytket_bits().cloned().collect_vec();
         let mut qubits = known_qubits.as_slice();
         let mut bits = known_bits.as_slice();
+
+        // Load the output parameter expressions.
+        let output_params = output_params
+            .iter()
+            .map(|p| self.load_half_turns(p))
+            .collect_vec();
+        let mut params: &[LoadedParameter] = &output_params;
 
         let function_type = self
             .builder
@@ -346,7 +356,6 @@ impl<'h> PytketDecoderContext<'h> {
             }
 
             // Otherwise, get the tracked wire.
-            let mut params: &[LoadedParameter] = &[];
             let found_wire = self
                 .wire_tracker
                 .find_typed_wire(
