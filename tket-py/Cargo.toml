@@ -1,6 +1,7 @@
 [package]
 name = "tket-py"
 version = "0.0.0"
+description = "Python bindings for TKET"
 edition = { workspace = true }
 rust-version = { workspace = true }
 homepage = { workspace = true }
@@ -24,6 +25,8 @@ tket = { path = "../tket", version = "0.16.0", features = [
     "binary-eccs",
 ] }
 tket-qsystem = { path = "../tket-qsystem", version = "0.22.0" }
+tket1-passes = { path = "../tket1-passes", version = "0.0.0" }
+
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tket-json-rs = { workspace = true, features = ["pyo3"] }

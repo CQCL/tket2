@@ -25,6 +25,10 @@ jobs:
     if: ${{ needs.changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     env:
+      # Path to the cached tket-c-api library
+      # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
+      # This config is not required, but speeds up the build by caching the tket-c-api library
+      # The alternative is to install conan and remove the env var
       TKET_C_API_PATH: ${{ github.workspace }}/tket-c-api
       LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
     steps:
