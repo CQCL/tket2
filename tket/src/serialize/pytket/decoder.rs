@@ -33,6 +33,7 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::circuit::StraightThroughWire;
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
@@ -293,7 +294,12 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The original Hugr entrypoint is _not_ modified, it must be set by the
     /// caller if required.
-    pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
+    ///
+    /// # Arguments
+    ///
+    /// - `output_params`: A list of output parameter expressions to associate
+    ///   with the region's outputs.
+    pub(super) fn finish(mut self, output_params: &[String]) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let known_qubits = self
             .wire_tracker
@@ -304,6 +310,13 @@ impl<'h> PytketDecoderContext<'h> {
         let mut qubits = known_qubits.as_slice();
         let mut bits = known_bits.as_slice();
 
+        // Load the output parameter expressions.
+        let output_params = output_params
+            .iter()
+            .map(|p| self.load_half_turns(p))
+            .collect_vec();
+        let mut params: &[LoadedParameter] = &output_params;
+
         let function_type = self
             .builder
             .hugr()
@@ -311,20 +324,20 @@ impl<'h> PytketDecoderContext<'h> {
             .inner_function_type()
             .unwrap();
         let expected_output_types = function_type.output_types().iter().cloned().collect_vec();
-        let output_node = self.builder.output().node();
+        let [_, output_node] = self.builder.io();
 
         for (ty, port) in expected_output_types
             .iter()
             .zip(self.builder.hugr().node_inputs(output_node).collect_vec())
         {
             // If the region's output is already connected, leave it alone.
-            // (It's a wire from an unsupported operation)
+            // (It's a wire from an unsupported operation, or was a connected
+            // straight through wire)
             if self.builder.hugr().is_linked(output_node, port) {
                 continue;
             }
 
             // Otherwise, get the tracked wire.
-            let mut params: &[LoadedParameter] = &[];
             let found_wire = self
                 .wire_tracker
                 .find_typed_wire(
@@ -428,10 +441,15 @@ impl<'h> PytketDecoderContext<'h> {
     /// - `commands`: The list of pytket commands to decode.
     /// - `extra_subgraph`: An additional subgraph of the original Hugr that was
     ///   not encoded as a pytket command, and must be decoded independently.
+    /// - `straight_through_wires`: A list of wires that directly connected the
+    ///   input node to the output node in the original region, and were not
+    ///   encoded in the pytket circuit or unsupported graphs.
+    ///   (They cannot be encoded in `extra_subgraph`).
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
         extra_subgraph: Option<SubgraphId>,
+        straight_through_wires: &[StraightThroughWire],
     ) -> Result<(), PytketDecodeError> {
         let config = self.config().clone();
         for com in commands {
@@ -439,9 +457,23 @@ impl<'h> PytketDecoderContext<'h> {
             self.process_command(com, config.as_ref())
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
+
+        // Add additional subgraphs if not encoded in commands.
         if let Some(subgraph_id) = extra_subgraph {
             self.insert_external_subgraph(subgraph_id, &[], &[], &[])
                 .map_err(|e| e.hugr_op("External subgraph"))?;
+        }
+
+        // Add wires from the input node to the output node that didn't get encoded in commands.
+        let [input_node, output_node] = self.builder.io();
+        for StraightThroughWire {
+            input_source,
+            output_target,
+        } in straight_through_wires
+        {
+            self.builder
+                .hugr_mut()
+                .connect(input_node, *input_source, output_node, *output_target);
         }
         Ok(())
     }

@@ -9,6 +9,7 @@ use hugr::builder::{
     ModuleBuilder, SubContainer,
 };
 use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
+use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use rayon::iter::ParallelIterator;
 use std::sync::Arc;
 
@@ -623,6 +624,59 @@ fn circ_unsupported_io_wire() -> Circuit {
     hugr.into()
 }
 
+/// A circuit that requires tracking info in `extra_subgraph` or `straight_through_wires`
+/// (see `EncodedCircuitInfo`), for a nested circuit in a CircBox.
+#[fixture]
+fn circ_unsupported_extras_in_circ_box() -> Circuit {
+    let input_t = vec![option_type(bool_t()).into(), option_type(qb_t()).into()];
+    let output_t = vec![bool_t(), option_type(qb_t()).into()];
+    let mut h = FunctionBuilder::new(
+        "unsupported_extras_in_circ_box",
+        Signature::new(input_t.clone(), output_t.clone()),
+    )
+    .unwrap();
+
+    let [maybe_b, maybe_q] = h.input_wires_arr();
+
+    let [maybe_b, maybe_q] = {
+        let mut nested = h
+            .dfg_builder(Signature::new(input_t, output_t), [maybe_b, maybe_q])
+            .unwrap();
+        let [maybe_b, maybe_q] = nested.input_wires_arr();
+
+        let [maybe_b] = nested
+            .build_unwrap_sum(1, option_type(bool_t()), maybe_b)
+            .unwrap();
+
+        nested
+            .finish_with_outputs([maybe_b, maybe_q])
+            .unwrap()
+            .outputs_arr()
+    };
+
+    let hugr = h.finish_hugr_with_outputs([maybe_b, maybe_q]).unwrap();
+    hugr.into()
+}
+
+// A circuit with an output parameter wire.
+#[fixture]
+fn circ_output_parameter_wire() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![float64_type()];
+    let mut h =
+        FunctionBuilder::new("output_parameter_wire", Signature::new(input_t, output_t)).unwrap();
+
+    let pi = h.add_load_value(ConstF64::new(std::f64::consts::PI));
+    let two = h.add_load_value(ConstF64::new(2.0));
+    let two_pi = h
+        .add_dataflow_op(FloatOps::fmul, [pi, two])
+        .unwrap()
+        .out_wire(0);
+
+    let hugr = h.finish_hugr_with_outputs([two_pi]).unwrap();
+    hugr.into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -757,6 +811,8 @@ fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), CircuitRoundtripTestConfig::Default)]
+// TODO: Should pass once CircBox encoding of DFGs is re-enabled.
+#[should_panic(expected = "Cannot encode subgraphs with nested structure")]
 #[case::nested_dfgs(circ_nested_dfgs(), CircuitRoundtripTestConfig::Default)]
 #[case::tk1_ops(circ_tk1_ops(), CircuitRoundtripTestConfig::Default)]
 #[case::missing_decoders(circ_measure_ancilla(), CircuitRoundtripTestConfig::NoStd)]
@@ -854,7 +910,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), 2, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
 #[should_panic(expected = "has an unconnected port")]
@@ -862,13 +918,19 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
-// TODO: An unsupported wire from the input to the output causes an error.
-//#[should_panic]
-#[should_panic(expected = "assertion failed")]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
+// have temporarily disabled encoding of DFG and function calls as CircBoxes to
+// avoid an error here.
+#[case::unsupported_extras_in_circ_box(
+    circ_unsupported_extras_in_circ_box(),
+    4,
+    CircuitRoundtripTestConfig::Default
+)]
+#[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
 // to/from the input of the head region being encoded...
-#[should_panic(expected = "Could not find a parameter of the required input type")]
+#[should_panic(expected = "Unsupported edge kind")]
 #[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
 
 fn encoded_circuit_roundtrip(

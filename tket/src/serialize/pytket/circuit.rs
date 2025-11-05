@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque};
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
-use hugr::core::HugrNode;
+use hugr::core::{HugrNode, IncomingPort, OutgoingPort};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
 use hugr::ops::{OpParent, OpTag, OpTrait};
@@ -59,6 +59,11 @@ pub(super) struct EncodedCircuitInfo {
     /// as a pytket command, and has no qubit/bits in its boundary that could be
     /// used to emit an opaque barrier command in the [`serial_circuit`].
     pub extra_subgraph: Option<SubgraphId>,
+    /// List of wires that directly connected the input node to the output node in the encoded region,
+    /// and were not encoded in [`serial_circuit`].
+    ///
+    /// We just store the input nodes's output port and output node's input port here.
+    pub straight_through_wires: Vec<StraightThroughWire>,
     /// List of parameters in the pytket circuit in the order they appear in the
     /// hugr input.
     ///
@@ -67,8 +72,20 @@ pub(super) struct EncodedCircuitInfo {
     pub input_params: Vec<String>,
     /// List of output parameter expressions found at the end of the encoded region.
     //
-    // TODO: The decoder does not currently connect these.
+    // TODO: The decoder does not currently connect these, everything that
+    // _produces_ a parameter gets included in unsupported subgraphs instead.
     pub output_params: Vec<String>,
+}
+
+/// A wire stored in the [`EncodedCircuitInfo`] that directly connected the
+/// input node to the output node in the encoded region, and was not encoded in
+/// the pytket circuit.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub(super) struct StraightThroughWire {
+    /// Source port of the wire in the input node.
+    pub input_source: OutgoingPort,
+    /// Target port of the wire in the output node.
+    pub output_target: IncomingPort,
 }
 
 impl EncodedCircuit<Node> {
@@ -162,8 +179,12 @@ impl EncodedCircuit<Node> {
                 options,
                 Some(&self.opaque_subgraphs),
             )?;
-            decoder.run_decoder(&encoded.serial_circuit.commands, encoded.extra_subgraph)?;
-            let decoded_node = decoder.finish()?.node();
+            decoder.run_decoder(
+                &encoded.serial_circuit.commands,
+                encoded.extra_subgraph,
+                &encoded.straight_through_wires,
+            )?;
+            let decoded_node = decoder.finish(&encoded.output_params)?.node();
 
             // Replace the region with the decoded function.
             //
@@ -312,8 +333,8 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
 
         let mut decoder =
             PytketDecoderContext::new(serial_circuit, &mut hugr, target, options, None)?;
-        decoder.run_decoder(&serial_circuit.commands, None)?;
-        decoder.finish()?;
+        decoder.run_decoder(&serial_circuit.commands, None, &[])?;
+        decoder.finish(&[])?;
         Ok(hugr)
     }
 
