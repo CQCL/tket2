@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#     "guppylang >=0.21.3",
+#     "guppylang >=0.21.6",
 # ]
 # ///
 
@@ -27,5 +27,5 @@ def main() -> None:
     result("b4", b4)
 
 
-program = main.compile()
+program = main.compile_function()
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())
