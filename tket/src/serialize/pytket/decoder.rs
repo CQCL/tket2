@@ -444,6 +444,7 @@ impl<'h> PytketDecoderContext<'h> {
     /// - `straight_through_wires`: A list of wires that directly connected the
     ///   input node to the output node in the original region, and were not
     ///   encoded in the pytket circuit or unsupported graphs.
+    ///   (They cannot be encoded in `extra_subgraph`).
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
@@ -457,7 +458,7 @@ impl<'h> PytketDecoderContext<'h> {
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
 
-        // Add additional subgraphs not encoded in commands.
+        // Add additional subgraphs if not encoded in commands.
         if let Some(subgraph_id) = extra_subgraph {
             self.insert_external_subgraph(subgraph_id, &[], &[], &[])
                 .map_err(|e| e.hugr_op("External subgraph"))?;
