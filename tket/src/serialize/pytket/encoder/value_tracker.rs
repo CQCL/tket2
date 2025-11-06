@@ -486,7 +486,7 @@ impl<N: HugrNode> ValueTracker<N> {
 
         Ok(ValueTrackerResult {
             qubits: self.qubits,
-            bits: bit_outputs,
+            bits: self.bits,
             params: param_outputs,
             qubit_permutation,
             input_params: self.input_params,
