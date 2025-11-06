@@ -102,7 +102,7 @@ impl PreludeEmitter {
                         return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty);
-                    if count.is_none() {
+                    if count.is_none_or(|c| c.params > 0) {
                         return Ok(EncodeStatus::Unsupported);
                     }
                 }

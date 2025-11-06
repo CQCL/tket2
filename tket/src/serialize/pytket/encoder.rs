@@ -895,10 +895,12 @@ impl<H: HugrView> PytketEncoderContext<H> {
             }
             OpType::Const(op) => {
                 let config = Arc::clone(&self.config);
-                if let Some(values) = config.const_to_pytket(&op.value, self)? {
-                    let wire = Wire::new(node, 0);
-                    self.values.register_wire(wire, values.into_iter(), circ)?;
-                    return Ok(EncodeStatus::Success);
+                if self.config().type_to_pytket(&op.get_type()).is_some() {
+                    if let Some(values) = config.const_to_pytket(&op.value, self)? {
+                        let wire = Wire::new(node, 0);
+                        self.values.register_wire(wire, values.into_iter(), circ)?;
+                        return Ok(EncodeStatus::Success);
+                    }
                 }
             }
             // TODO: DFG and function call emissions are temporarily disabled,

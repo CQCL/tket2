@@ -9,11 +9,13 @@ use std::sync::RwLock;
 use hugr::builder::{BuildError, DFGBuilder, Dataflow};
 use hugr::extension::prelude::bool_t;
 use hugr::extension::ExtensionId;
+use hugr::std_extensions::arithmetic::float_types;
 use hugr::types::{Type, TypeEnum};
 use hugr::{Hugr, Wire};
 use itertools::Itertools;
 
 use crate::extension::bool::BoolOp;
+use crate::extension::rotation;
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
 use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner};
 
@@ -77,6 +79,14 @@ impl TypeTranslatorSet {
             return count;
         }
 
+        // We currently don't allow user types to contain parameters,
+        // so we handle rotations and floats manually here.
+        if typ.as_extension().is_some_and(|ext| {
+            [float_types::EXTENSION_ID, rotation::ROTATION_EXTENSION_ID].contains(ext.extension())
+        }) {
+            return Some(RegisterCount::only_params(1));
+        }
+
         let res = match typ.as_type_enum() {
             TypeEnum::Sum(sum) => {
                 if sum.num_variants() == 0 {
@@ -96,7 +106,8 @@ impl TypeTranslatorSet {
                             }
                         })
                         .sum();
-                    count
+                    // Don't allow parameters nested inside other types
+                    count.filter(|c| c.params == 0)
                 } else {
                     None
                 }
@@ -105,7 +116,12 @@ impl TypeTranslatorSet {
                 let type_ext = custom.extension();
                 for encoder in self.translators_for_extension(type_ext) {
                     if let Some(count) = encoder.type_to_pytket(custom, self) {
-                        break 'outer Some(count);
+                        // Don't allow user types with nested parameters
+                        if count.params == 0 {
+                            break 'outer Some(count);
+                        } else {
+                            break 'outer None;
+                        }
                     }
                 }
                 None

@@ -17,7 +17,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
 use hugr::ops::{OpParent, OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
-use hugr::types::Signature;
+use hugr::types::{Signature, SumType};
 use hugr::HugrView;
 use itertools::Itertools;
 use rstest::{fixture, rstest};
@@ -729,6 +729,21 @@ fn circ_output_parameter_wire() -> Circuit {
     hugr.into()
 }
 
+// A circuit with a [float64] wire, which should be treated as unsupported.
+#[fixture]
+fn circ_complex_param_type() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![SumType::new_tuple(vec![float64_type()]).into()];
+    let mut h =
+        FunctionBuilder::new("complex_param_type", Signature::new(input_t, output_t)).unwrap();
+
+    let float64 = h.add_load_value(ConstF64::new(1.0));
+    let float_tuple = h.make_tuple([float64]).unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([float_tuple]).unwrap();
+    hugr.into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -971,6 +986,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::order_edge(circ_order_edge(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::bool_conversion(circ_bool_conversion(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::complex_param_type(circ_complex_param_type(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
 // have temporarily disabled encoding of DFG and function calls as CircBoxes to
 // avoid an error here.
