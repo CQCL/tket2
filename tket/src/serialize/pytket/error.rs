@@ -101,8 +101,13 @@ pub enum PytketEncodeError<N: HugrNode = hugr::Node> {
         head_op: String,
     },
     /// No qubits or bits to attach the barrier command to for unsupported nodes.
-    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to.")]
-    UnsupportedSubgraphHasNoRegisters {},
+    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to{}",
+        if params.is_empty() {"".to_string()} else {format!(" alongside its parameters [{}]", params.iter().join(", "))}
+    )]
+    UnsupportedSubgraphHasNoRegisters {
+        /// Parameter inputs to the unsupported subgraph.
+        params: Vec<String>,
+    },
 }
 
 impl<N: HugrNode> PytketEncodeError<N> {

@@ -657,7 +657,16 @@ impl WireTracker {
                     PytketDecodeErrorInner::NoMatchingParameter { ty: ty.to_string() }.wrap(),
                 );
             };
-            return Ok(FoundWire::Parameter(*param));
+            if ty == param.wire_type() {
+                return Ok(FoundWire::Parameter(*param));
+            }
+            // Convert between half-turn floats and rotations as needed.
+            let param_ty = if ty == &float64_type() {
+                ParameterType::FloatHalfTurns
+            } else {
+                ParameterType::Rotation
+            };
+            return Ok(FoundWire::Parameter(param.with_type(param_ty, builder)));
         }
 
         // Translate the wire type to a pytket register count.

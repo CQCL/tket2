@@ -55,15 +55,8 @@ pub struct EncodedCircuit<Node: HugrNode> {
 pub(super) struct EncodedCircuitInfo {
     /// The serial circuit encoded from the region.
     pub serial_circuit: SerialCircuit,
-    /// A subgraph of the region that does not contain any operation encodable
-    /// as a pytket command, and has no qubit/bits in its boundary that could be
-    /// used to emit an opaque barrier command in the [`serial_circuit`].
-    pub extra_subgraph: Option<SubgraphId>,
-    /// List of wires that directly connected the input node to the output node in the encoded region,
-    /// and were not encoded in [`serial_circuit`].
-    ///
-    /// We just store the input nodes's output port and output node's input port here.
-    pub straight_through_wires: Vec<StraightThroughWire>,
+    /// Information about any unsupported nodes in the region that could not be encoded as a pytket command.
+    pub additional_nodes_and_wires: AdditionalNodesAndWires,
     /// List of parameters in the pytket circuit in the order they appear in the
     /// hugr input.
     ///
@@ -75,6 +68,24 @@ pub(super) struct EncodedCircuitInfo {
     // TODO: The decoder does not currently connect these, everything that
     // _produces_ a parameter gets included in unsupported subgraphs instead.
     pub output_params: Vec<String>,
+}
+
+/// Nodes and edges from the original region that could not be encoded into the
+/// pytket circuit, as they cannot be attached to a pytket command.
+#[derive(Debug, Clone)]
+pub(super) struct AdditionalNodesAndWires {
+    /// A subgraph of the region that does not contain any operation encodable
+    /// as a pytket command, and has no qubit/bits in its boundary that could be
+    /// used to emit an opaque barrier command in the [`serial_circuit`].
+    pub extra_subgraph: Option<SubgraphId>,
+    /// Parameter expression inputs to the `extra_subgraph`.
+    /// These cannot be encoded either if there's no pytket command to attach them to.
+    pub extra_subgraph_params: Vec<String>,
+    /// List of wires that directly connected the input node to the output node in the encoded region,
+    /// and were not encoded in [`serial_circuit`].
+    ///
+    /// We just store the input nodes's output port and output node's input port here.
+    pub straight_through_wires: Vec<StraightThroughWire>,
 }
 
 /// A wire stored in the [`EncodedCircuitInfo`] that directly connected the
@@ -181,8 +192,7 @@ impl EncodedCircuit<Node> {
             )?;
             decoder.run_decoder(
                 &encoded.serial_circuit.commands,
-                encoded.extra_subgraph,
-                &encoded.straight_through_wires,
+                Some(&encoded.additional_nodes_and_wires),
             )?;
             let decoded_node = decoder.finish(&encoded.output_params)?.node();
 
@@ -333,7 +343,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
 
         let mut decoder =
             PytketDecoderContext::new(serial_circuit, &mut hugr, target, options, None)?;
-        decoder.run_decoder(&serial_circuit.commands, None, &[])?;
+        decoder.run_decoder(&serial_circuit.commands, None)?;
         decoder.finish(&[])?;
         Ok(hugr)
     }

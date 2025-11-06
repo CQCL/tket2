@@ -30,7 +30,7 @@ use super::{
     PytketEncodeError, PytketEncodeOpError, METADATA_OPGROUP, METADATA_PHASE, METADATA_Q_REGISTERS,
 };
 use crate::circuit::Circuit;
-use crate::serialize::pytket::circuit::EncodedCircuitInfo;
+use crate::serialize::pytket::circuit::{AdditionalNodesAndWires, EncodedCircuitInfo};
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::opaque::{
@@ -227,17 +227,19 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ) -> Result<(EncodedCircuitInfo, OpaqueSubgraphs<H::Node>), PytketEncodeError<H::Node>> {
         // Add any remaining unsupported nodes
         let mut extra_subgraph: Option<BTreeSet<H::Node>> = None;
+        let mut extra_subgraph_params = Vec::new();
         while !self.unsupported.is_empty() {
             let node = self.unsupported.iter().next().unwrap();
             let opaque_subgraphs = self.unsupported.extract_component(node, circ.hugr())?;
             match self.emit_unsupported(&opaque_subgraphs, circ) {
                 Ok(()) => (),
-                Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {}) => {
+                Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters { params }) => {
                     // We'll store the nodes in the `extra_subgraph` field of the `EncodedCircuitInfo`.
                     // So the decoder can reconstruct the original subgraph.
                     extra_subgraph
                         .get_or_insert_default()
                         .extend(opaque_subgraphs.nodes().iter().cloned());
+                    extra_subgraph_params.extend(params);
                 }
                 Err(e) => return Err(e),
             }
@@ -263,8 +265,11 @@ impl<H: HugrView> PytketEncoderContext<H> {
             serial_circuit: ser,
             input_params: tracker_result.input_params,
             output_params: tracker_result.params,
-            extra_subgraph,
-            straight_through_wires: tracker_result.straight_through_wires,
+            additional_nodes_and_wires: AdditionalNodesAndWires {
+                extra_subgraph,
+                extra_subgraph_params,
+                straight_through_wires: tracker_result.straight_through_wires,
+            },
         };
 
         Ok((info, self.opaque_subgraphs))
@@ -605,7 +610,6 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 // If the wire is not tracked, no need to consume it.
                 continue;
             };
-
             op_values.extend(tracked_values.iter().cloned());
         }
 
@@ -654,7 +658,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
         //
         // This should only fail when looking at the "leftover" unsupported nodes at the end of the decoding process.
         if op_values.qubits.is_empty() && op_values.bits.is_empty() {
-            return Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {});
+            return Err(PytketEncodeError::UnsupportedSubgraphHasNoRegisters {
+                params: input_param_exprs.clone(),
+            });
         }
 
         // Create pytket operation, and add the subcircuit as hugr

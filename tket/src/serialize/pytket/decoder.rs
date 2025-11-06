@@ -34,11 +34,11 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
-use crate::serialize::pytket::circuit::StraightThroughWire;
+use crate::serialize::pytket::circuit::{AdditionalNodesAndWires, StraightThroughWire};
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphs, SubgraphId};
+use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphs};
 use crate::serialize::pytket::{
     default_decoder_config, DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner,
 };
@@ -460,8 +460,7 @@ impl<'h> PytketDecoderContext<'h> {
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
-        extra_subgraph: Option<SubgraphId>,
-        straight_through_wires: &[StraightThroughWire],
+        extra_nodes_and_wires: Option<&AdditionalNodesAndWires>,
     ) -> Result<(), PytketDecodeError> {
         let config = self.config().clone();
         for com in commands {
@@ -470,22 +469,33 @@ impl<'h> PytketDecoderContext<'h> {
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
 
-        // Add additional subgraphs if not encoded in commands.
-        if let Some(subgraph_id) = extra_subgraph {
-            self.insert_external_subgraph(subgraph_id, &[], &[], &[])
-                .map_err(|e| e.hugr_op("External subgraph"))?;
-        }
-
-        // Add wires from the input node to the output node that didn't get encoded in commands.
+        // Add additional subgraphs and wires not encoded in commands.
         let [input_node, output_node] = self.builder.io();
-        for StraightThroughWire {
-            input_source,
-            output_target,
-        } in straight_through_wires
-        {
-            self.builder
-                .hugr_mut()
-                .connect(input_node, *input_source, output_node, *output_target);
+        if let Some(extras) = extra_nodes_and_wires {
+            if let Some(subgraph_id) = extras.extra_subgraph {
+                let params = extras
+                    .extra_subgraph_params
+                    .iter()
+                    .map(|p| self.load_half_turns(p))
+                    .collect_vec();
+
+                self.insert_external_subgraph(subgraph_id, &[], &[], &params)
+                    .map_err(|e| e.hugr_op("External subgraph"))?;
+            }
+
+            // Add wires from the input node to the output node that didn't get encoded in commands.
+            for StraightThroughWire {
+                input_source,
+                output_target,
+            } in &extras.straight_through_wires
+            {
+                self.builder.hugr_mut().connect(
+                    input_node,
+                    *input_source,
+                    output_node,
+                    *output_target,
+                );
+            }
         }
         Ok(())
     }
