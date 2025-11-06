@@ -624,6 +624,30 @@ fn circ_unsupported_io_wire() -> Circuit {
     hugr.into()
 }
 
+// Nodes with order edges should be marked as unsupported to preserve the connection.
+#[fixture]
+fn order_edge() -> Circuit {
+    let input_t = vec![qb_t(), qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
+    let mut h = FunctionBuilder::new("order_edge", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2] = h.input_wires_arr();
+
+    let cx1 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx1.outputs_arr();
+
+    let cx2 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx2.outputs_arr();
+
+    let cx3 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx3.outputs_arr();
+
+    h.set_order(&cx1, &cx3);
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
 /// A circuit that requires tracking info in `extra_subgraph` or `straight_through_wires`
 /// (see `EncodedCircuitInfo`), for a nested circuit in a CircBox.
 #[fixture]
@@ -919,6 +943,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::order_edge(order_edge(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
 // have temporarily disabled encoding of DFG and function calls as CircBoxes to
 // avoid an error here.
