@@ -18,7 +18,7 @@ use std::sync::Arc;
 use hugr::builder::{BuildHandle, Container, DFGBuilder, Dataflow, FunctionBuilder, SubContainer};
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{DataflowOpID, NodeHandle};
-use hugr::ops::{OpParent, OpTrait, OpType, Value, DFG};
+use hugr::ops::{OpParent, OpTrait, OpType, DFG};
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -272,14 +272,16 @@ impl<'h> PytketDecoderContext<'h> {
             wire_tracker.register_input_parameter(LoadedParameter::rotation(wire), param)?;
         }
 
-        // Any additional qubits or bits required by the circuit get initialized to |0> / false.
+        // Any additional qubits or bits required by the circuit are registered
+        // in the tracker without a wire being created.
+        //
+        // We'll lazily initialize them with a QAlloc or a LoadConstant
+        // operation if necessary.
         for q in qubits {
-            let q_wire = dfg.add_dataflow_op(TketOp::QAlloc, []).unwrap().out_wire(0);
-            wire_tracker.track_wire(q_wire, q.ty(), [q], [])?;
+            wire_tracker.track_qubit(q.pytket_register_arc(), Some(q.reg_hash()))?;
         }
         for b in bits {
-            let b_wire = dfg.add_load_value(Value::false_val());
-            wire_tracker.track_wire(b_wire, b.ty(), [], [b])?;
+            wire_tracker.track_bit(b.pytket_register_arc(), Some(b.reg_hash()))?;
         }
 
         wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);

@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 
 use hugr::builder::{DFGBuilder, Dataflow as _};
+use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::Value;
 use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
@@ -14,6 +15,7 @@ use itertools::Itertools;
 use tket_json_rs::circuit_json::ImplicitPermutation;
 use tket_json_rs::register::ElementId as PytketRegister;
 
+use crate::extension::bool::bool_type;
 use crate::extension::rotation::{rotation_type, ConstRotation};
 use crate::serialize::pytket::decoder::param::parser::{parse_pytket_param, PytketParam};
 use crate::serialize::pytket::decoder::{
@@ -25,7 +27,7 @@ use crate::serialize::pytket::opaque::EncodedEdgeID;
 use crate::serialize::pytket::{
     PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig, RegisterHash,
 };
-use crate::symbolic_constant_op;
+use crate::{symbolic_constant_op, TketOp};
 
 /// Tracked data for a wire in [`TrackedWires`].
 #[derive(Debug, Clone, PartialEq)]
@@ -481,6 +483,7 @@ impl WireTracker {
         if let Some(previous_id) = self.latest_qubit_tracker.insert(hash, id) {
             self.qubits[previous_id.0].mark_outdated();
         }
+        self.qubit_wires.insert(id, Vec::new());
         Ok(self.get_qubit(id))
     }
 
@@ -504,7 +507,7 @@ impl WireTracker {
         if let Some(previous_id) = self.latest_bit_tracker.insert(hash, id) {
             self.bits[previous_id.0].mark_outdated();
         }
-
+        self.bit_wires.insert(id, Vec::new());
         Ok(self.get_bit(id))
     }
 
@@ -679,7 +682,7 @@ impl WireTracker {
             .first()
             .into_iter()
             .flat_map(|bit| self.bit_wires(bit));
-        let mut candidate = qubit_candidates.chain(bit_candidates);
+        let candidates = qubit_candidates.chain(bit_candidates).collect_vec();
 
         // The bits and qubits we expect the wire to contain.
         let wire_qubits = qubit_args
@@ -698,21 +701,30 @@ impl WireTracker {
                 && wire_data.bits == wire_bit_ids
                 && config.types_are_isomorphic(wire_data.ty(), ty)
         };
-        let Some(wire) = candidate.find(check_wire) else {
-            return Err(PytketDecodeErrorInner::NoMatchingWire {
-                ty: ty.to_string(),
-                qubit_args: qubit_args
-                    .iter()
-                    .map(|q| q.pytket_register().to_string())
-                    .collect(),
-                bit_args: bit_args
-                    .iter()
-                    .map(|bit| bit.pytket_register().to_string())
-                    .collect(),
+        let wire = match candidates.into_iter().find(check_wire) {
+            Some(wire) => wire,
+            // Handle lazy initialization of qubit and bit wires. These are
+            // normally qubits/bits present in the pytket circuit definition,
+            // but not in the region's input.
+            _ if ty == &qb_t() => self.initialize_qubit_wire(builder, qubit_args[0].clone())?,
+            _ if ty == &bool_t() || ty == &bool_type() => {
+                self.initialize_bit_wire(builder, bit_args[0].clone())?
             }
-            .wrap());
+            _ => {
+                return Err(PytketDecodeErrorInner::NoMatchingWire {
+                    ty: ty.to_string(),
+                    qubit_args: qubit_args
+                        .iter()
+                        .map(|q| q.pytket_register().to_string())
+                        .collect(),
+                    bit_args: bit_args
+                        .iter()
+                        .map(|bit| bit.pytket_register().to_string())
+                        .collect(),
+                }
+                .wrap());
+            }
         };
-        drop(candidate);
 
         // Check that none of the selected qubit or bit has been marked as outdated.
         if let Some(qubit) = qubit_args
@@ -991,10 +1003,10 @@ impl WireTracker {
             .collect::<Result<_, _>>()?;
 
         for &q in &qubits {
-            self.qubit_wires.entry(q).or_default().push(wire);
+            self.qubit_wires[&q].push(wire);
         }
         for &b in &bits {
-            self.bit_wires.entry(b).or_default().push(wire);
+            self.bit_wires[&b].push(wire);
         }
 
         let wire_data = WireData {
@@ -1084,6 +1096,37 @@ impl WireTracker {
                 );
             }
         }
+    }
+
+    /// Initialize a qubit wire that has been declared earlier.
+    ///
+    /// This is used when a qubit is declared in the pytket circuit definition,
+    /// but not in the region's input.
+    fn initialize_qubit_wire(
+        &mut self,
+        builder: &mut DFGBuilder<&mut Hugr>,
+        qubit: TrackedQubit,
+    ) -> Result<Wire, PytketDecodeError> {
+        let wire = builder
+            .add_dataflow_op(TketOp::QAlloc, [])
+            .unwrap()
+            .out_wire(0);
+        self.track_wire(wire, qubit.ty(), [qubit], [])?;
+        Ok(wire)
+    }
+
+    /// Initialize a bit wire that has been declared earlier.
+    ///
+    /// This is used when a bit is declared in the pytket circuit definition,
+    /// but not in the region's input.
+    fn initialize_bit_wire(
+        &mut self,
+        builder: &mut DFGBuilder<&mut Hugr>,
+        bit: TrackedBit,
+    ) -> Result<Wire, PytketDecodeError> {
+        let wire = builder.add_load_const(Value::false_val());
+        self.track_wire(wire, bit.ty(), [], [bit])?;
+        Ok(wire)
     }
 }
 
