@@ -4,7 +4,9 @@
 //! A configuration struct contains a list of custom decoders that define
 //! translations of legacy tket primitives into HUGR operations.
 
+use hugr::builder::DFGBuilder;
 use hugr::types::Type;
+use hugr::{Hugr, Wire};
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -106,5 +108,26 @@ impl PytketDecoderConfig {
     /// Other types will return `None`.
     pub fn type_to_pytket(&self, typ: &Type) -> Option<RegisterCount> {
         self.type_translators.type_to_pytket(typ)
+    }
+
+    /// Returns `true` if the two types are isomorphic. I.e. they can be translated
+    /// into each other without losing information.
+    pub fn types_are_isomorphic(&self, typ1: &Type, typ2: &Type) -> bool {
+        self.type_translators.types_are_isomorphic(typ1, typ2)
+    }
+
+    /// Inserts the necessary operations to translate a type into an isomorphic
+    /// type.
+    ///
+    /// This operation fails if [`Self::types_are_isomorphic`] returns `false`.
+    pub(in crate::serialize::pytket) fn transform_typed_value(
+        &self,
+        wire: Wire,
+        initial_type: &Type,
+        target_type: &Type,
+        builder: &mut DFGBuilder<&mut Hugr>,
+    ) -> Result<Wire, PytketDecodeError> {
+        self.type_translators
+            .transform_typed_value(wire, initial_type, target_type, builder)
     }
 }

@@ -17,7 +17,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
 use hugr::ops::{OpParent, OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
-use hugr::types::Signature;
+use hugr::types::{Signature, SumType};
 use hugr::HugrView;
 use itertools::Itertools;
 use rstest::{fixture, rstest};
@@ -27,7 +27,7 @@ use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_REGISTERS};
 use crate::circuit::Circuit;
-use crate::extension::bool::BoolOp;
+use crate::extension::bool::{bool_type, BoolOp};
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
@@ -624,6 +624,52 @@ fn circ_unsupported_io_wire() -> Circuit {
     hugr.into()
 }
 
+// Nodes with order edges should be marked as unsupported to preserve the connection.
+#[fixture]
+fn circ_order_edge() -> Circuit {
+    let input_t = vec![qb_t(), qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
+    let mut h = FunctionBuilder::new("order_edge", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2] = h.input_wires_arr();
+
+    let cx1 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx1.outputs_arr();
+
+    let cx2 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx2.outputs_arr();
+
+    let cx3 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx3.outputs_arr();
+
+    h.set_order(&cx1, &cx3);
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
+// Bool types get converted automatically between native and tket representations.
+#[fixture]
+fn circ_bool_conversion() -> Circuit {
+    let input_t = vec![bool_t(), bool_type()];
+    let output_t = vec![bool_t(), bool_type()];
+    let mut h = FunctionBuilder::new("bool_conversion", Signature::new(input_t, output_t)).unwrap();
+
+    let [native_b0, tket_b1] = h.input_wires_arr();
+
+    let [tket_b0] = h
+        .add_dataflow_op(BoolOp::make_opaque, [native_b0])
+        .unwrap()
+        .outputs_arr();
+    let [native_b1] = h
+        .add_dataflow_op(BoolOp::read, [tket_b1])
+        .unwrap()
+        .outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([native_b1, tket_b0]).unwrap();
+    hugr.into()
+}
+
 /// A circuit that requires tracking info in `extra_subgraph` or `straight_through_wires`
 /// (see `EncodedCircuitInfo`), for a nested circuit in a CircBox.
 #[fixture]
@@ -662,7 +708,7 @@ fn circ_unsupported_extras_in_circ_box() -> Circuit {
 #[fixture]
 fn circ_output_parameter_wire() -> Circuit {
     let input_t = vec![];
-    let output_t = vec![float64_type()];
+    let output_t = vec![float64_type(), rotation_type()];
     let mut h =
         FunctionBuilder::new("output_parameter_wire", Signature::new(input_t, output_t)).unwrap();
 
@@ -672,8 +718,29 @@ fn circ_output_parameter_wire() -> Circuit {
         .add_dataflow_op(FloatOps::fmul, [pi, two])
         .unwrap()
         .out_wire(0);
+    let two_pi_rotation = h
+        .add_dataflow_op(RotationOp::from_halfturns_unchecked, [two_pi])
+        .unwrap()
+        .out_wire(0);
 
-    let hugr = h.finish_hugr_with_outputs([two_pi]).unwrap();
+    let hugr = h
+        .finish_hugr_with_outputs([two_pi, two_pi_rotation])
+        .unwrap();
+    hugr.into()
+}
+
+// A circuit with a [float64] wire, which should be treated as unsupported.
+#[fixture]
+fn circ_complex_param_type() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![SumType::new_tuple(vec![float64_type()]).into()];
+    let mut h =
+        FunctionBuilder::new("complex_param_type", Signature::new(input_t, output_t)).unwrap();
+
+    let float64 = h.add_load_value(ConstF64::new(1.0));
+    let float_tuple = h.make_tuple([float64]).unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([float_tuple]).unwrap();
     hugr.into()
 }
 
@@ -912,13 +979,14 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::nested_dfgs(circ_nested_dfgs(), 2, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
-#[should_panic(expected = "has an unconnected port")]
 #[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::order_edge(circ_order_edge(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::bool_conversion(circ_bool_conversion(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::complex_param_type(circ_complex_param_type(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
 // have temporarily disabled encoding of DFG and function calls as CircBoxes to
 // avoid an error here.
@@ -928,10 +996,7 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
     CircuitRoundtripTestConfig::Default
 )]
 #[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
-// to/from the input of the head region being encoded...
-#[should_panic(expected = "Unsupported edge kind")]
-#[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::non_local(circ_non_local(), 2, CircuitRoundtripTestConfig::Default)]
 
 fn encoded_circuit_roundtrip(
     #[case] circ: Circuit,

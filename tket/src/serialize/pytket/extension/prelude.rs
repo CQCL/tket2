@@ -93,12 +93,16 @@ impl PreludeEmitter {
         let args = op.args().first();
         match args {
             Some(TypeArg::Tuple(elems)) | Some(TypeArg::List(elems)) => {
+                if elems.is_empty() {
+                    return Ok(EncodeStatus::Unsupported);
+                }
+
                 for arg in elems {
                     let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty);
-                    if count.is_none() {
+                    if count.is_none_or(|c| c.params > 0) {
                         return Ok(EncodeStatus::Unsupported);
                     }
                 }

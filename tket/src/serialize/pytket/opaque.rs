@@ -2,6 +2,9 @@
 //! encoding as barrier metadata in pytket circuits.
 
 mod payload;
+mod subgraph;
+
+pub use subgraph::OpaqueSubgraph;
 
 pub use payload::{EncodedEdgeID, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
 
@@ -10,10 +13,9 @@ use std::ops::Index;
 
 use crate::serialize::pytket::PytketEncodeError;
 use hugr::core::HugrNode;
-use hugr::hugr::views::SiblingSubgraph;
 use hugr::HugrView;
 
-/// The ID of a subgraph in the Hugr.
+/// The ID of an [`OpaqueSubgraph`] registered in an `OpaqueSubgraphs` tracker.
 #[derive(Debug, derive_more::Display, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[display("{tracker_id}.{local_id}")]
 pub struct SubgraphId {
@@ -21,6 +23,22 @@ pub struct SubgraphId {
     tracker_id: usize,
     /// A locally unique ID in the [`OpaqueSubgraphs`] instance.
     local_id: usize,
+}
+
+impl serde::Serialize for SubgraphId {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        (&self.tracker_id, &self.local_id).serialize(s)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SubgraphId {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let (tracker_id, local_id) = serde::Deserialize::deserialize(d)?;
+        Ok(Self {
+            tracker_id,
+            local_id,
+        })
+    }
 }
 
 /// A set of subgraphs a HUGR that have been marked as _unsupported_ during a
@@ -41,23 +59,7 @@ pub(super) struct OpaqueSubgraphs<N> {
     /// in the pytket circuit.
     ///
     /// Subcircuits are identified in the barrier metadata by their ID. See [`SubgraphId`].
-    opaque_subgraphs: BTreeMap<SubgraphId, SiblingSubgraph<N>>,
-}
-
-impl serde::Serialize for SubgraphId {
-    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        (&self.tracker_id, &self.local_id).serialize(s)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for SubgraphId {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let (tracker_id, local_id) = serde::Deserialize::deserialize(d)?;
-        Ok(Self {
-            tracker_id,
-            local_id,
-        })
-    }
+    opaque_subgraphs: BTreeMap<SubgraphId, OpaqueSubgraph<N>>,
 }
 
 impl<N: HugrNode> OpaqueSubgraphs<N> {
@@ -78,7 +80,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     /// Register a new opaque subgraph in the Hugr.
     ///
     /// Returns and ID that can be used to identify the subgraph in the pytket circuit.
-    pub fn register_opaque_subgraph(&mut self, subgraph: SiblingSubgraph<N>) -> SubgraphId {
+    pub fn register_opaque_subgraph(&mut self, subgraph: OpaqueSubgraph<N>) -> SubgraphId {
         let id = SubgraphId {
             local_id: self.next_local_id,
             tracker_id: self.id,
@@ -93,7 +95,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     /// # Panics
     ///
     /// Panics if the ID is invalid.
-    pub fn get(&self, id: SubgraphId) -> Option<&SiblingSubgraph<N>> {
+    pub fn get(&self, id: SubgraphId) -> Option<&OpaqueSubgraph<N>> {
         self.opaque_subgraphs.get(&id)
     }
 
@@ -150,7 +152,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
 }
 
 impl<N: HugrNode> Index<SubgraphId> for OpaqueSubgraphs<N> {
-    type Output = SiblingSubgraph<N>;
+    type Output = OpaqueSubgraph<N>;
 
     fn index(&self, index: SubgraphId) -> &Self::Output {
         self.get(index)

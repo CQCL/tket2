@@ -4,11 +4,12 @@ use hugr::core::HugrNode;
 use hugr::envelope::{EnvelopeConfig, EnvelopeError};
 use hugr::extension::resolution::{resolve_type_extensions, WeakExtensionRegistry};
 use hugr::extension::{ExtensionRegistry, ExtensionRegistryLoadError};
-use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
+use itertools::Itertools;
 
+use crate::serialize::pytket::opaque::OpaqueSubgraph;
 use crate::serialize::pytket::{
     PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError, PytketEncodeOpError,
 };
@@ -124,31 +125,27 @@ impl OpaqueSubgraphPayload {
     /// Returns an error if a node in the subgraph has children or calls a
     /// global function.
     pub fn new_inline<N: HugrNode>(
-        subgraph: &SiblingSubgraph<N>,
+        subgraph: &OpaqueSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
     ) -> Result<Self, PytketEncodeError<N>> {
-        let signature = subgraph.signature(hugr);
+        let signature = subgraph.signature();
 
-        if !subgraph.function_calls().is_empty()
-            || subgraph
-                .nodes()
-                .iter()
-                .any(|n| hugr.first_child(*n).is_some())
-        {
+        let Some(opaque_hugr) = subgraph
+            .is_sibling_subgraph_compatible()
+            .then(|| subgraph.extract_subgraph(hugr).ok())
+            .flatten()
+        else {
             return Err(PytketEncodeOpError::UnsupportedStandaloneSubgraph {
-                nodes: subgraph.nodes().to_vec(),
+                nodes: subgraph.nodes().iter().cloned().collect_vec(),
             }
             .into());
-        }
+        };
 
-        let mut inputs = Vec::with_capacity(subgraph.incoming_ports().iter().map(Vec::len).sum());
-        for subgraph_inputs in subgraph.incoming_ports() {
-            let Some((inp_node, inp_port0)) = subgraph_inputs.first() else {
-                continue;
-            };
-            let input_wire = Wire::from_connected_port(*inp_node, *inp_port0, hugr);
+        let mut inputs = Vec::with_capacity(subgraph.incoming_ports().len());
+        for (inp_node, inp_port) in subgraph.incoming_ports() {
+            let input_wire = Wire::from_connected_port(*inp_node, *inp_port, hugr);
             let edge_id = EncodedEdgeID::new(input_wire);
-            inputs.extend(itertools::repeat_n(edge_id, subgraph_inputs.len()));
+            inputs.push(edge_id);
         }
 
         let outputs = subgraph
@@ -156,7 +153,6 @@ impl OpaqueSubgraphPayload {
             .iter()
             .map(|(n, p)| EncodedEdgeID::new(Wire::new(*n, *p)));
 
-        let opaque_hugr = subgraph.extract_subgraph(hugr, "");
         let hugr_envelope = Package::from_hugr(opaque_hugr)
             .store_str(EnvelopeConfig::text())
             .unwrap();

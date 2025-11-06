@@ -5,9 +5,8 @@ use std::sync::Arc;
 
 use hugr::builder::Container;
 use hugr::hugr::hugrmut::{HugrMut, InsertedForest};
-use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::{OpTag, OpTrait};
-use hugr::types::{Signature, Type};
+use hugr::types::Type;
 use hugr::{Hugr, HugrView, Node, OutgoingPort, PortIndex, Wire};
 use hugr_core::hugr::internal::HugrMutInternals;
 use itertools::Itertools;
@@ -16,7 +15,9 @@ use crate::serialize::pytket::decoder::{
     DecodeStatus, FoundWire, LoadedParameter, PytketDecoderContext, TrackedBit, TrackedQubit,
 };
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphPayload, SubgraphId};
+use crate::serialize::pytket::opaque::{
+    EncodedEdgeID, OpaqueSubgraph, OpaqueSubgraphPayload, SubgraphId,
+};
 use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner, PytketDecoderConfig};
 
 impl<'h> PytketDecoderContext<'h> {
@@ -64,13 +65,8 @@ impl<'h> PytketDecoderContext<'h> {
         let Some(subgraph) = self.opaque_subgraphs.and_then(|s| s.get(id)) else {
             return Err(PytketDecodeErrorInner::OpaqueSubgraphNotFound { id }.wrap());
         };
-        let signature = subgraph.signature(self.builder.hugr());
 
-        let old_parent = self
-            .builder
-            .hugr()
-            .get_parent(subgraph.nodes()[0])
-            .ok_or_else(|| PytketDecodeErrorInner::ExternalSubgraphWasModified { id }.wrap())?;
+        let old_parent = subgraph.region();
         if !OpTag::DataflowParent.is_superset(self.builder.hugr().get_optype(old_parent).tag()) {
             return Err(PytketDecodeErrorInner::ExternalSubgraphWasModified { id }.wrap());
         }
@@ -82,12 +78,10 @@ impl<'h> PytketDecoderContext<'h> {
         }
 
         self.rewire_external_subgraph_inputs(
-            subgraph, qubits, bits, params, old_parent, new_parent, &signature,
+            subgraph, qubits, bits, params, old_parent, new_parent,
         )?;
 
-        self.rewire_external_subgraph_outputs(
-            subgraph, qubits, bits, old_parent, new_parent, &signature,
-        )?;
+        self.rewire_external_subgraph_outputs(subgraph, qubits, bits, old_parent, new_parent)?;
 
         Ok(DecodeStatus::Success)
     }
@@ -95,24 +89,28 @@ impl<'h> PytketDecoderContext<'h> {
     /// Rewire the inputs of an external subgraph moved to the new region.
     ///
     /// Helper for [`Self::insert_external_subgraph`].
-    #[expect(clippy::too_many_arguments)]
     fn rewire_external_subgraph_inputs(
         &mut self,
-        subgraph: &SiblingSubgraph<Node>,
+        subgraph: &OpaqueSubgraph<Node>,
         mut input_qubits: &[TrackedQubit],
         mut input_bits: &[TrackedBit],
         mut input_params: &[LoadedParameter],
         old_parent: Node,
         new_parent: Node,
-        signature: &Signature,
     ) -> Result<(), PytketDecodeError> {
         let old_input = self.builder.hugr().get_io(old_parent).unwrap()[0];
         let new_input = self.builder.hugr().get_io(new_parent).unwrap()[0];
 
         // Reconnect input wires from parts of/nodes in the region that have been encoded into pytket.
-        for (ty, targets) in signature.input().iter().zip_eq(subgraph.incoming_ports()) {
+        for (ty, (tgt_node, tgt_port)) in subgraph
+            .signature()
+            .input()
+            .iter()
+            .zip_eq(subgraph.incoming_ports())
+        {
             let found_wire = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 ty,
                 &mut input_qubits,
                 &mut input_bits,
@@ -125,9 +123,11 @@ impl<'h> PytketDecoderContext<'h> {
                 FoundWire::Parameter(param) => param.wire(),
                 FoundWire::Unsupported { .. } => {
                     // Input port with an unsupported type.
-                    let Some((neigh, neigh_port)) = targets.first().and_then(|(tgt, port)| {
-                        self.builder.hugr().single_linked_output(*tgt, *port)
-                    }) else {
+                    let Some((neigh, neigh_port)) = self
+                        .builder
+                        .hugr()
+                        .single_linked_output(*tgt_node, *tgt_port)
+                    else {
                         // The input was disconnected. We just skip it.
                         // (This is the case for unused other-ports)
                         continue;
@@ -143,11 +143,9 @@ impl<'h> PytketDecoderContext<'h> {
                 }
             };
 
-            for (tgt, port) in targets {
-                self.builder
-                    .hugr_mut()
-                    .connect(wire.node(), wire.source(), *tgt, *port);
-            }
+            self.builder
+                .hugr_mut()
+                .connect(wire.node(), wire.source(), *tgt_node, *tgt_port);
         }
 
         Ok(())
@@ -161,12 +159,11 @@ impl<'h> PytketDecoderContext<'h> {
     /// Helper for [`Self::insert_external_subgraph`].
     fn rewire_external_subgraph_outputs(
         &mut self,
-        subgraph: &SiblingSubgraph<Node>,
+        subgraph: &OpaqueSubgraph<Node>,
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
         old_parent: Node,
         new_parent: Node,
-        signature: &Signature,
     ) -> Result<(), PytketDecodeError> {
         let old_output = self.builder.hugr().get_io(old_parent).unwrap()[1];
         let new_output = self.builder.hugr().get_io(new_parent).unwrap()[1];
@@ -174,7 +171,12 @@ impl<'h> PytketDecoderContext<'h> {
         let mut output_qubits = qubits;
         let mut output_bits = bits;
 
-        for (ty, (src, src_port)) in signature.output().iter().zip_eq(subgraph.outgoing_ports()) {
+        for (ty, (src, src_port)) in subgraph
+            .signature()
+            .output()
+            .iter()
+            .zip_eq(subgraph.outgoing_ports())
+        {
             // Output wire from the subgraph. Depending on the type, we may need
             // to track new qubits and bits, re-connect it to some output, or
             // leave it untouched.
@@ -191,7 +193,7 @@ impl<'h> PytketDecoderContext<'h> {
                 if wire_qubits.is_none() || wire_bits.is_none() {
                     return Err(make_unexpected_node_out_error(
                         self.config(),
-                        signature.output().iter(),
+                        subgraph.signature().output().iter(),
                         qubits.len(),
                         bits.len(),
                     ));
@@ -353,7 +355,8 @@ impl<'h> PytketDecoderContext<'h> {
         // outputs.
         for ((ty, edge_id), targets) in payload_inputs.iter().zip_eq(to_insert_inputs) {
             let found_wire = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 ty,
                 &mut input_qubits,
                 &mut input_bits,
