@@ -708,7 +708,7 @@ fn circ_unsupported_extras_in_circ_box() -> Circuit {
 #[fixture]
 fn circ_output_parameter_wire() -> Circuit {
     let input_t = vec![];
-    let output_t = vec![float64_type()];
+    let output_t = vec![float64_type(), rotation_type()];
     let mut h =
         FunctionBuilder::new("output_parameter_wire", Signature::new(input_t, output_t)).unwrap();
 
@@ -718,8 +718,14 @@ fn circ_output_parameter_wire() -> Circuit {
         .add_dataflow_op(FloatOps::fmul, [pi, two])
         .unwrap()
         .out_wire(0);
+    let two_pi_rotation = h
+        .add_dataflow_op(RotationOp::from_halfturns_unchecked, [two_pi])
+        .unwrap()
+        .out_wire(0);
 
-    let hugr = h.finish_hugr_with_outputs([two_pi]).unwrap();
+    let hugr = h
+        .finish_hugr_with_outputs([two_pi, two_pi_rotation])
+        .unwrap();
     hugr.into()
 }
 

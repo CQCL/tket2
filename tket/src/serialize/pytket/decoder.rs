@@ -7,6 +7,7 @@ mod wires;
 
 use hugr::extension::ExtensionRegistry;
 use hugr::hugr::hugrmut::HugrMut;
+use hugr::std_extensions::arithmetic::float_types::float64_type;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
@@ -372,7 +373,14 @@ impl<'h> PytketDecoderContext<'h> {
             let wire = match found_wire {
                 FoundWire::Register(wire) => wire.wire(),
 
-                FoundWire::Parameter(param) => param.wire(),
+                FoundWire::Parameter(param) => {
+                    let param_ty = if ty == &float64_type() {
+                        ParameterType::FloatHalfTurns
+                    } else {
+                        ParameterType::Rotation
+                    };
+                    param.with_type(param_ty, &mut self.builder).wire()
+                }
                 FoundWire::Unsupported { .. } => {
                     // Disconnected port with an unsupported type. We just skip
                     // it, since it must have been disconnected in the original
