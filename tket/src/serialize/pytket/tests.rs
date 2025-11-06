@@ -648,7 +648,7 @@ fn circ_order_edge() -> Circuit {
     hugr.into()
 }
 
-// Nodes with order edges should be marked as unsupported to preserve the connection.
+// Bool types get converted automatically between native and tket representations.
 #[fixture]
 fn circ_bool_conversion() -> Circuit {
     let input_t = vec![bool_t(), bool_type()];

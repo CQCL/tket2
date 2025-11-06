@@ -15,8 +15,11 @@ use hugr::{Direction, Hugr, HugrView, IncomingPort, OutgoingPort};
 /// A subgraph of nodes in the Hugr that could not be encoded as TKET1
 /// operations.
 ///
-/// of subgraphs it can represent; in particular const edges and order edge are
-/// not allowed in the boundary.
+/// This is a simpler version of [`SiblingSubgraph`] that
+/// - Always maps boundary ports to exactly one node port.
+/// - Does not require a convex checker to verify convexity (since we always create regions using a toposort).
+/// - Allows non-value edges at its boundaries, which can be left unmodified by the encoder/decoder.
+/// - Keeps a flag indicating if it can be represented as a valid [`SiblingSubgraph`].
 #[derive(Debug, Clone)]
 pub struct OpaqueSubgraph<N> {
     /// The nodes in the subgraph.
@@ -36,7 +39,7 @@ pub struct OpaqueSubgraph<N> {
     /// - Having non-local edges.
     /// - Having const edges to global definitions.
     /// - Having order edges to nodes outside the subgraph.
-    /// - Calling a global functions.
+    /// - Calling global functions.
     sibling_subgraph_compatible: bool,
 }
 
@@ -156,7 +159,7 @@ impl<N: HugrNode> OpaqueSubgraph<N> {
     /// - Having non-local edges.
     /// - Having const edges to global definitions.
     /// - Having order edges to nodes outside the subgraph.
-    /// - Calling a global functions.
+    /// - Calling global functions.
     pub fn is_sibling_subgraph_compatible(&self) -> bool {
         self.sibling_subgraph_compatible
     }
