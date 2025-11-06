@@ -17,6 +17,11 @@ on:
       - published
   workflow_dispatch:
 
+  # TODO: For testing only, remove me before merging
+  pull_request:
+    branches:
+      - main
+
 permissions:
   contents: read
 
@@ -169,6 +174,19 @@ jobs:
           echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
           echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> "$GITHUB_OUTPUT"
           echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> "$GITHUB_OUTPUT"
+
+      - name: Check tket-c-api shared library
+        shell: bash
+        run: |
+          echo "tket-c-api files:"
+          find ${{ steps.tket-paths.outputs.tket_c_api_path }} -type f
+          echo "Running objdump -f on all shared objects under ${{ steps.tket-paths.outputs.tket_c_api_path }}"
+          find ${{ steps.tket-paths.outputs.tket_c_api_path }} -type f -name "*.so" | while read sofile; do
+            echo "======= objdump -f $sofile ======="
+            objdump -f "$sofile" || echo "objdump failed for $sofile"
+            echo
+          done
+
       - name: Build wheels
         shell: bash
         run: |
