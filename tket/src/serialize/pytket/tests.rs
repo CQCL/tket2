@@ -27,7 +27,7 @@ use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_REGISTERS};
 use crate::circuit::Circuit;
-use crate::extension::bool::BoolOp;
+use crate::extension::bool::{bool_type, BoolOp};
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
@@ -626,7 +626,7 @@ fn circ_unsupported_io_wire() -> Circuit {
 
 // Nodes with order edges should be marked as unsupported to preserve the connection.
 #[fixture]
-fn order_edge() -> Circuit {
+fn circ_order_edge() -> Circuit {
     let input_t = vec![qb_t(), qb_t()];
     let output_t = vec![qb_t(), qb_t()];
     let mut h = FunctionBuilder::new("order_edge", Signature::new(input_t, output_t)).unwrap();
@@ -645,6 +645,28 @@ fn order_edge() -> Circuit {
     h.set_order(&cx1, &cx3);
 
     let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
+// Nodes with order edges should be marked as unsupported to preserve the connection.
+#[fixture]
+fn circ_bool_conversion() -> Circuit {
+    let input_t = vec![bool_t(), bool_type()];
+    let output_t = vec![bool_t(), bool_type()];
+    let mut h = FunctionBuilder::new("bool_conversion", Signature::new(input_t, output_t)).unwrap();
+
+    let [native_b0, tket_b1] = h.input_wires_arr();
+
+    let [tket_b0] = h
+        .add_dataflow_op(BoolOp::make_opaque, [native_b0])
+        .unwrap()
+        .outputs_arr();
+    let [native_b1] = h
+        .add_dataflow_op(BoolOp::read, [tket_b1])
+        .unwrap()
+        .outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([native_b1, tket_b0]).unwrap();
     hugr.into()
 }
 
@@ -943,7 +965,8 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::order_edge(order_edge(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::order_edge(circ_order_edge(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::bool_conversion(circ_bool_conversion(), 1, CircuitRoundtripTestConfig::Default)]
 // TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
 // have temporarily disabled encoding of DFG and function calls as CircBoxes to
 // avoid an error here.

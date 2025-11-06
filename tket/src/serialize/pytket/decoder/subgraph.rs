@@ -109,7 +109,8 @@ impl<'h> PytketDecoderContext<'h> {
             .zip_eq(subgraph.incoming_ports())
         {
             let found_wire = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 ty,
                 &mut input_qubits,
                 &mut input_bits,
@@ -354,7 +355,8 @@ impl<'h> PytketDecoderContext<'h> {
         // outputs.
         for ((ty, edge_id), targets) in payload_inputs.iter().zip_eq(to_insert_inputs) {
             let found_wire = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 ty,
                 &mut input_qubits,
                 &mut input_bits,

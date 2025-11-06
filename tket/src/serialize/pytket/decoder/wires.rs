@@ -508,6 +508,18 @@ impl WireTracker {
         Ok(self.get_bit(id))
     }
 
+    /// Mark all the values in a wire as outdated.
+    fn mark_wire_outdated(&mut self, wire: Wire) {
+        let wire_data = &self.wires[&wire];
+
+        for qubit in &wire_data.qubits {
+            self.qubits[qubit.0].mark_outdated();
+        }
+        for bit in &wire_data.bits {
+            self.bits[bit.0].mark_outdated();
+        }
+    }
+
     /// Mark a qubit as outdated, without adding a new wire containing the fresh value.
     ///
     /// This is used when a hugr operation consumes pytket registers as its inputs, but doesn't use them in the outputs.
@@ -598,6 +610,9 @@ impl WireTracker {
     /// The qubit and bit arguments are only consumed as required by the type,
     /// some registers may be left unused.
     ///
+    /// If the wire type require additional conversion, some operations will be
+    /// added to the Hugr to perform it.
+    ///
     /// # Arguments
     ///
     /// * `config` - The configuration for the decoder, used to count the qubits
@@ -614,9 +629,11 @@ impl WireTracker {
     /// # Errors
     ///
     /// See [`WireTracker::find_typed_wires`] for possible errors.
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::serialize::pytket) fn find_typed_wire(
-        &self,
+        &mut self,
         config: &PytketDecoderConfig,
+        builder: &mut DFGBuilder<&mut Hugr>,
         ty: &Type,
         qubit_args: &mut &[TrackedQubit],
         bit_args: &mut &[TrackedBit],
@@ -668,18 +685,18 @@ impl WireTracker {
         let wire_qubits = qubit_args
             .iter()
             .take(reg_count.qubits)
-            .map(|q| q.id())
+            .cloned()
             .collect_vec();
-        let wire_bits = bit_args
-            .iter()
-            .take(reg_count.bits)
-            .map(|bit| bit.id())
-            .collect_vec();
+        let wire_qubit_ids = wire_qubits.iter().map(|q| q.id()).collect_vec();
+        let wire_bits = bit_args.iter().take(reg_count.bits).cloned().collect_vec();
+        let wire_bit_ids = wire_bits.iter().map(|bit| bit.id()).collect_vec();
 
         // Find a wire that contains the correct type..
         let check_wire = |w: &Wire| {
             let wire_data = &self.wires[w];
-            wire_data.ty() == ty && wire_data.qubits == wire_qubits && wire_data.bits == wire_bits
+            wire_data.qubits == wire_qubit_ids
+                && wire_data.bits == wire_bit_ids
+                && config.types_are_isomorphic(wire_data.ty(), ty)
         };
         let Some(wire) = candidate.find(check_wire) else {
             return Err(PytketDecodeErrorInner::NoMatchingWire {
@@ -695,6 +712,7 @@ impl WireTracker {
             }
             .wrap());
         };
+        drop(candidate);
 
         // Check that none of the selected qubit or bit has been marked as outdated.
         if let Some(qubit) = qubit_args
@@ -719,11 +737,21 @@ impl WireTracker {
         }
 
         // Mark the qubits and bits as used.
-        // TODO: We can use the slice `split_off` method once MSRV is ≥1.87
         *qubit_args = &qubit_args[reg_count.qubits..];
         *bit_args = &bit_args[reg_count.bits..];
 
-        Ok(FoundWire::Register(self.wires[&wire].clone()))
+        // Convert the wire type, if needed.
+        let wire_data = &self.wires[&wire];
+        let new_wire = config.transform_typed_value(wire, wire_data.ty(), ty, builder)?;
+
+        if wire == new_wire {
+            Ok(FoundWire::Register(self.wires[&wire].clone()))
+        } else {
+            let ty: Arc<Type> = wire_data.ty.clone();
+            self.track_wire(new_wire, ty, wire_qubits, wire_bits)?;
+            self.mark_wire_outdated(wire);
+            Ok(FoundWire::Register(self.wires[&new_wire].clone()))
+        }
     }
 
     /// Returns a new [TrackedWires] set for a list of [`TrackedQubit`]s,
@@ -734,6 +762,9 @@ impl WireTracker {
     ///
     /// The qubit and bit arguments are only consumed as required by the types.
     /// Some registers may be left unused.
+    ///
+    /// If the wire type require additional conversion, some operations will be
+    /// added to the Hugr to perform it.
     ///
     /// # Arguments
     ///
@@ -751,8 +782,9 @@ impl WireTracker {
     /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`]
     /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub(super) fn find_typed_wires(
-        &self,
+        &mut self,
         config: &PytketDecoderConfig,
+        builder: &mut DFGBuilder<&mut Hugr>,
         types: &[Type],
         mut qubit_args: &[TrackedQubit],
         mut bit_args: &[TrackedBit],
@@ -768,6 +800,7 @@ impl WireTracker {
         for ty in types {
             match self.find_typed_wire(
                 config,
+                builder,
                 ty,
                 &mut qubit_args,
                 &mut bit_args,

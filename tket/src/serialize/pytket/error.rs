@@ -432,6 +432,20 @@ pub enum PytketDecodeErrorInner {
         /// The envelope decoding error.
         source: EnvelopeError,
     },
+    /// Cannot translate a wire from one type to another.
+    #[display("Cannot translate {wire} from type {initial_type} to type {target_type}{}",
+        context.as_ref().map(|s| format!(". {s}")).unwrap_or_default()
+    )]
+    CannotTranslateWire {
+        /// The wire that couldn't be translated.
+        wire: Wire,
+        /// The initial type of the wire.
+        initial_type: String,
+        /// The target type of the wire.
+        target_type: String,
+        /// The error that occurred while translating the wire.
+        context: Option<String>,
+    },
 }
 
 impl PytketDecodeErrorInner {

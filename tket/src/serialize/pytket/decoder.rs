@@ -341,7 +341,8 @@ impl<'h> PytketDecoderContext<'h> {
             let found_wire = self
                 .wire_tracker
                 .find_typed_wire(
-                    self.config(),
+                    &self.config,
+                    &mut self.builder,
                     ty,
                     &mut qubits,
                     &mut bits,
@@ -417,7 +418,8 @@ impl<'h> PytketDecoderContext<'h> {
         for q in qubits.iter() {
             let mut qubit_args: &[TrackedQubit] = std::slice::from_ref(q);
             let Ok(FoundWire::Register(wire)) = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 &qb_type,
                 &mut qubit_args,
                 &mut bit_args,
@@ -540,14 +542,20 @@ impl<'h> PytketDecoderContext<'h> {
     /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`]
     /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub fn find_typed_wires(
-        &self,
+        &mut self,
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
         params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
-        self.wire_tracker
-            .find_typed_wires(self.config(), types, qubit_args, bit_args, params)
+        self.wire_tracker.find_typed_wires(
+            &self.config,
+            &mut self.builder,
+            types,
+            qubit_args,
+            bit_args,
+            params,
+        )
     }
 
     /// Connects the input ports of a node using a list of input qubits, bits,
@@ -663,8 +671,8 @@ impl<'h> PytketDecoderContext<'h> {
         }
 
         // Gather the input wires, with the types needed by the operation.
-        let input_wires =
-            self.find_typed_wires(sig.input_types(), input_qubits, input_bits, params)?;
+        let input_types = sig.input_types().to_vec();
+        let input_wires = self.find_typed_wires(&input_types, input_qubits, input_bits, params)?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
         for (input_idx, wire) in input_wires.wires().enumerate() {

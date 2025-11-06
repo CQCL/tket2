@@ -6,12 +6,16 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+use hugr::builder::{BuildError, DFGBuilder, Dataflow};
 use hugr::extension::prelude::bool_t;
 use hugr::extension::ExtensionId;
 use hugr::types::{Type, TypeEnum};
+use hugr::{Hugr, Wire};
 use itertools::Itertools;
 
+use crate::extension::bool::BoolOp;
 use crate::serialize::pytket::extension::{PytketTypeTranslator, RegisterCount};
+use crate::serialize::pytket::{PytketDecodeError, PytketDecodeErrorInner};
 
 /// A set of [`PytketTypeTranslator`]s that can be used to translate HUGR types
 /// into pytket registers (qubits, bits, and parameter expressions).
@@ -127,6 +131,77 @@ impl TypeTranslatorSet {
             .into_iter()
             .flatten()
             .map(move |idx| &self.type_translators[*idx])
+    }
+
+    /// Returns `true` if the two types are isomorphic. I.e. they can be translated
+    /// into each other without losing information.
+    //
+    // TODO: We should allow custom TypeTranslators to expand this checks,
+    // and implement their own translations.
+    pub fn types_are_isomorphic(&self, typ1: &Type, typ2: &Type) -> bool {
+        if typ1 == typ2 {
+            return true;
+        }
+
+        // For now, we just hard-code this to the two kind of bits we support.
+        let native_bool = bool_t();
+        let tket_bool = crate::extension::bool::bool_type();
+        if (typ1 == &native_bool && typ2 == &tket_bool)
+            || (typ1 == &tket_bool && typ2 == &native_bool)
+        {
+            return true;
+        }
+
+        false
+    }
+
+    /// Inserts the necessary operations to translate a type into an isomorphic
+    /// type.
+    ///
+    /// This operation fails if [`Self::types_are_isomorphic`] returns `false`.
+    pub(super) fn transform_typed_value(
+        &self,
+        wire: Wire,
+        initial_type: &Type,
+        target_type: &Type,
+        builder: &mut DFGBuilder<&mut Hugr>,
+    ) -> Result<Wire, PytketDecodeError> {
+        if initial_type == target_type {
+            return Ok(wire);
+        }
+
+        let map_build_error = |e: BuildError| PytketDecodeErrorInner::CannotTranslateWire {
+            wire,
+            initial_type: initial_type.to_string(),
+            target_type: target_type.to_string(),
+            context: Some(e.to_string()),
+        };
+
+        // Hard-coded transformations until customs calls are added to [`PytketTypeTranslator`].
+        let native_bool = bool_t();
+        let tket_bool = crate::extension::bool::bool_type();
+        if initial_type == &native_bool && target_type == &tket_bool {
+            let [wire] = builder
+                .add_dataflow_op(BoolOp::make_opaque, [wire])
+                .map_err(map_build_error)?
+                .outputs_arr();
+            return Ok(wire);
+        }
+        if initial_type == &tket_bool && target_type == &native_bool {
+            let [wire] = builder
+                .add_dataflow_op(BoolOp::read, [wire])
+                .map_err(map_build_error)?
+                .outputs_arr();
+            return Ok(wire);
+        }
+
+        Err(PytketDecodeErrorInner::CannotTranslateWire {
+            wire,
+            initial_type: initial_type.to_string(),
+            target_type: target_type.to_string(),
+            context: None,
+        }
+        .wrap())
     }
 }
 
