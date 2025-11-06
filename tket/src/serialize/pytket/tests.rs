@@ -996,9 +996,6 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
     CircuitRoundtripTestConfig::Default
 )]
 #[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
-// to/from the input of the head region being encoded...
-#[should_panic(expected = "has an unconnected port")]
 #[case::non_local(circ_non_local(), 2, CircuitRoundtripTestConfig::Default)]
 
 fn encoded_circuit_roundtrip(
