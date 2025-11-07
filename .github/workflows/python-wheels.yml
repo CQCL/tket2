@@ -247,11 +247,9 @@ jobs:
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
-          export CARGO_TARGET=${{ matrix.platform.target }}
           uv run --python ${{ env.PYTHON_VERSION }} \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
-            maturin build \
-            ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
+            maturin build ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
             --release \
             --out ../dist \
             --target ${{ matrix.platform.target }} \
@@ -262,7 +260,6 @@ jobs:
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
-          export CARGO_TARGET=${{ matrix.platform.target }}
           uv run --python ${{ env.PYTHON_VERSION }}+freethreaded \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
