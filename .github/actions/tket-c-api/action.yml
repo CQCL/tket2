@@ -192,29 +192,6 @@ runs:
         Set-Location tket1-passes
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
 
-        # Verify cmake is available
-        if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-          Write-Error "cmake not found in PATH"
-          Write-Output "PATH: $env:PATH"
-        } else {
-          $cmakePath = (Get-Command cmake).Source
-          Write-Output "cmake found: $cmakePath"
-          cmake --version
-        }
-
-        # Verify conan is available
-        # The conan-io/setup-conan action should have installed it, but verify
-        if (-not (Get-Command conan -ErrorAction SilentlyContinue)) {
-          Write-Error "conan not found in PATH"
-          Write-Output "PATH: $env:PATH"
-          Write-Output "Python location: $(Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
-          Write-Output "Python Scripts: $env:LOCALAPPDATA\Programs\Python\Python*\Scripts"
-        } else {
-          $conanPath = (Get-Command conan).Source
-          Write-Output "conan found: $conanPath"
-          conan --version
-        }
-
         # Build conan install command
         $conanArgs = @("install", ".", "--build=missing", "--options=tket-c-api/*:shared=True")
 
