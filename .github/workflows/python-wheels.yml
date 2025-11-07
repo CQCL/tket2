@@ -150,12 +150,6 @@ jobs:
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-
-              # Set linker configuration for cross-compilation
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-              echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-              echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
-              echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
               ;;
           esac
       - name: Install tket-c-api library
@@ -228,6 +222,7 @@ jobs:
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
+          export CARGO_TARGET=${{ matrix.platform.target }}
           uv run --python ${{ env.PYTHON_VERSION }} \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
@@ -242,6 +237,7 @@ jobs:
         shell: bash
         run: |
           cd ${{ env.MODULE_DIR }}
+          export CARGO_TARGET=${{ matrix.platform.target }}
           uv run --python ${{ env.PYTHON_VERSION }}+freethreaded \
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
