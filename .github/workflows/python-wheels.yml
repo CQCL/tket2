@@ -100,10 +100,9 @@ jobs:
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             test-wheels: true
-          # ---------------- Windows
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            test-wheels: true
+          # ---------------- Windows (cross-compiled from Linux)
+          - runner: ubuntu-24.04
+            target: x86_64-pc-windows-gnu
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -133,14 +132,6 @@ jobs:
           WORKSPACE="${{ github.workspace }}"
 
           case "$RUNNER_OS" in
-            Windows)
-              echo "tket_c_api_path=$WORKSPACE\\tket-c-api" >> $GITHUB_OUTPUT
-              echo "TKET_C_API_PATH=$WORKSPACE\\tket-c-api" >> $GITHUB_ENV
-              echo "$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_PATH
-              echo "$WORKSPACE\\tket-c-api\\bin" >> $GITHUB_PATH
-              echo "LD_LIBRARY_PATH=$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_ENV
-              echo "PATH=$WORKSPACE\\tket-c-api\\bin;$PATH" >> $GITHUB_ENV
-              ;;
             macOS)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
@@ -200,103 +191,11 @@ jobs:
             echo
           done
 
-      - name: Check tket-c-api shared library (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Add pyo3 generate-import-lib feature (Windows)
+        if: matrix.platform.target == 'x86_64-pc-windows-gnu'
+        shell: bash
         run: |
-          Write-Output "Checking Windows DLL and LIB files in $env:TKET_C_API_PATH"
-          Write-Output "All files:"
-          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -File | ForEach-Object {
-            Write-Output "  $($_.FullName) ($($_.Length) bytes)"
-          }
-          Write-Output ""
-
-          # Set up Visual Studio environment to get dumpbin
-          $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise"
-          if (Test-Path $vsPath) {
-            $vcvarsPath = Get-ChildItem -Path $vsPath -Recurse -Filter "vcvars64.bat" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($vcvarsPath) {
-              Write-Output "Setting up Visual Studio environment..."
-              # Run vcvars64.bat and capture the environment
-              $envScript = $vcvarsPath.FullName
-              cmd /c "`"$envScript`" && set" | ForEach-Object {
-                if ($_ -match '^([^=]+)=(.*)$') {
-                  [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2])
-                }
-              }
-            }
-          }
-
-          Write-Output "DLL files:"
-          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.dll" | ForEach-Object {
-            Write-Output "======= $($_.FullName) ======="
-            try {
-              $fileInfo = Get-Item $_.FullName
-              Write-Output "File: $($fileInfo.FullName)"
-              Write-Output "Size: $($fileInfo.Length) bytes"
-              Write-Output "Last Modified: $($fileInfo.LastWriteTime)"
-              # Try to get file version info if available
-              $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.FullName)
-              if ($versionInfo.FileVersion) {
-                Write-Output "File Version: $($versionInfo.FileVersion)"
-              }
-            } catch {
-              Write-Output "Failed to get file info: $_"
-            }
-            Write-Output ""
-          }
-
-          Write-Output "LIB files:"
-          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.lib" | ForEach-Object {
-            Write-Output "======= $($_.FullName) ======="
-            try {
-              $fileInfo = Get-Item $_.FullName
-              Write-Output "File: $($fileInfo.FullName)"
-              Write-Output "Size: $($fileInfo.Length) bytes"
-
-              # Try to use dumpbin if available
-              if (Get-Command dumpbin -ErrorAction SilentlyContinue) {
-                Write-Output "Checking exports with dumpbin:"
-                dumpbin /EXPORTS $_.FullName 2>&1 | Select-Object -First 100
-              } else {
-                # Try to find dumpbin in Visual Studio installation
-                $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
-                if (Test-Path $vsPath) {
-                  $dumpbinPath = Get-ChildItem -Path $vsPath -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-                  if ($dumpbinPath) {
-                    Write-Output "Checking exports with dumpbin (found at $($dumpbinPath.FullName)):"
-                    & $dumpbinPath.FullName /EXPORTS $_.FullName 2>&1 | Select-Object -First 100
-                  } else {
-                    Write-Output "dumpbin.exe not found"
-                  }
-                } else {
-                  Write-Output "Visual Studio path not found"
-                }
-              }
-            } catch {
-              Write-Output "Failed to get file info: $_"
-            }
-            Write-Output ""
-          }
-
-          # Also check DLL exports if possible
-          Write-Output "Checking DLL exports:"
-          $dllFile = Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.dll" | Select-Object -First 1
-          if ($dllFile) {
-            if (Get-Command dumpbin -ErrorAction SilentlyContinue) {
-              Write-Output "DLL exports from $($dllFile.FullName):"
-              dumpbin /EXPORTS $dllFile.FullName 2>&1 | Select-Object -First 100
-            } else {
-              $vsPath = "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC"
-              if (Test-Path $vsPath) {
-                $dumpbinPath = Get-ChildItem -Path $vsPath -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-                if ($dumpbinPath) {
-                  Write-Output "DLL exports from $($dllFile.FullName):"
-                  & $dumpbinPath.FullName /EXPORTS $dllFile.FullName 2>&1 | Select-Object -First 100
-                }
-              }
-            }
-          }
+          cargo add -p tket-py pyo3 --features generate-import-lib
 
       - name: Build wheels
         shell: bash
