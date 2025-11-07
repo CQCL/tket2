@@ -160,6 +160,8 @@ runs:
 
         if [ -n "$CC" ]; then
           echo "Using cross-compiler: CC=$CC, CXX=$CXX"
+          # Verify cross-compiler is available and working
+          $CC --version || echo "Warning: Failed to get $CC version"
         fi
 
         # Build conan install command

@@ -189,6 +189,10 @@ jobs:
           find $TKET_C_API_PATH -type f -name "*.so" | while IFS= read -r sofile; do
             echo "======= objdump -f $sofile ======="
             objdump -f "$sofile" || echo "objdump failed for $sofile"
+            echo "======= readelf -h $sofile ======="
+            readelf -h "$sofile" 2>/dev/null | head -20 || echo "readelf failed for $sofile"
+            echo "======= file $sofile ======="
+            file "$sofile" || echo "file failed for $sofile"
             echo
           done
           find $TKET_C_API_PATH -type f -name "*.dylib" | while IFS= read -r dylibfile; do
