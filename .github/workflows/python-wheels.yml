@@ -164,7 +164,11 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ matrix.platform.manylinux }}" ]; then
-            WITH_ZIG_FLAG="--with maturin[zig]"
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              sudo apt-get update
+              sudo apt-get install -y zig
+            fi
+            WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
             COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
           else
             WITH_ZIG_FLAG=""
