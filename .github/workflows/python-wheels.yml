@@ -73,9 +73,12 @@ jobs:
         # - manylinux: (optional) If doing manylinux-compatible wheels,
         #    the manylinux version to use. Setting this option causes the wheels
         #    to be built with zig.
+        # - test-wheels: Whether to test installing the wheels.
+        #    This is only done when the target platform matches the runner platform.
         platform:
           - runner: macos-26
             target: aarch64-apple-darwin
+            test-wheels: true
 
           - runner: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
@@ -95,14 +98,17 @@ jobs:
           - runner: ubuntu-22.04
             target: i686-unknown-linux-musl
             manylinux: "musllinux_1_2"
-          - runner: macos-15
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
+            test-wheels: true
 
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
+            test-wheels: true
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             manylinux: "manylinux2014"
+            test-wheels: true
           - runner: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
@@ -136,10 +142,10 @@ jobs:
 
           case "$RUNNER_OS" in
             Windows)
-              echo "tket_c_api_path=$WORKSPACE\tket-c-api" >> $GITHUB_OUTPUT
-              echo "TKET_C_API_PATH=$WORKSPACE\tket-c-api" >> $GITHUB_ENV
-              echo "$WORKSPACE\tket-c-api\lib" >> $GITHUB_PATH
-              echo "LD_LIBRARY_PATH=$WORKSPACE\tket-c-api\lib" >> $GITHUB_ENV
+              echo "tket_c_api_path=$WORKSPACE\\tket-c-api" >> $GITHUB_OUTPUT
+              echo "TKET_C_API_PATH=$WORKSPACE\\tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_PATH
+              echo "LD_LIBRARY_PATH=$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_ENV
               ;;
             macOS)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
@@ -179,9 +185,9 @@ jobs:
         shell: bash
         run: |
           echo "tket-c-api files:"
-          find ${{ steps.tket-paths.outputs.tket_c_api_path }} -type f
-          echo "Running objdump -f on all shared objects under ${{ steps.tket-paths.outputs.tket_c_api_path }}"
-          find ${{ steps.tket-paths.outputs.tket_c_api_path }} -type f -name "*.so" | while read sofile; do
+          find $TKET_C_API_PATH -type f
+          echo "Running objdump -f on all shared objects under $TKET_C_API_PATH"
+          find $TKET_C_API_PATH -type f -name "*.so" | while read sofile; do
             echo "======= objdump -f $sofile ======="
             objdump -f "$sofile" || echo "objdump failed for $sofile"
             echo
@@ -223,8 +229,12 @@ jobs:
       - name: Test installing the built wheels
         run: |
           echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
-          uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
+          if [ "$TEST_INSTALL" = "true" ]; then
+            uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
+          fi
           uvx twine check --strict dist/*
+        env:
+          TEST_INSTALL: ${{ matrix.platform.test-wheels }}
 
   sdist:
     needs: check-tag
