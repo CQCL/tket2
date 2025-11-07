@@ -196,7 +196,6 @@ runs:
         if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
           Write-Error "cmake not found in PATH"
           Write-Output "PATH: $env:PATH"
-          exit 1
         } else {
           $cmakePath = (Get-Command cmake).Source
           Write-Output "cmake found: $cmakePath"
@@ -210,7 +209,6 @@ runs:
           Write-Output "PATH: $env:PATH"
           Write-Output "Python location: $(Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
           Write-Output "Python Scripts: $env:LOCALAPPDATA\Programs\Python\Python*\Scripts"
-          exit 1
         } else {
           $conanPath = (Get-Command conan).Source
           Write-Output "conan found: $conanPath"
