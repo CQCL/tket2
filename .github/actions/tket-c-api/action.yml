@@ -196,8 +196,8 @@ runs:
         # Install ninja
         choco upgrade ninja
 
-        # Build conan install command
-        CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
+        # Build conan install command using Ninja generator
+        CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\" -c tools.cmake.cmaketoolchain:generator=Ninja"
 
         if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
           # Convert Windows path separators for bash
