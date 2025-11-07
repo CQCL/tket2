@@ -192,6 +192,29 @@ runs:
         cd tket1-passes
         mkdir -p "${{ inputs.install-path }}"
 
+        # On Windows, convert Windows PATH to bash-compatible paths
+        # Get the Windows PATH and convert it so bash can find cmake and other tools
+        OLDIFS=$IFS
+        IFS=';'
+        for winpath in $(cmd.exe /c "echo %PATH%" 2>/dev/null | tr -d '\r'); do
+          # Convert Windows path to bash path (C:\... -> /c/...)
+          bashpath=$(echo "$winpath" | sed 's|^\([A-Za-z]\):|/\1|' | sed 's|\\|/|g' | tr -d '\r')
+          if [ -d "$bashpath" ]; then
+            export PATH="$bashpath:$PATH"
+          fi
+        done
+        IFS=$OLDIFS
+
+        # Verify cmake is available
+        if ! command -v cmake &> /dev/null; then
+          echo "Error: cmake not found in PATH"
+          echo "PATH: $PATH"
+          exit 1
+        else
+          echo "cmake found: $(which cmake)"
+          cmake --version
+        fi
+
         # Build conan install command
         CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
 
