@@ -190,6 +190,14 @@ runs:
         if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
           CONAN_CMD="$CONAN_CMD --profile=${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
           echo "Using profile: ${{ steps.conan-profile.outputs.profile }}"
+
+          # For Windows mingw cross-compilation, use CMake toolchain file to avoid MSVC flags
+          if [ "$TARGET" == "x86_64-pc-windows-gnu" ]; then
+            TOOLCHAIN_FILE="${{ github.workspace }}/tket1-passes/cmake-toolchain-mingw.cmake"
+            CONAN_CMD="$CONAN_CMD -c tools.cmake.cmaketoolchain:generator=Unix\ Makefiles"
+            CONAN_CMD="$CONAN_CMD -c tools.cmake.cmaketoolchain:toolchain_file=$TOOLCHAIN_FILE"
+            echo "Using CMake toolchain file: $TOOLCHAIN_FILE"
+          fi
         else
           echo "Using default conan profile"
         fi
