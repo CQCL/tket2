@@ -186,10 +186,21 @@ jobs:
         run: |
           echo "tket-c-api files:"
           find $TKET_C_API_PATH -type f
-          echo "Running objdump -f on all shared objects under $TKET_C_API_PATH"
           find $TKET_C_API_PATH -type f -name "*.so" | while read sofile; do
             echo "======= objdump -f $sofile ======="
             objdump -f "$sofile" || echo "objdump failed for $sofile"
+            echo
+          done
+          find $TKET_C_API_PATH -type f -name "*.dylib" | while read dylibfile; do
+            echo "======= otool -L $dylibfile ======="
+            otool -L "$dylibfile" || echo "otool failed for $dylibfile"
+            echo "======= file $dylibfile ======="
+            file "$dylibfile" || echo "file failed for $dylibfile"
+            echo
+          done
+          find $TKET_C_API_PATH -type f -name "*.dll" | while read dllfile; do
+            echo "======= file $dllfile ======="
+            file "$dllfile" || echo "file failed for $dllfile"
             echo
           done
 
