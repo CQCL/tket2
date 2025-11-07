@@ -159,15 +159,14 @@ jobs:
         with:
           install-path: ${{ steps.tket-paths.outputs.tket_c_api_path }}
           target: ${{ matrix.platform.target }}
+
+      - uses: mlugg/setup-zig@v2
+        if: ${{ matrix.platform.manylinux }}
       - name: Set compatibility flag
         id: compatibility-flag
         shell: bash
         run: |
           if [ -n "${{ matrix.platform.manylinux }}" ]; then
-            if [[ "$RUNNER_OS" == "Linux" ]]; then
-              sudo apt-get update
-              sudo apt-get install -y zig
-            fi
             WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
             COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
           else
