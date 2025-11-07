@@ -189,21 +189,22 @@ runs:
         Set-Location tket1-passes
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
 
-        # Build conan install command
-        $conanCmd = "conan install . --build=missing --options=`"tket-c-api/*:shared=True`""
+        # Build conan install command arguments
+        $conanArgs = @("install", ".", "--build=missing", "--options=tket-c-api/*:shared=True")
 
         if ("${{ steps.conan-profile.outputs.use_profile }}" -eq "true") {
           $profilePath = "${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
-          $conanCmd = "$conanCmd --profile=$profilePath"
+          $conanArgs += "--profile=$profilePath"
           Write-Output "Using profile: ${{ steps.conan-profile.outputs.profile }}"
         } else {
           Write-Output "Using default conan profile"
         }
 
-        $conanCmd = "$conanCmd --format=json"
+        $conanArgs += "--format=json"
+        $conanCmd = "conan " + ($conanArgs -join " ")
         Write-Output "Running: $conanCmd"
 
-        $conanOutput = Invoke-Expression $conanCmd
+        $conanOutput = & conan $conanArgs
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
