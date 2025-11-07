@@ -132,23 +132,12 @@ jobs:
         id: tket-paths
         shell: bash
         run: |
-          echo "RUNNER_OS=$RUNNER_OS"
           WORKSPACE="${{ github.workspace }}"
-
-          case "$RUNNER_OS" in
-            macOS)
-              echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
-              echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
-              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
-              echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-              ;;
-            Linux)
-              echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
-              echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
-              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
-              echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-              ;;
-          esac
+          echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
+          echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+          echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
+          echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -157,6 +146,7 @@ jobs:
 
       - uses: mlugg/setup-zig@v2
         if: ${{ matrix.platform.manylinux }}
+
       - name: Set compatibility flag
         id: compatibility-flag
         shell: bash
