@@ -167,6 +167,14 @@ runs:
           x86_64-pc-windows-gnu)
             export CC="x86_64-w64-mingw32-gcc"
             export CXX="x86_64-w64-mingw32-g++"
+            # Tell CMake to use GCC-style flags instead of MSVC flags
+            export CMAKE_SYSTEM_NAME="Windows"
+            export CMAKE_C_COMPILER="x86_64-w64-mingw32-gcc"
+            export CMAKE_CXX_COMPILER="x86_64-w64-mingw32-g++"
+            export CMAKE_GENERATOR="Unix Makefiles"
+            # Override any MSVC-specific flags that might be set
+            export CMAKE_CXX_FLAGS=""
+            export CMAKE_C_FLAGS=""
             ;;
         esac
 
