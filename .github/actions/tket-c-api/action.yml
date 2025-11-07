@@ -54,11 +54,6 @@ runs:
           x86_64-unknown-linux-gnu|x86_64-unknown-linux-musl)
             # Native compilation, no cross-compiler needed
             ;;
-          x86_64-pc-windows-gnu)
-            # Install mingw-w64 for Windows cross-compilation
-            sudo apt-get update
-            sudo apt-get install -y gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
-            ;;
           *)
             # For other targets, check if cross-compilation is needed
             if [[ "$TARGET" == *"linux"* ]] && [[ "$TARGET" != *"x86_64"* ]]; then
@@ -100,8 +95,8 @@ runs:
           x86_64-unknown-linux-musl)
             PROFILE="linux-x86_64-musl-gcc14"
             ;;
-          x86_64-pc-windows-gnu)
-            PROFILE="windows-mingw-gcc14"
+          x86_64-pc-windows-msvc)
+            PROFILE="windows-2025"
             ;;
           *)
             # For non-Linux targets or if no match, let conan generate a default profile
@@ -109,7 +104,7 @@ runs:
               PROFILE="macos-15"
             elif [[ "$TARGET" == *"apple"* ]] && [[ "$TARGET" == *"x86_64"* ]]; then
               PROFILE="macos-15-intel"
-            elif [[ "$TARGET" == *"windows"* ]]; then
+            elif [[ "$TARGET" == *"windows"* ]] && [[ "$TARGET" == *"msvc"* ]]; then
               PROFILE="windows-2025"
             elif [[ "$TARGET" == *"armv8"* ]] || [[ "$TARGET" == *"aarch64"* ]]; then
               PROFILE="linux-armv8-gcc14"
@@ -140,7 +135,7 @@ runs:
         fi
 
     - name: Build and install tket-c-api
-      if: steps.cache.outputs.cache-hit != 'true'
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
       shell: bash
       run: |
         cd tket1-passes
@@ -164,18 +159,6 @@ runs:
             # For i686, conan profile with arch=x86 should handle -m32 automatically
             # No need to set CC/CXX explicitly
             ;;
-          x86_64-pc-windows-gnu)
-            export CC="x86_64-w64-mingw32-gcc"
-            export CXX="x86_64-w64-mingw32-g++"
-            # Tell CMake to use GCC-style flags instead of MSVC flags
-            export CMAKE_SYSTEM_NAME="Windows"
-            export CMAKE_C_COMPILER="x86_64-w64-mingw32-gcc"
-            export CMAKE_CXX_COMPILER="x86_64-w64-mingw32-g++"
-            export CMAKE_GENERATOR="Unix Makefiles"
-            # Override any MSVC-specific flags that might be set
-            export CMAKE_CXX_FLAGS=""
-            export CMAKE_C_FLAGS=""
-            ;;
         esac
 
         if [ -n "$CC" ]; then
@@ -190,14 +173,6 @@ runs:
         if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
           CONAN_CMD="$CONAN_CMD --profile=${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
           echo "Using profile: ${{ steps.conan-profile.outputs.profile }}"
-
-          # For Windows mingw cross-compilation, use CMake toolchain file to avoid MSVC flags
-          if [ "$TARGET" == "x86_64-pc-windows-gnu" ]; then
-            TOOLCHAIN_FILE="${{ github.workspace }}/tket1-passes/cmake-toolchain-mingw.cmake"
-            CONAN_CMD="$CONAN_CMD -c tools.cmake.cmaketoolchain:generator=Unix\ Makefiles"
-            CONAN_CMD="$CONAN_CMD -c tools.cmake.cmaketoolchain:toolchain_file=$TOOLCHAIN_FILE"
-            echo "Using CMake toolchain file: $TOOLCHAIN_FILE"
-          fi
         else
           echo "Using default conan profile"
         fi
@@ -209,6 +184,38 @@ runs:
         CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
         echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
         cp -r "$CONAN_LIB_FOLDER/"* "${{ inputs.install-path }}/"
+
+    - name: Build and install tket-c-api (Windows)
+      if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+      shell: bash
+      run: |
+        cd tket1-passes
+        mkdir -p "${{ inputs.install-path }}"
+
+        # Build conan install command
+        CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
+
+        if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
+          # Convert Windows path separators for bash
+          PROFILE_PATH="${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
+          PROFILE_PATH=$(echo "$PROFILE_PATH" | sed 's|\\|/|g')
+          CONAN_CMD="$CONAN_CMD --profile=$PROFILE_PATH"
+          echo "Using profile: ${{ steps.conan-profile.outputs.profile }}"
+        else
+          echo "Using default conan profile"
+        fi
+
+        CONAN_CMD="$CONAN_CMD --format=json"
+        echo "Running: $CONAN_CMD"
+
+        CONAN_OUTPUT=$(eval $CONAN_CMD)
+        CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
+        # Convert Windows path separators for bash
+        CONAN_LIB_FOLDER=$(echo "$CONAN_LIB_FOLDER" | sed 's|\\|/|g')
+        INSTALL_PATH="${{ inputs.install-path }}"
+        INSTALL_PATH=$(echo "$INSTALL_PATH" | sed 's|\\|/|g')
+        echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
+        cp -r "$CONAN_LIB_FOLDER/"* "$INSTALL_PATH/"
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'

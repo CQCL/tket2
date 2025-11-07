@@ -104,9 +104,10 @@ jobs:
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             test-wheels: true
-          # ---------------- Windows (cross-compiled from Linux)
-          - runner: ubuntu-24.04
-            target: x86_64-pc-windows-gnu
+          # ---------------- Windows
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            test-wheels: true
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -132,12 +133,31 @@ jobs:
         id: tket-paths
         shell: bash
         run: |
+          echo "RUNNER_OS=$RUNNER_OS"
           WORKSPACE="${{ github.workspace }}"
-          echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
-          echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
-          echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
-          echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-          echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+
+          case "$RUNNER_OS" in
+            Windows)
+              echo "tket_c_api_path=$WORKSPACE\\tket-c-api" >> $GITHUB_OUTPUT
+              echo "TKET_C_API_PATH=$WORKSPACE\\tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_PATH
+              echo "$WORKSPACE\\tket-c-api\\bin" >> $GITHUB_PATH
+              echo "LD_LIBRARY_PATH=$WORKSPACE\\tket-c-api\\lib" >> $GITHUB_ENV
+              echo "PATH=$WORKSPACE\\tket-c-api\\bin;$PATH" >> $GITHUB_ENV
+              ;;
+            macOS)
+              echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
+              echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
+              echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+              ;;
+            Linux)
+              echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
+              echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
+              echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
+              echo "LD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+              ;;
+          esac
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -184,12 +204,6 @@ jobs:
             file "$dylibfile" || echo "file failed for $dylibfile"
             echo
           done
-
-      - name: Add pyo3 generate-import-lib feature (Windows)
-        if: matrix.platform.target == 'x86_64-pc-windows-gnu'
-        shell: bash
-        run: |
-          cargo add -p tket-py pyo3 --features generate-import-lib
 
       - name: Build wheels
         shell: bash
