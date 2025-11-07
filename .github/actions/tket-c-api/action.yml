@@ -189,11 +189,6 @@ runs:
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
       shell: bash
       run: |
-        if ! command -v cmake &> /dev/null; then
-          choco install cmake --version=3.27.7 -y
-        else
-          echo "cmake is already installed"
-        fi
 
         cd tket1-passes
         mkdir -p "${{ inputs.install-path }}"
@@ -201,15 +196,7 @@ runs:
         # Build conan install command
         CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
 
-        if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
-          # Convert Windows path separators for bash
-          PROFILE_PATH="${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
-          PROFILE_PATH=$(echo "$PROFILE_PATH" | sed 's|\\|/|g')
-          CONAN_CMD="$CONAN_CMD --profile=$PROFILE_PATH"
-          echo "Using profile: ${{ steps.conan-profile.outputs.profile }}"
-        else
-          echo "Using default conan profile"
-        fi
+        echo "Using default conan profile"
 
         CONAN_CMD="$CONAN_CMD --format=json"
         echo "Running: $CONAN_CMD"
