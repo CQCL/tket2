@@ -19,7 +19,7 @@ fn main() {
     let target = SupportedPlatform::from_target_str(&env::var("TARGET").unwrap());
 
     let header_path = if let Some(path) = custom_tket_path {
-        cargo_set_custom_lib_path(&path.join("lib"), target);
+        cargo_set_custom_lib_path(&path.join("lib"));
         let header_path = path.join("include").join("tket-c-api.h");
 
         assert!(
@@ -204,13 +204,11 @@ fn add_conan_remote_if_missing(conan_remote: &str) {
     }
 }
 
-fn cargo_set_custom_lib_path(search_path: &Path, target: Option<SupportedPlatform>) {
+fn cargo_set_custom_lib_path(search_path: &Path) {
     println!("cargo:rustc-link-search={}", search_path.display());
 
-    let lib_name = if target.is_some_and(|t| t == SupportedPlatform::WindowsX86) {
-        "libtket-c-api"
-    } else {
-        "tket-c-api"
-    };
+    // On Windows, the import library is named tket-c-api.lib (without lib prefix)
+    // On Unix systems, it's typically libtket-c-api.so/dylib, but we link as tket-c-api
+    let lib_name = "tket-c-api";
     println!("cargo:rustc-link-lib={lib_name}");
 }
