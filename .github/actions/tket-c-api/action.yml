@@ -97,23 +97,18 @@ runs:
             ;;
           *)
             # For non-Linux targets or if no match, let conan generate a default profile
-            if [[ "$TARGET" == *"apple"* ]]; then
-              if [[ "$TARGET" == *"aarch64"* ]]; then
-                PROFILE="macos-15"
-              elif [[ "$TARGET" == *"x86_64"* ]]; then
-                PROFILE="macos-15-intel"
-              fi
+            if [[ "$TARGET" == *"apple"* ]] && [[ "$TARGET" == *"aarch64"* ]]; then
+              PROFILE="macos-15"
+            elif [[ "$TARGET" == *"apple"* ]] && [[ "$TARGET" == *"x86_64"* ]]; then
+              PROFILE="macos-15-intel"
             elif [[ "$TARGET" == *"windows"* ]]; then
               PROFILE="windows-2025"
+            elif [[ "$TARGET" == *"armv8"* ]] || [[ "$TARGET" == *"aarch64"* ]]; then
+              PROFILE="linux-armv8-gcc14"
+            elif [[ "$TARGET" == *"x86_64"* ]]; then
+              PROFILE="linux-x86_64-gcc14"
             else
-              # Default: use existing profiles from tket1-passes/conan-profiles
-              if [[ "$TARGET" == *"armv8"* ]] || [[ "$TARGET" == *"aarch64"* ]]; then
-                PROFILE="linux-armv8-gcc14"
-              elif [[ "$TARGET" == *"x86_64"* ]]; then
-                PROFILE="linux-x86_64-gcc14"
-              else
-                PROFILE=""
-              fi
+              PROFILE=""
             fi
             ;;
         esac
