@@ -187,58 +187,56 @@ runs:
 
     - name: Build and install tket-c-api (Windows)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
-      shell: bash
+      shell: pwsh
       run: |
-        cd tket1-passes
-        mkdir -p "${{ inputs.install-path }}"
-
-        # On Windows, convert Windows PATH to bash-compatible paths
-        # Get the Windows PATH and convert it so bash can find cmake and other tools
-        OLDIFS=$IFS
-        IFS=';'
-        for winpath in $(cmd.exe /c "echo %PATH%" 2>/dev/null | tr -d '\r'); do
-          # Convert Windows path to bash path (C:\... -> /c/...)
-          bashpath=$(echo "$winpath" | sed 's|^\([A-Za-z]\):|/\1|' | sed 's|\\|/|g' | tr -d '\r')
-          if [ -d "$bashpath" ]; then
-            export PATH="$bashpath:$PATH"
-          fi
-        done
-        IFS=$OLDIFS
+        Set-Location tket1-passes
+        New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
 
         # Verify cmake is available
-        if ! command -v cmake &> /dev/null; then
-          echo "Error: cmake not found in PATH"
-          echo "PATH: $PATH"
+        if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+          Write-Error "cmake not found in PATH"
+          Write-Output "PATH: $env:PATH"
           exit 1
-        else
-          echo "cmake found: $(which cmake)"
+        } else {
+          $cmakePath = (Get-Command cmake).Source
+          Write-Output "cmake found: $cmakePath"
           cmake --version
-        fi
+        }
+
+        # Verify conan is available
+        # The conan-io/setup-conan action should have installed it, but verify
+        if (-not (Get-Command conan -ErrorAction SilentlyContinue)) {
+          Write-Error "conan not found in PATH"
+          Write-Output "PATH: $env:PATH"
+          Write-Output "Python location: $(Get-Command python -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
+          Write-Output "Python Scripts: $env:LOCALAPPDATA\Programs\Python\Python*\Scripts"
+          exit 1
+        } else {
+          $conanPath = (Get-Command conan).Source
+          Write-Output "conan found: $conanPath"
+          conan --version
+        }
 
         # Build conan install command
-        CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
+        $conanArgs = @("install", ".", "--build=missing", "--options=tket-c-api/*:shared=True")
 
-        if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
-          # Convert Windows path separators for bash
-          PROFILE_PATH="${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
-          PROFILE_PATH=$(echo "$PROFILE_PATH" | sed 's|\\|/|g')
-          CONAN_CMD="$CONAN_CMD --profile=$PROFILE_PATH"
-          echo "Using profile: ${{ steps.conan-profile.outputs.profile }}"
-        else
-          echo "Using default conan profile"
-        fi
+        if ("${{ steps.conan-profile.outputs.use_profile }}" -eq "true") {
+          $profilePath = "${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
+          $conanArgs += "--profile=$profilePath"
+          Write-Output "Using profile: ${{ steps.conan-profile.outputs.profile }}"
+        } else {
+          Write-Output "Using default conan profile"
+        }
 
-        CONAN_CMD="$CONAN_CMD --format=json"
-        echo "Running: $CONAN_CMD"
+        $conanArgs += "--format=json"
+        $conanCmdStr = "conan " + ($conanArgs -join " ")
+        Write-Output "Running: $conanCmdStr"
 
-        CONAN_OUTPUT=$(eval $CONAN_CMD)
-        CONAN_LIB_FOLDER=$(echo "$CONAN_OUTPUT" | jq -r ".graph.nodes.\"1\".package_folder")
-        # Convert Windows path separators for bash
-        CONAN_LIB_FOLDER=$(echo "$CONAN_LIB_FOLDER" | sed 's|\\|/|g')
-        INSTALL_PATH="${{ inputs.install-path }}"
-        INSTALL_PATH=$(echo "$INSTALL_PATH" | sed 's|\\|/|g')
-        echo "CONAN_LIB_FOLDER: $CONAN_LIB_FOLDER"
-        cp -r "$CONAN_LIB_FOLDER/"* "$INSTALL_PATH/"
+        $conanOutput = & conan $conanArgs
+        $conanJson = $conanOutput | ConvertFrom-Json
+        $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
+        Write-Output "CONAN_LIB_FOLDER: $conanLibFolder"
+        Copy-Item -Recurse -Force -Path "$conanLibFolder\*" -Destination "${{ inputs.install-path }}"
 
     - name: Upload compiled library to cache
       if: steps.cache.outputs.cache-hit != 'true'
