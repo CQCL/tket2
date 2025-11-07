@@ -80,22 +80,22 @@ jobs:
             target: aarch64-apple-darwin
             test-wheels: true
 
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: aarch64-unknown-linux-musl
             manylinux: "musllinux_1_2"
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: armv7-unknown-linux-gnueabihf
             manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: armv7-unknown-linux-musleabihf
             manylinux: "musllinux_1_2"
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: i686-unknown-linux-gnu
             manylinux: "manylinux2014"
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: i686-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: macos-15-intel
@@ -105,11 +105,11 @@ jobs:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             test-wheels: true
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             manylinux: "manylinux2014"
             test-wheels: true
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
     steps:
@@ -186,23 +186,41 @@ jobs:
         run: |
           echo "tket-c-api files:"
           find $TKET_C_API_PATH -type f
-          find $TKET_C_API_PATH -type f -name "*.so" | while read sofile; do
+          find $TKET_C_API_PATH -type f -name "*.so" | while IFS= read -r sofile; do
             echo "======= objdump -f $sofile ======="
             objdump -f "$sofile" || echo "objdump failed for $sofile"
             echo
           done
-          find $TKET_C_API_PATH -type f -name "*.dylib" | while read dylibfile; do
+          find $TKET_C_API_PATH -type f -name "*.dylib" | while IFS= read -r dylibfile; do
             echo "======= otool -L $dylibfile ======="
             otool -L "$dylibfile" || echo "otool failed for $dylibfile"
             echo "======= file $dylibfile ======="
             file "$dylibfile" || echo "file failed for $dylibfile"
             echo
           done
-          find $TKET_C_API_PATH -type f -name "*.dll" | while read dllfile; do
-            echo "======= file $dllfile ======="
-            file "$dllfile" || echo "file failed for $dllfile"
-            echo
-          done
+
+      - name: Check tket-c-api shared library (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Output "Checking Windows DLL files in $env:TKET_C_API_PATH"
+          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.dll" | ForEach-Object {
+            Write-Output "======= $($_.FullName) ======="
+            try {
+              $fileInfo = Get-Item $_.FullName
+              Write-Output "File: $($fileInfo.FullName)"
+              Write-Output "Size: $($fileInfo.Length) bytes"
+              Write-Output "Last Modified: $($fileInfo.LastWriteTime)"
+              # Try to get file version info if available
+              $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.FullName)
+              if ($versionInfo.FileVersion) {
+                Write-Output "File Version: $($versionInfo.FileVersion)"
+              }
+            } catch {
+              Write-Output "Failed to get file info: $_"
+            }
+            Write-Output ""
+          }
 
       - name: Build wheels
         shell: bash
