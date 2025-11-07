@@ -87,6 +87,9 @@ fn main() {
     // Link in standard C++ library.
     if target.is_some_and(|t| t.is_macos()) {
         println!("cargo:rustc-link-lib=c++");
+    } else if target.is_some_and(|t| t == SupportedPlatform::WindowsX86) {
+        // On Windows with MSVC, don't link stdc++ - MSVC runtime is used by default
+        // The tket-c-api library should already be linked against the correct runtime
     } else {
         println!("cargo:rustc-link-lib=stdc++");
     }
