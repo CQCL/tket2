@@ -199,7 +199,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Write-Output "Checking Windows DLL files in $env:TKET_C_API_PATH"
+          Write-Output "Checking Windows DLL and LIB files in $env:TKET_C_API_PATH"
+          Write-Output "All files:"
+          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -File | ForEach-Object {
+            Write-Output "  $($_.FullName) ($($_.Length) bytes)"
+          }
+          Write-Output ""
+          Write-Output "DLL files:"
           Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.dll" | ForEach-Object {
             Write-Output "======= $($_.FullName) ======="
             try {
@@ -211,6 +217,25 @@ jobs:
               $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($_.FullName)
               if ($versionInfo.FileVersion) {
                 Write-Output "File Version: $($versionInfo.FileVersion)"
+              }
+            } catch {
+              Write-Output "Failed to get file info: $_"
+            }
+            Write-Output ""
+          }
+          Write-Output "LIB files:"
+          Get-ChildItem -Path "$env:TKET_C_API_PATH" -Recurse -Filter "*.lib" | ForEach-Object {
+            Write-Output "======= $($_.FullName) ======="
+            try {
+              $fileInfo = Get-Item $_.FullName
+              Write-Output "File: $($fileInfo.FullName)"
+              Write-Output "Size: $($fileInfo.Length) bytes"
+              # Try to dump symbols from the library
+              if (Get-Command dumpbin -ErrorAction SilentlyContinue) {
+                Write-Output "Exported symbols:"
+                dumpbin /EXPORTS $_.FullName 2>&1 | Select-Object -First 50
+              } else {
+                Write-Output "dumpbin not available to check exports"
               }
             } catch {
               Write-Output "Failed to get file info: $_"
