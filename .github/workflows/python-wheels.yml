@@ -79,10 +79,7 @@ jobs:
         # Note that we are platform support is limited by the pytket wheels availability.
         # Since we have it as a dependency, wheels built for other platforms will be unusable.
         platform:
-          - runner: macos-26
-            target: aarch64-apple-darwin
-            test-wheels: true
-
+          # ---------------- Linux
           - runner: ubuntu-24.04
             target: aarch64-unknown-linux-gnu
             manylinux: "manylinux2014"
@@ -90,24 +87,23 @@ jobs:
             target: aarch64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           - runner: ubuntu-24.04
-            target: armv7-unknown-linux-gnueabihf
-            manylinux: "manylinux2014"
-          - runner: ubuntu-24.04
-            target: armv7-unknown-linux-musleabihf
-            manylinux: "musllinux_1_2"
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-            test-wheels: true
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            test-wheels: true
-          - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             manylinux: "manylinux2014"
             test-wheels: true
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
+          # ---------------- Mac
+          - runner: macos-26
+            target: aarch64-apple-darwin
+            test-wheels: true
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            test-wheels: true
+          # ---------------- Windows
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            test-wheels: true
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
