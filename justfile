@@ -79,9 +79,14 @@ recompile-eccs:
 gen-extensions:
     cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
 
+# Update snapshot tests for both rust and python (requires `cargo-insta`)
+update-snapshots: update-snapshots-rs update-snapshots-py
 # Interactively update snapshot tests (requires `cargo-insta`)
-update-snapshots:
+update-snapshots-rs:
     cargo insta review
+# Update python snapshot tests.
+update-snapshots-py *TEST_ARGS:
+    uv run pytest --snapshot-update {{TEST_ARGS}}
 
 # Build the sphinx API documentation
 build-pydocs:
