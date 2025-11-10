@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.10](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.9...qis-compiler-v0.2.10) (2025-11-10)
+
+
+### Features
+
+* add GPU lowering to selene-hugr-qis-compiler ([#1169](https://github.com/CQCL/tket2/issues/1169)) ([bcf1d4c](https://github.com/CQCL/tket2/commit/bcf1d4c3c7a1dce383fcdd7f4668663b2fbc7c04))
+
+### Bug Fixes
+
+* Fix runtime panic when iterating through arrays of affine/bool types ([hugr#2666](https://github.com/CQCL/hugr/pull/2666)) ([01b8a8e](https://github.com/CQCL/tket2/commit/01b8a8e686592459336334849340e70173606550))
+
 ## [0.2.9](https://github.com/CQCL/tket2/compare/qis-compiler-v0.2.8...qis-compiler-v0.2.9) (2025-10-22)
 
 

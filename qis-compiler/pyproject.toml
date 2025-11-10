@@ -39,7 +39,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-version = "0.2.9" # updated by release-please
+version = "0.2.10" # updated by release-please
 
 [project.urls]
 repository = "https://github.com/CQCL/tket2/tree/main/qis-compiler"
