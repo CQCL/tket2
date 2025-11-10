@@ -193,9 +193,6 @@ runs:
         cd tket1-passes
         mkdir -p "${{ inputs.install-path }}"
 
-        # Install ninja
-        choco upgrade ninja
-
         # Build conan install command
         CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
 
@@ -208,9 +205,6 @@ runs:
         else
           echo "Using default conan profile"
         fi
-
-        # For Windows, use Ninja generator
-        CONAN_CMD="$CONAN_CMD -c tools.cmake.cmaketoolchain:generator=Ninja"
 
         CONAN_CMD="$CONAN_CMD --format=json"
         echo "Running: $CONAN_CMD"
