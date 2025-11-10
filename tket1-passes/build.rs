@@ -112,10 +112,10 @@ enum SupportedPlatform {
     // Platforms with pre-built binaries in tket-libs conan remote
     MacOsX86,
     MacOsArm,
-    WindowsX86,
     LinuxX86,
-    LinuxArmv8,
     // Manually added profiles for cross-compilation (no pre-built binaries)
+    WindowsX86,
+    LinuxArmv8,
     LinuxAarch64Gnu,
     LinuxAarch64Musl,
     LinuxArmv7Gnu,
@@ -175,17 +175,14 @@ impl SupportedPlatform {
         }
     }
 
+    /// Some selected platforms publish pre-built binaries.
+    ///
+    /// For all others, we need to pass `--build=missing` to conan and build
+    /// from source.
     fn needs_build_from_source(&self) -> bool {
-        // Manually added profiles don't have pre-built binaries, so they need to build from source
-        matches!(
+        !matches!(
             self,
-            SupportedPlatform::LinuxAarch64Gnu
-                | SupportedPlatform::LinuxAarch64Musl
-                | SupportedPlatform::LinuxArmv7Gnu
-                | SupportedPlatform::LinuxArmv7Musl
-                | SupportedPlatform::LinuxI686Gnu
-                | SupportedPlatform::LinuxI686Musl
-                | SupportedPlatform::LinuxX86_64Musl
+            SupportedPlatform::MacOsX86 | SupportedPlatform::MacOsArm | SupportedPlatform::LinuxX86
         )
     }
 }
