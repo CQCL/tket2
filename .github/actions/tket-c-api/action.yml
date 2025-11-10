@@ -191,11 +191,15 @@ runs:
       run: |
         Set-Location tket1-passes
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
+
         $conanOutput = conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
+
         echo "CONAN_LIB_FOLDER: $conanLibFolder"
         echo "Files in CONAN_LIB_FOLDER:"
+
+        # Copy the built library files to the install path
         Get-ChildItem -Path "$conanLibFolder" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
         Copy-Item -Recurse -Force -Path "$conanLibFolder\*" -Destination "${{ inputs.install-path }}"
         echo "tket-c-api library files:"

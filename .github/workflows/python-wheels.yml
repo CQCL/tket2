@@ -105,7 +105,7 @@ jobs:
             target: x86_64-apple-darwin
             test-wheels: true
           # ---------------- Windows
-          - runner: windows-2022
+          - runner: windows-2025
             target: x86_64-pc-windows-msvc
             test-wheels: true
     steps:
@@ -288,6 +288,10 @@ jobs:
             Write-Host "======= Sample of all exported symbols (first 50) ======="
             $exportLines = $exports -split "`n" | Where-Object { $_ -match "^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]+\s+(\S+)" }
             $exportLines | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
+
+            Write-Host ""
+            Write-Host "======= dumpbin /LINKERMEMBER:1 (symbol table) ======="
+            & $dumpbinPath /LINKERMEMBER:1 $libFile.FullName 2>&1 | Out-String
           } else {
             Write-Host "ERROR: Could not find dumpbin.exe. Cannot inspect library symbols."
             Write-Host "Trying alternative: lib.exe /LIST"
