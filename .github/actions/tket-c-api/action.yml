@@ -72,10 +72,10 @@ runs:
 
         case "$TARGET" in
           aarch64-unknown-linux-gnu)
-            PROFILE="linux-aarch64-gcc14"
+            PROFILE="linux-armv8-gcc14"
             ;;
           aarch64-unknown-linux-musl)
-            PROFILE="linux-aarch64-gcc14"
+            PROFILE="linux-armv8-gcc14"
             ;;
           armv7-unknown-linux-gnueabihf)
             PROFILE="linux-armv7-gcc14"
