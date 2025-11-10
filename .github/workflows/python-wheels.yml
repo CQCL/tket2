@@ -105,7 +105,7 @@ jobs:
             target: x86_64-apple-darwin
             test-wheels: true
           # ---------------- Windows
-          - runner: windows-latest
+          - runner: windows-2022
             target: x86_64-pc-windows-msvc
             test-wheels: true
     steps:
