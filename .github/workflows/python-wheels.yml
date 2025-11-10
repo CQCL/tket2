@@ -292,6 +292,35 @@ jobs:
             Write-Host ""
             Write-Host "======= dumpbin /LINKERMEMBER:1 (symbol table) ======="
             & $dumpbinPath /LINKERMEMBER:1 $libFile.FullName 2>&1 | Out-String
+
+            # Check the DLL file - the actual symbols should be there
+            Write-Host ""
+            Write-Host "======= Checking DLL file for actual exports ======="
+            $dllFile = Get-ChildItem -Path "$env:TKET_C_API_PATH" -Filter "*.dll" -Recurse | Select-Object -First 1
+            if ($dllFile) {
+              Write-Host "Found DLL: $($dllFile.FullName)"
+              Write-Host ""
+              Write-Host "======= dumpbin /EXPORTS on DLL ======="
+              $dllExports = & $dumpbinPath /EXPORTS $dllFile.FullName 2>&1 | Out-String
+              Write-Host $dllExports
+
+              Write-Host ""
+              Write-Host "======= Checking DLL for specific symbols ======="
+              $foundCount = 0
+              foreach ($symbol in $symbols) {
+                if ($dllExports -match [regex]::Escape($symbol)) {
+                  Write-Host "✓ Found in DLL: $symbol"
+                  $foundCount++
+                } else {
+                  Write-Host "✗ Missing in DLL: $symbol"
+                }
+              }
+              Write-Host ""
+              Write-Host "DLL Summary: Found $foundCount out of $($symbols.Count) required symbols"
+            } else {
+              Write-Host "WARNING: No .dll file found in $env:TKET_C_API_PATH"
+              Write-Host "This means the import library (.lib) has no DLL to reference!"
+            }
           } else {
             Write-Host "ERROR: Could not find dumpbin.exe. Cannot inspect library symbols."
             Write-Host "Trying alternative: lib.exe /LIST"
