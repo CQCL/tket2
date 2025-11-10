@@ -192,17 +192,31 @@ runs:
         Set-Location tket1-passes
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
 
-        $conanOutput = conan install . --build=missing --options="tket-c-api/*:shared=True" --format=json
+        # Build conan install command
+        $conanCmd = "conan install . --build=missing --options=`"tket-c-api/*:shared=True`""
+
+        if ("${{ steps.conan-profile.outputs.use_profile }}" -eq "true") {
+          $profilePath = "${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
+          $conanCmd = "$conanCmd --profile=$profilePath"
+          Write-Host "Using profile: $profilePath"
+        } else {
+          Write-Host "Using default conan profile"
+        }
+
+        $conanCmd = "$conanCmd --format=json"
+        Write-Host "Running: $conanCmd"
+
+        $conanOutput = Invoke-Expression $conanCmd
         $conanJson = $conanOutput | ConvertFrom-Json
         $conanLibFolder = $conanJson.graph.nodes.'1'.package_folder
 
-        echo "CONAN_LIB_FOLDER: $conanLibFolder"
-        echo "Files in CONAN_LIB_FOLDER:"
+        Write-Host "CONAN_LIB_FOLDER: $conanLibFolder"
+        Write-Host "Files in CONAN_LIB_FOLDER:"
 
         # Copy the built library files to the install path
         Get-ChildItem -Path "$conanLibFolder" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
         Copy-Item -Recurse -Force -Path "$conanLibFolder\*" -Destination "${{ inputs.install-path }}"
-        echo "tket-c-api library files:"
+        Write-Host "tket-c-api library files:"
         Get-ChildItem -Path "${{ inputs.install-path }}" -Recurse -File | ForEach-Object { Write-Output $_.FullName }
 
     - name: Upload compiled library to cache
