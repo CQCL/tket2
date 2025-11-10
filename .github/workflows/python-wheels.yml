@@ -203,6 +203,101 @@ jobs:
             file "$dylibfile" || echo "file failed for $dylibfile"
             echo
           done
+          find $TKET_C_API_PATH -type f -name "*.lib" | while IFS= read -r libfile; do
+            echo "======= Checking Windows library: $libfile ======="
+            echo "======= file $libfile ======="
+            file "$libfile" || echo "file failed for $libfile"
+            echo
+          done
+
+      # TODO: Just for debugging, remove me before merging
+      - name: Check tket-c-api Windows library symbols
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $libFile = Get-ChildItem -Path "$env:TKET_C_API_PATH" -Filter "*.lib" -Recurse | Select-Object -First 1
+          if (-not $libFile) {
+            Write-Host "No .lib file found in $env:TKET_C_API_PATH"
+            exit 1
+          }
+
+          Write-Host "Found library: $($libFile.FullName)"
+
+          # Try to find dumpbin.exe - check common locations
+          $dumpbinPath = $null
+          $searchPaths = @(
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC",
+            "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC"
+          )
+
+          foreach ($basePath in $searchPaths) {
+            if (Test-Path $basePath) {
+              $found = Get-ChildItem -Path $basePath -Filter "dumpbin.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($found) {
+                $dumpbinPath = $found.FullName
+                Write-Host "Found dumpbin.exe at: $dumpbinPath"
+                break
+              }
+            }
+          }
+
+          if (-not $dumpbinPath) {
+            Write-Host "dumpbin.exe not found in standard locations, trying 'where dumpbin'"
+            $whereResult = where.exe dumpbin 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              $dumpbinPath = $whereResult | Select-Object -First 1
+              Write-Host "Found dumpbin.exe via PATH: $dumpbinPath"
+            }
+          }
+
+          if ($dumpbinPath) {
+            Write-Host ""
+            Write-Host "======= Full export list from dumpbin /EXPORTS ======="
+            & $dumpbinPath /EXPORTS $libFile.FullName 2>&1 | Out-String
+
+            Write-Host ""
+            Write-Host "======= Checking for specific missing symbols ======="
+            $exports = & $dumpbinPath /EXPORTS $libFile.FullName 2>&1 | Out-String
+            $symbols = @(
+              "tket_clifford_simp",
+              "tket_free_circuit",
+              "tket_squash_phasedx_rz",
+              "tket_circuit_to_json",
+              "tket_free_string",
+              "tket_circuit_from_json",
+              "tket_error_string"
+            )
+
+            $foundCount = 0
+            foreach ($symbol in $symbols) {
+              # Check for both decorated and undecorated names
+              if ($exports -match [regex]::Escape($symbol)) {
+                Write-Host "✓ Found: $symbol"
+                $foundCount++
+              } else {
+                Write-Host "✗ Missing: $symbol"
+              }
+            }
+
+            Write-Host ""
+            Write-Host "Summary: Found $foundCount out of $($symbols.Count) required symbols"
+
+            # Also show a sample of all exported symbols
+            Write-Host ""
+            Write-Host "======= Sample of all exported symbols (first 50) ======="
+            $exportLines = $exports -split "`n" | Where-Object { $_ -match "^\s+\d+\s+[0-9A-F]+\s+[0-9A-F]+\s+(\S+)" }
+            $exportLines | Select-Object -First 50 | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host "ERROR: Could not find dumpbin.exe. Cannot inspect library symbols."
+            Write-Host "Trying alternative: lib.exe /LIST"
+            $libPath = Get-ChildItem -Path "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC" -Filter "lib.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($libPath) {
+              & $libPath.FullName /LIST $libFile.FullName
+            } else {
+              Write-Host "lib.exe also not found"
+            }
+          }
 
       - name: Build wheels
         shell: bash
