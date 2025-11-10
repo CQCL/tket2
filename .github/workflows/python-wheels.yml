@@ -71,7 +71,7 @@ jobs:
         # - test-wheels: Whether to test installing the wheels.
         #    This is only done when the target platform matches the runner platform.
         #
-        # Note that we are platform support is limited by the pytket wheels availability.
+        # Note that platform support is limited by the pytket wheels' availability.
         # Since we have it as a dependency, wheels built for other platforms will be unusable.
         platform:
           # ---------------- Linux
