@@ -188,6 +188,10 @@ runs:
     - name: Build and install tket-c-api (Windows)
       if: steps.cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
       shell: pwsh
+      env:
+        # Set CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS as environment variable
+        # CMake will pick this up if the Conan recipe doesn't explicitly set it
+        CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS: "ON"
       run: |
         Set-Location tket1-passes
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
@@ -202,6 +206,8 @@ runs:
         } else {
           Write-Host "Using default conan profile"
         }
+
+        Write-Host "CMake option CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON will be passed to the build"
 
         $conanCmd = "$conanCmd --format=json"
         Write-Host "Running: $conanCmd"
