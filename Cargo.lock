@@ -281,9 +281,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "capnp"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "015e45130949bb49a7776b7aa96d78d0cb7a8ddba8a8357c2103e77aebbb66ad"
+checksum = "bbffb6e69e1ea2cf518ac5037a78a223ecb82b4ac81e7ab33cb5211b43d712ac"
 dependencies = [
  "embedded-io",
 ]
@@ -315,9 +315,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.44"
+version = "1.2.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37521ac7aabe3d13122dc382493e20c9416f299d2ccd5b3a5340a2570cdeb0f3"
+checksum = "35900b6c8d709fb1d854671ae27aeaa9eec2f8b01b364e1619a40da3e6fe2afe"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1065,9 +1065,9 @@ dependencies = [
 
 [[package]]
 name = "hugr"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24c9826ecb2ba11167169c60b58af72287e1067985c6c53ee15e1dfac24501a7"
+checksum = "1d8b180fc27111bc631352b8516a281703430d96b4e0c4bedecb00585bb7bbb2"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1077,9 +1077,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-cli"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30f02b2f36f13496b8782d3db8b551e0b504183820c42414808e717681fda476"
+checksum = "21a63e1e7d6f798e9bd032fd616854b4294d680056088a386d8a9a6c00b4291c"
 dependencies = [
  "anyhow",
  "clap",
@@ -1098,9 +1098,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-core"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5d7bfbe7ec73b88e1e9d99d7f74af02adeb629ad0fdc2de932613143f57523e"
+checksum = "6cde86f402bdea148e74c72a951354839dd1fb1f703fe620b4ef4d471a7d5978"
 dependencies = [
  "base64",
  "cgmath",
@@ -1136,9 +1136,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-llvm"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cc42b0b29e8864a4f7bd84a72750d72d8478f21b4eddf4163d6710358354622"
+checksum = "c55104ec359dcf7c608a903dcb69be0297fcdda812c37bce18ee13b0ca3a0930"
 dependencies = [
  "anyhow",
  "cc",
@@ -1156,9 +1156,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-model"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bc5cc351623b0480bc159501747b116aa7c98f1a6b8c7bf79c6cf7103f2f9b2"
+checksum = "2db0fbf9bf9e6f5828b905403c3c1e3b3b4e27520e92930a16915abbef60909b"
 dependencies = [
  "base64",
  "bumpalo",
@@ -1178,9 +1178,9 @@ dependencies = [
 
 [[package]]
 name = "hugr-passes"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebc97e7f288a188c1c343d44111fccfa84613df18f63e09f1280af593eab3990"
+checksum = "9e170464e6c94176cd39099f52bac95552bf360b971959cd8a4a27d76e645ab9"
 dependencies = [
  "ascent",
  "derive_more 2.0.1",
