@@ -19,6 +19,9 @@ in
     pkgs.zlib
     pkgs.ncurses
     pkgs.stdenv.cc.cc.lib
+
+  ] ++ lib.optionals pkgs.stdenv.isDarwin [
+    pkgs.xz
   ];
 
 
