@@ -17,11 +17,6 @@ on:
       - published
   workflow_dispatch:
 
-  # TODO: For testing only, remove me before merging
-  pull_request:
-    branches:
-      - main
-
 permissions:
   contents: read
 
@@ -83,7 +78,6 @@ jobs:
           # aarch64 cross-compilation with maturin was causing linking issues
           # (it doesn't seem to be using zig even though we set --zig)
           # so it's temporarily disabled
-          # TODO: Investigate the linking issues and re-enable
           #- runner: ubuntu-24.04
           #  target: aarch64-unknown-linux-gnu
           #  manylinux: "manylinux2014"
