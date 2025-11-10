@@ -472,17 +472,7 @@ jobs:
           echo "Rust: ${{ needs.changes.outputs.rust }}"
           echo "Python: ${{ needs.changes.outputs.python }}"
       - name: Fail if required checks failed
-        # This condition should simply be `if: failure() || cancelled()`,
-        # but there seems to be a bug in the github workflow runner.
-        #
-        # See https://github.com/orgs/community/discussions/80788
-        if: |
-          needs.changes.result == 'failure' || needs.changes.result == 'cancelled' ||
-          needs.check-rs.result == 'failure' || needs.check-rs.result == 'cancelled' ||
-          needs.check-py.result == 'failure' || needs.check-py.result == 'cancelled' ||
-          needs.tests-rs-stable-no-features.result == 'failure' || needs.tests-rs-stable-no-features.result == 'cancelled' ||
-          needs.tests-rs-stable-all-features.result == 'failure' || needs.tests-rs-stable-all-features.result == 'cancelled' ||
-          needs.tests-py.result == 'failure' || needs.tests-py.result == 'cancelled'
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: |
           echo "Required checks failed"
           echo "Please check the logs for more information"
