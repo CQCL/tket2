@@ -166,12 +166,12 @@ impl SupportedPlatform {
             SupportedPlatform::LinuxArmv8 => "linux-armv8-gcc14",
             // Manually added profiles for cross-compilation (will build from source)
             SupportedPlatform::LinuxAarch64Gnu => "linux-aarch64-gcc14",
-            SupportedPlatform::LinuxAarch64Musl => "linux-aarch64-musl-gcc14",
+            SupportedPlatform::LinuxAarch64Musl => "linux-aarch64-gcc14",
             SupportedPlatform::LinuxArmv7Gnu => "linux-armv7-gcc14",
-            SupportedPlatform::LinuxArmv7Musl => "linux-armv7-musl-gcc14",
+            SupportedPlatform::LinuxArmv7Musl => "linux-armv7-gcc14",
             SupportedPlatform::LinuxI686Gnu => "linux-i686-gcc14",
-            SupportedPlatform::LinuxI686Musl => "linux-i686-musl-gcc14",
-            SupportedPlatform::LinuxX86_64Musl => "linux-x86_64-musl-gcc14",
+            SupportedPlatform::LinuxI686Musl => "linux-i686-gcc14",
+            SupportedPlatform::LinuxX86_64Musl => "linux-x86_64-gcc14",
         }
     }
 
