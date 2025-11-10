@@ -217,9 +217,9 @@ jobs:
           # Copy the DLL to the package directory so maturin can include it in the wheel
           # The maturin.include in pyproject.toml expects it relative to the package root
           if [ -f "$TKET_C_API_PATH/bin/tket-c-api.dll" ]; then
-            cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket-c-api.dll"
-            echo "Copied DLL to $MODULE_DIR/tket-c-api.dll"
-            ls -lh "$MODULE_DIR/tket-c-api.dll"
+            cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket/tket-c-api.dll"
+            echo "Copied DLL to $MODULE_DIR/tket/tket-c-api.dll"
+            ls -lh "$MODULE_DIR/tket/tket-c-api.dll"
           else
             echo "ERROR: DLL not found at $TKET_C_API_PATH/bin/tket-c-api.dll"
             exit 1
