@@ -1,4 +1,4 @@
-name: Build qis-compiler wheels Release
+name: qis-compiler Python wheels 🐍
 
 on:
   push:
@@ -22,7 +22,24 @@ env:
   CACHE_CARGO: true
   UV_VERSION: "0.9.7"
 jobs:
+  # Check if the tag matches the package name,
+  # or if the workflow is running on a non-release event.
+  check-tag:
+    name: Check tag
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check-tag.outputs.run }}
+    steps:
+      - name: Check tag
+        id: check-tag
+        run: |
+          echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
+        env:
+          SHOULD_RUN: ${{ github.event_name != 'release' || ( github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/qis-compiler-v') ) }}
+
   build_qis_compiler_wheels:
+    needs: check-tag
+    if: ${{ needs.check-tag.outputs.run == 'true' }}
     strategy:
       fail-fast: false
       matrix:
@@ -83,41 +100,23 @@ jobs:
           if-no-files-found: error
 
   release:
-    strategy:
-      matrix:
-        target:
-          - name: qis-compiler
-            upload: wheelhouse/selene_hugr_qis_compiler-*.whl
-
-    name: Release ${{ matrix.target.name }}
+    name: Release qis-compiler
+    needs: [check-tag, build_qis_compiler_wheels]
+    if: ${{ needs.check-tag.outputs.run == 'true' && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     # always do a full build and test before release of any package
-    needs: [build_qis_compiler_wheels]
     environment: release
     permissions:
       contents: write
       # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
-    if: ${{ github.event_name != 'pull_request' }}
     steps:
-      # note: we can't use if: on the entire job, as if statements are evaluated
-      # before matrix expansion, so we follow the convention of guppylang and
-      # use a step to check if we should run the release job
-      - name: Check tag
-        id: check-tag
-        run: |
-          echo "run=$SHOULD_RUN" >> $GITHUB_OUTPUT
-        env:
-          SHOULD_RUN: ${{ github.ref_type == 'tag' && startsWith(github.ref, format('refs/tags/{0}-v', matrix.target.name)) }}
-
       - uses: actions/download-artifact@v5
-        if: ${{ steps.check-tag.outputs.run == 'true' }}
         with:
           path: wheelhouse
           merge-multiple: true
 
       - name: Publish package distributions to PyPI
-        if: ${{ steps.check-tag.outputs.run == 'true' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           verbose: true
