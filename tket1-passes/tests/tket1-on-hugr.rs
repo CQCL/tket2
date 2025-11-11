@@ -5,17 +5,17 @@ use hugr::algorithms::normalize_cfgs::NormalizeCFGPass;
 use tket1_passes::Tket1Circuit;
 
 use hugr::algorithms::const_fold::ConstantFoldPass;
+use hugr::algorithms::ComposablePass;
 use hugr::builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
-use hugr::{Hugr, HugrView, Node, hugr::hugrmut::HugrMut};
+use hugr::{hugr::hugrmut::HugrMut, Hugr, HugrView, Node};
 use rayon::iter::ParallelIterator;
 use rstest::{fixture, rstest};
 use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
+use tket::passes::squash_borrow::BorrowSquashPass;
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::{Circuit, TketOp};
-use tket::passes::squash_borrow::BorrowSquashPass;
-use hugr::algorithms::ComposablePass;
 
 /// A flat quantum circuit inside a function.
 ///
@@ -106,11 +106,12 @@ fn test_borrow_squash() {
     NormalizeCFGPass::default().run(&mut h).unwrap();
 
     ConstantFoldPass::default()
-        .then::<_,itertools::Either<_,_>>(BorrowSquashPass::default())
+        .then::<_, itertools::Either<_, _>>(BorrowSquashPass::default())
         .run(&mut h)
         .unwrap();
     let mut circ = Circuit::new(h);
-    let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
+    let mut encoded =
+        EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
 
     for (_, serial_circuit) in encoded.iter_mut() {
         let mut circuit_ptr = Tket1Circuit::from_serial_circuit(serial_circuit).unwrap();
