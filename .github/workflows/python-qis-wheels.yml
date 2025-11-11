@@ -1,4 +1,4 @@
-name: qis-compiler Python wheels 🐍
+name: Python wheels 🐍 (qis-compiler)
 
 on:
   push:
@@ -11,6 +11,7 @@ on:
     # check builds work if qis-compiler build config changes
     paths:
       - "qis-compiler/pyproject.toml"
+      - ".github/workflows/python-qis-wheels.yml"
   workflow_dispatch:
 
 permissions:
