@@ -17,6 +17,11 @@ on:
       - published
   workflow_dispatch:
 
+  # TODO: REMOVE THIS BEFORE MERGING
+  pull_request:
+    branches:
+      - "**"
+
 permissions:
   contents: read
 
@@ -256,10 +261,14 @@ jobs:
         run: |
           echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
           if [ "$TEST_INSTALL" = "true" ]; then
+            # Make sure we only use the tket lib from the wheel itself
+            rm -rf $WORKSPACE\tket-c-api\lib
+            rm -rf $WORKSPACE\tket-c-api\bin
             uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
           fi
           uvx twine check --strict dist/*
         env:
+          WORKSPACE: ${{ github.workspace }}
           TEST_INSTALL: ${{ matrix.platform.test-wheels }}
 
   sdist:
