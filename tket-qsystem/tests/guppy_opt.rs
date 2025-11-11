@@ -70,10 +70,10 @@ fn count_gates(h: &impl HugrView) -> (usize, usize) {
 ///
 #[rstest]
 #[case::angles(guppy_angles(), (5, 1))]
-#[case::false_branch(guppy_false_branch(), (0, 0))]
+#[case::false_branch(guppy_false_branch(), (3, 1))]
 #[case::nested(guppy_nested(), (6, 3))]
 #[case::ranges(guppy_ranges(), (8, 4))]
-#[case::simple_cx(guppy_simple_cx(), (0, 0))]
+#[case::simple_cx(guppy_simple_cx(), (4, 2))]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
 fn optimise_guppy(#[case] mut hugr: Hugr, #[case] before: (usize, usize)) {
     NormalizeGuppy::default().run(&mut hugr).unwrap();
