@@ -23,7 +23,7 @@ pub struct NormalizeGuppy {
     /// Whether to remove dead functions.
     dead_funcs: bool,
     /// Whether to inline DFG operations.
-    inline: bool,
+    inline_dfgs: bool,
 }
 
 impl NormalizeGuppy {
@@ -49,7 +49,7 @@ impl NormalizeGuppy {
     }
     /// Set whether to inline DFG operations.
     pub fn inline_dfgs(&mut self, inline: bool) -> &mut Self {
-        self.inline = inline;
+        self.inline_dfgs = inline;
         self
     }
 }
@@ -61,7 +61,7 @@ impl Default for NormalizeGuppy {
             constant_fold: true,
             untuple: true,
             dead_funcs: true,
-            inline: true,
+            inline_dfgs: true,
         }
     }
 }
@@ -84,7 +84,7 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         if self.dead_funcs {
             RemoveDeadFuncsPass::default().run(hugr)?;
         }
-        if self.inline {
+        if self.inline_dfgs {
             InlineDFGsPass.run(hugr).unwrap_or_else(|e| match e {})
         }
 
