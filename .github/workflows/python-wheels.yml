@@ -209,31 +209,18 @@ jobs:
             echo
           done
 
-      - name: Copy shared tket-c-api library to package directory (non-linux)
-        if: runner.os != 'Linux'
+      - name: Copy DLL to package directory (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
-          # Copy the shared library to the package directory so maturin can
-          # include it in the wheel.
-          #
-          # On Linux, this is automatically by maturin calling `auditwheel` and `patchelf`
-          case "$RUNNER_OS" in
-            Windows)
-              LIBRARY="$TKET_C_API_PATH/bin/tket-c-api.dll"
-              TARGET="$MODULE_DIR/tket/tket-c-api.dll"
-              ;;
-            macOS)
-              LIBRARY="$TKET_C_API_PATH/lib/libtket-c-api.dylib"
-              TARGET="$MODULE_DIR/tket/.dylibs/libtket-c-api.dylib"
-              ;;
-          esac
-
-          if [ -f "$LIBRARY" ]; then
-            cp "$LIBRARY" "$TARGET"
-            echo "Copied DLL to $TARGET"
-            ls -lh "$TARGET"
+          # Copy the DLL to the package directory so maturin can include it in the wheel
+          # The maturin.include in pyproject.toml expects it relative to the package root
+          if [ -f "$TKET_C_API_PATH/bin/tket-c-api.dll" ]; then
+            cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket/tket-c-api.dll"
+            echo "Copied DLL to $MODULE_DIR/tket/tket-c-api.dll"
+            ls -lh "$MODULE_DIR/tket/tket-c-api.dll"
           else
-            echo "ERROR: DLL not found at $LIBRARY"
+            echo "ERROR: DLL not found at $TKET_C_API_PATH/bin/tket-c-api.dll"
             exit 1
           fi
 
