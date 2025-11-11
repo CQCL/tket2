@@ -114,10 +114,6 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
 
         # Set the path to the cached tket-c-api library
         # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts

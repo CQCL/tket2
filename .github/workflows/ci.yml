@@ -75,10 +75,6 @@ jobs:
           install-path: ${{ env.TKET_C_API_PATH }}
       - name: Check formatting
         run: cargo fmt -- --check
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Run clippy
         run: cargo clippy --all-targets --all-features --workspace -- -D warnings
       - name: Build docs
@@ -176,10 +172,6 @@ jobs:
           toolchain: "stable"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -210,10 +202,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -244,10 +232,6 @@ jobs:
           # Nightly is required to count doctests coverage
           toolchain: "nightly"
           components: llvm-tools-preview
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -291,10 +275,6 @@ jobs:
           toolchain: "nightly"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
@@ -374,10 +354,6 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: ${{ env.LLVM_VERSION }}
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Run qis-compiler tests
@@ -472,7 +448,17 @@ jobs:
           echo "Rust: ${{ needs.changes.outputs.rust }}"
           echo "Python: ${{ needs.changes.outputs.python }}"
       - name: Fail if required checks failed
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        # This condition should simply be `if: failure() || cancelled()`,
+        # but there seems to be a bug in the github workflow runner.
+        #
+        # See https://github.com/orgs/community/discussions/80788
+        if: |
+          needs.changes.result == 'failure' || needs.changes.result == 'cancelled' ||
+          needs.check-rs.result == 'failure' || needs.check-rs.result == 'cancelled' ||
+          needs.check-py.result == 'failure' || needs.check-py.result == 'cancelled' ||
+          needs.tests-rs-stable-no-features.result == 'failure' || needs.tests-rs-stable-no-features.result == 'cancelled' ||
+          needs.tests-rs-stable-all-features.result == 'failure' || needs.tests-rs-stable-all-features.result == 'cancelled' ||
+          needs.tests-py.result == 'failure' || needs.tests-py.result == 'cancelled'
         run: |
           echo "Required checks failed"
           echo "Please check the logs for more information"
