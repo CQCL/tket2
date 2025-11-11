@@ -209,32 +209,17 @@ jobs:
             echo
           done
 
-      - name: Copy shared tket-c-api library to package directory (non-linux)
-        if: runner.os != 'Linux'
+      - name: Copy DLL to package directory (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
-          # Copy the shared library to the package directory so maturin can
-          # include it in the wheel.
-          #
-          # On Linux, this is automatically by maturin calling `auditwheel` and `patchelf`
-          case "$RUNNER_OS" in
-            Windows)
-              LIBRARY="$TKET_C_API_PATH/bin/tket-c-api.dll"
-              TARGET="$MODULE_DIR/tket/tket-c-api.dll"
-              ;;
-            macOS)
-              LIBRARY="$TKET_C_API_PATH/lib/libtket-c-api.dylib"
-              TARGET="$MODULE_DIR/tket/.dylibs/libtket-c-api.dylib"
-              ;;
-          esac
-
-          if [ -f "$LIBRARY" ]; then
-            mkdir -p "$(dirname "$TARGET")"
-            cp "$LIBRARY" "$TARGET"
-            echo "Copied DLL to $TARGET"
-            ls -lh "$TARGET"
+          # Copy the DLL to the package directory so maturin can include it in the wheel
+          if [ -f "$TKET_C_API_PATH/bin/tket-c-api.dll" ]; then
+            cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket/tket-c-api.dll"
+            echo "Copied DLL to $MODULE_DIR/tket/tket-c-api.dll"
+            ls -lh "$MODULE_DIR/tket/tket-c-api.dll"
           else
-            echo "ERROR: DLL not found at $LIBRARY"
+            echo "ERROR: DLL not found at $TKET_C_API_PATH/bin/tket-c-api.dll"
             exit 1
           fi
 
@@ -278,9 +263,9 @@ jobs:
           fi
           uvx --from delocate delocate-listdeps $MAC_WHEELS || true
           uvx --from delocate delocate-wheel -v -w dist/repaired $MAC_WHEELS
-          rm -f $MAC_WHEELS
-          mv dist/repaired/*.whl dist/
-          rmdir dist/repaired || true
+          rm -v -f $MAC_WHEELS
+          mv -v dist/repaired/*.whl dist/
+          rmdir -v dist/repaired || true
           echo "Repaired wheels:"
           ls -lh dist/*macosx*.whl
 
