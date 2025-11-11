@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.9](https://github.com/CQCL/tket2/compare/tket-py-v0.12.8...tket-py-v0.12.9) (2025-11-11)
+
+
+### Features
+
+* Add bindings for tket1-passes from python ([[#1225](https://github.com/CQCL/tket2/issues/1225)](https://github.com/CQCL/tket2/pull/1225)) ([fce8084](https://github.com/CQCL/tket2/commit/fce8084d84ad1b8c31fc460f710093a6c54710ed))
+
 ## [0.12.8](https://github.com/CQCL/tket2/compare/tket-py-v0.12.7...tket-py-v0.12.8) (2025-10-20)
 
 ### Documentation
