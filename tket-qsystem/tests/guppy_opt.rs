@@ -3,6 +3,7 @@
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
+use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
 
 use hugr::algorithms::ComposablePass;
 use hugr::{Hugr, HugrView};
@@ -44,19 +45,39 @@ fn guppy_simple_cx() -> Hugr {
     load_guppy_circuit("simple_cx")
 }
 
+fn count_gates(h: &impl HugrView) -> (usize, usize) {
+    let mut non_alloc = 0;
+    let mut alloc = 0;
+    for n in h.nodes() {
+        if let Some(eop) = h.get_optype(n).as_extension_op() {
+            if [TKET_EXTENSION_ID, TKET1_EXTENSION_ID].contains(eop.extension_id()) {
+                if ["tket.quantum.QFree", "tket.quantum.QAlloc"]
+                    .contains(&eop.qualified_id().as_str())
+                {
+                    alloc += 1;
+                } else {
+                    non_alloc += 1;
+                }
+            }
+        }
+    }
+    (non_alloc, alloc)
+}
+
 /// Run some simple optimization passes on the guppy-generated HUGRs and validate the result.
 ///
 /// This test is intended to check the current status of the Guppy optimization passes.
 ///
 #[rstest]
-#[case::angles(guppy_angles())]
-#[case::false_branch(guppy_false_branch())]
-#[case::nested(guppy_nested())]
-#[case::ranges(guppy_ranges())]
-#[case::simple_cx(guppy_simple_cx())]
+#[case::angles(guppy_angles(), (5, 1))]
+#[case::false_branch(guppy_false_branch(), (0, 0))]
+#[case::nested(guppy_nested(), (6, 3))]
+#[case::ranges(guppy_ranges(), (8, 4))]
+#[case::simple_cx(guppy_simple_cx(), (0, 0))]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy(#[case] mut hugr: Hugr) {
+fn optimise_guppy(#[case] mut hugr: Hugr, #[case] before: (usize, usize)) {
     NormalizeGuppy::default().run(&mut hugr).unwrap();
+    assert_eq!(count_gates(&hugr), before);
 
     // TODO: Run pytket passes here, and check that the circuit is as optimized as possible at this point.
     //
