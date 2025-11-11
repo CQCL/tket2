@@ -118,7 +118,7 @@ struct BorrowReturnPorts {
 /// Determine if the given node is a borrow or return node, and if so, return
 /// the ports identifying the operands.
 ///
-/// If not, return `Ok(None)` - this will prevent elision of any return-borrow-return
+/// If not, return `Ok(None)` - this will prevent elision for any Borrow-Return-Borrow
 /// spanning this node.
 fn is_borrow_return<H: HugrView>(node: H::Node, hugr: &H) -> Option<BorrowReturnPorts> {
     let op = hugr.get_optype(node);
