@@ -13,7 +13,7 @@ use hugr::{hugr::hugrmut::HugrMut, Hugr, HugrView, Node};
 use rayon::iter::ParallelIterator;
 use rstest::{fixture, rstest};
 use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
-use tket::passes::squash_borrow::BorrowSquashPass;
+use tket::passes::borrow_squash::BorrowSquashPass;
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::{Circuit, TketOp};
 
