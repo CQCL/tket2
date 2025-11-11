@@ -209,18 +209,31 @@ jobs:
             echo
           done
 
-      - name: Copy DLL to package directory (Windows)
-        if: runner.os == 'Windows'
+      - name: Copy shared tket-c-api library to package directory (non-linux)
+        if: runner.os != 'Linux'
         shell: bash
         run: |
-          # Copy the DLL to the package directory so maturin can include it in the wheel
-          # The maturin.include in pyproject.toml expects it relative to the package root
-          if [ -f "$TKET_C_API_PATH/bin/tket-c-api.dll" ]; then
-            cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket/tket-c-api.dll"
-            echo "Copied DLL to $MODULE_DIR/tket/tket-c-api.dll"
-            ls -lh "$MODULE_DIR/tket/tket-c-api.dll"
+          # Copy the shared library to the package directory so maturin can
+          # include it in the wheel.
+          #
+          # On Linux, this is automatically by maturin calling `auditwheel` and `patchelf`
+          case "$RUNNER_OS" in
+            Windows)
+              LIBRARY="$TKET_C_API_PATH/bin/tket-c-api.dll"
+              TARGET="$MODULE_DIR/tket/tket-c-api.dll"
+              ;;
+            macOS)
+              LIBRARY="$TKET_C_API_PATH/lib/libtket-c-api.dylib"
+              TARGET="$MODULE_DIR/tket/.dylibs/libtket-c-api.dylib"
+              ;;
+          esac
+
+          if [ -f "$LIBRARY" ]; then
+            cp "$LIBRARY" "$TARGET"
+            echo "Copied DLL to $TARGET"
+            ls -lh "$TARGET"
           else
-            echo "ERROR: DLL not found at $TKET_C_API_PATH/bin/tket-c-api.dll"
+            echo "ERROR: DLL not found at $LIBRARY"
             exit 1
           fi
 
@@ -235,6 +248,7 @@ jobs:
             --out ../dist \
             --target ${{ matrix.platform.target }} \
             --strip
+
       - name: Build free-threaded wheels
         # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
         if: false
@@ -249,6 +263,25 @@ jobs:
             --out ../dist \
             --target ${{ matrix.platform.target }} \
             --strip
+
+      - name: Repair macOS wheels with delocate
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "Repairing macOS wheels with delocate..."
+          ls -lh dist || true
+          MAC_WHEELS=$(ls dist/*macosx*.whl 2>/dev/null || true)
+          if [ -z "$MAC_WHEELS" ]; then
+            echo "No macOS wheels found to repair; skipping delocate."
+            exit 0
+          fi
+          uvx --from delocate delocate-listdeps $MAC_WHEELS || true
+          uvx --from delocate delocate-wheel -v -w dist/repaired $MAC_WHEELS
+          rm -f $MAC_WHEELS
+          mv dist/repaired/*.whl dist/
+          rmdir dist/repaired || true
+          echo "Repaired wheels:"
+          ls -lh dist/*macosx*.whl
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
