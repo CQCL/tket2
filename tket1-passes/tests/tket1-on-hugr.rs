@@ -90,8 +90,8 @@ fn count_quantum_gates(circuit: &Circuit, region: Node) -> usize {
         .count()
 }
 
-#[test]
-fn test_borrow_squash() {
+#[rstest]
+fn test_borrow_squash(#[values(true, false)] squash_borrows: bool) {
     let reader = BufReader::new(include_bytes!("../../test_files/nested_array.hugr").as_slice());
     let mut h = Hugr::load(reader, None).unwrap();
     let array_func = h
@@ -103,12 +103,24 @@ fn test_borrow_squash() {
         })
         .unwrap();
     h.set_entrypoint(array_func);
-    NormalizeCFGPass::default().run(&mut h).unwrap();
-
-    ConstantFoldPass::default()
-        .then::<_, itertools::Either<_, _>>(BorrowSquashPass::default())
+    let count_quantum_gates = |h: &Hugr| {
+        h.entry_descendants()
+            .filter_map(|n| h.get_optype(n).as_extension_op())
+            .filter(|eop| {
+                [TKET_EXTENSION_ID, TKET1_EXTENSION_ID].contains(eop.extension_id())
+                    && !["tket.quantum.QFree", "tket.quantum.QAlloc"].contains(&eop.qualified_id().as_str())
+            })
+            .count()
+    };
+    NormalizeCFGPass::default()
+        .then::<_, itertools::Either<_,_>>(ConstantFoldPass::default())
         .run(&mut h)
         .unwrap();
+    assert_eq!(count_quantum_gates(&h), 2);
+    if squash_borrows {
+        BorrowSquashPass::default().run(&mut h).unwrap();
+    }
+
     let mut circ = Circuit::new(h);
     let mut encoded =
         EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
@@ -125,11 +137,5 @@ fn test_borrow_squash() {
 
     let h = circ.into_hugr();
     h.validate().unwrap();
-    assert!(h
-        .nodes()
-        .any(|n| h.get_optype(n).as_extension_op().is_some_and(|eop| [
-            TKET_EXTENSION_ID,
-            TKET1_EXTENSION_ID
-        ]
-        .contains(eop.extension_id()))));
+    assert_eq!(count_quantum_gates(&h), if squash_borrows { 0 } else { 2 });
 }
