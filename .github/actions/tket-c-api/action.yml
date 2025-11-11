@@ -168,7 +168,7 @@ runs:
         fi
 
         # Build conan install command
-        CONAN_CMD="conan install . --build=missing --options=\"tket-c-api/*:shared=True\""
+        CONAN_CMD="conan install . --build=missing"
 
         if [ "${{ steps.conan-profile.outputs.use_profile }}" == "true" ]; then
           CONAN_CMD="$CONAN_CMD --profile=${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
@@ -193,7 +193,7 @@ runs:
         New-Item -ItemType Directory -Force -Path "${{ inputs.install-path }}" | Out-Null
 
         # Build conan install command
-        $conanCmd = "conan install . --build=missing --options=`"tket-c-api/*:shared=True`""
+        $conanCmd = "conan install . --build=missing"
 
         if ("${{ steps.conan-profile.outputs.use_profile }}" -eq "true") {
           $profilePath = "${{ github.workspace }}/${{ steps.conan-profile.outputs.profile }}"
