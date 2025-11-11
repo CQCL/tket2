@@ -60,8 +60,9 @@ impl PytketTypeTranslator for PreludeEmitter {
         _set: &TypeTranslatorSet,
     ) -> Option<RegisterCount> {
         match typ.name().as_str() {
-            "usize" => Some(RegisterCount::only_bits(64)),
             "qubit" => Some(RegisterCount::only_qubits(1)),
+            // We don't translate `usize`s currently, as none of the operations
+            // that use them are translated to pytket.
             _ => None,
         }
     }
