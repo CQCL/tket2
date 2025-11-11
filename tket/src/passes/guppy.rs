@@ -75,8 +75,7 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         }
         if self.untuple {
             UntuplePass::new(UntupleRecursive::Recursive)
-                .run(hugr)
-                .map_err(NormalizeGuppyErrors::Untuple)?;
+                .run(hugr)?;
         }
         if self.constant_fold {
             ConstantFoldPass::default().run(hugr)?;
