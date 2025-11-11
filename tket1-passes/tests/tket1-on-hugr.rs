@@ -1,19 +1,21 @@
 //! Test running tket1 passes on hugr circuit.
 use std::io::BufReader;
 
+use hugr::algorithms::normalize_cfgs::NormalizeCFGPass;
 use tket1_passes::Tket1Circuit;
 
 use hugr::algorithms::const_fold::ConstantFoldPass;
 use hugr::builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
-use hugr::{Hugr, HugrView, Node};
+use hugr::{Hugr, HugrView, Node, hugr::hugrmut::HugrMut};
 use rayon::iter::ParallelIterator;
 use rstest::{fixture, rstest};
-use tket::extension::{REGISTRY, TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
+use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::{Circuit, TketOp};
 use tket::passes::squash_borrow::BorrowSquashPass;
+use hugr::algorithms::ComposablePass;
 
 /// A flat quantum circuit inside a function.
 ///
@@ -91,7 +93,7 @@ fn count_quantum_gates(circuit: &Circuit, region: Node) -> usize {
 #[test]
 fn test_borrow_squash() {
     let reader = BufReader::new(include_bytes!("../../test_files/nested_array.hugr").as_slice());
-    let mut h = Hugr::load(reader, Some(&REGISTRY)).unwrap();
+    let mut h = Hugr::load(reader, None).unwrap();
     let array_func = h
         .children(h.module_root())
         .find(|n| {
@@ -101,13 +103,14 @@ fn test_borrow_squash() {
         })
         .unwrap();
     h.set_entrypoint(array_func);
+    NormalizeCFGPass::default().run(&mut h).unwrap();
 
     ConstantFoldPass::default()
-        .then(BorrowSquashPass::default())
+        .then::<_,itertools::Either<_,_>>(BorrowSquashPass::default())
         .run(&mut h)
         .unwrap();
-    let circ = Circuit::new(h);
-    let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new_with_subcircuits()).unwrap();
+    let mut circ = Circuit::new(h);
+    let mut encoded = EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
 
     for (_, serial_circuit) in encoded.iter_mut() {
         let mut circuit_ptr = Tket1Circuit::from_serial_circuit(serial_circuit).unwrap();
@@ -117,7 +120,7 @@ fn test_borrow_squash() {
         *serial_circuit = circuit_ptr.to_serial_circuit().unwrap();
     }
 
-    encoded.reassemble_inline(circ.hugr_mut(), None).unwrap();
+    encoded.reassemble_inplace(circ.hugr_mut(), None).unwrap();
 
     let h = circ.into_hugr();
     h.validate().unwrap();
