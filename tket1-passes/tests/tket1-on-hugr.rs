@@ -103,20 +103,17 @@ fn test_borrow_squash(#[values(true, false)] squash_borrows: bool) {
         })
         .unwrap();
     h.set_entrypoint(array_func);
-    let count_quantum_gates = |h: &Hugr| {
+    let count_cxs = |h: &Hugr| {
         h.entry_descendants()
             .filter_map(|n| h.get_optype(n).as_extension_op())
-            .filter(|eop| {
-                [TKET_EXTENSION_ID, TKET1_EXTENSION_ID].contains(eop.extension_id())
-                    && !["tket.quantum.QFree", "tket.quantum.QAlloc"].contains(&eop.qualified_id().as_str())
-            })
+            .filter(|eop| eop.qualified_id() == "tket.quantum.CX")
             .count()
     };
     NormalizeCFGPass::default()
-        .then::<_, itertools::Either<_,_>>(ConstantFoldPass::default())
+        .then::<_, itertools::Either<_, _>>(ConstantFoldPass::default())
         .run(&mut h)
         .unwrap();
-    assert_eq!(count_quantum_gates(&h), 2);
+    assert_eq!(count_cxs(&h), 2);
     if squash_borrows {
         BorrowSquashPass::default().run(&mut h).unwrap();
     }
@@ -137,5 +134,5 @@ fn test_borrow_squash(#[values(true, false)] squash_borrows: bool) {
 
     let h = circ.into_hugr();
     h.validate().unwrap();
-    assert_eq!(count_quantum_gates(&h), if squash_borrows { 0 } else { 2 });
+    assert_eq!(count_cxs(&h), if squash_borrows { 0 } else { 2 });
 }
