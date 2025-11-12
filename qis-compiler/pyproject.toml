@@ -162,8 +162,8 @@ before-all = [
     'tar xf clang+llvm-14.0.6-$ARCH_PREFIX.tar.xz -C /tmp/llvm --strip-components=1',
 ]
 repair-wheel-command = [
-    'DYLD_LIBRARY_PATH=/tmp/llvm/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}',
-    'uvx abi3audit --strict --report {wheel}',
+    'DYLD_LIBRARY_PATH=/tmp/llvm/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -vv {wheel}',
+    'uvx abi3audit --strict --report {wheel} -v',
 ]
 
 [tool.cibuildwheel.windows.environment]
