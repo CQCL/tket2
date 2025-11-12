@@ -1,8 +1,11 @@
 //! Tests optimizing Guppy-generated programs.
 
+use smol_str::SmolStr;
+use std::collections::HashMap;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
+use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
 
 use hugr::algorithms::ComposablePass;
 use hugr::{Hugr, HugrView};
@@ -44,19 +47,46 @@ fn guppy_simple_cx() -> Hugr {
     load_guppy_circuit("simple_cx")
 }
 
+fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
+    let mut counts = HashMap::new();
+    for n in h.nodes() {
+        if let Some(eop) = h.get_optype(n).as_extension_op() {
+            if [TKET_EXTENSION_ID, TKET1_EXTENSION_ID].contains(eop.extension_id()) {
+                *counts.entry(eop.qualified_id()).or_default() += 1;
+            }
+        }
+    }
+    counts
+}
+
 /// Run some simple optimization passes on the guppy-generated HUGRs and validate the result.
 ///
 /// This test is intended to check the current status of the Guppy optimization passes.
 ///
 #[rstest]
-#[case::angles(guppy_angles())]
-#[case::false_branch(guppy_false_branch())]
-#[case::nested(guppy_nested())]
-#[case::ranges(guppy_ranges())]
-#[case::simple_cx(guppy_simple_cx())]
+#[case::angles(guppy_angles(), [
+    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1)
+])]
+#[case::false_branch(guppy_false_branch(), [
+    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
+])]
+#[case::nested(guppy_nested(), [
+    ("tket.quantum.CZ", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 3), ("tket.quantum.MeasureFree", 3)
+])]
+#[case::ranges(guppy_ranges(), [
+    ("tket.quantum.QAlloc", 4), ("tket.quantum.MeasureFree", 4), ("tket.quantum.H", 2), ("tket.quantum.CX", 2)
+])]
+#[case::simple_cx(guppy_simple_cx(), [
+    ("tket.quantum.QAlloc", 2), ("tket.quantum.CX", 2), ("tket.quantum.MeasureFree", 2)
+])]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy(#[case] mut hugr: Hugr) {
+fn optimise_guppy<'a>(
+    #[case] mut hugr: Hugr,
+    #[case] before: impl IntoIterator<Item = (&'a str, usize)>,
+) {
     NormalizeGuppy::default().run(&mut hugr).unwrap();
+    let before = before.into_iter().map(|(k, v)| (k.into(), v)).collect();
+    assert_eq!(count_gates(&hugr), before);
 
     // TODO: Run pytket passes here, and check that the circuit is as optimized as possible at this point.
     //
