@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.10](https://github.com/CQCL/tket2/compare/tket-py-v0.12.9...tket-py-v0.12.10) (2025-11-11)
+
+
+### Bug Fixes
+
+* Fix wheel builds for macos ([46619f7](https://github.com/CQCL/tket2/commit/46619f781fe4e75d0eb7799221e547519f78f631))
+
 ## [0.12.9](https://github.com/CQCL/tket2/compare/tket-py-v0.12.8...tket-py-v0.12.9) (2025-11-11)
 
 
