@@ -83,18 +83,25 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         if self.simplify_cfgs {
             NormalizeCFGPass::default().run(hugr)?;
         }
+        // When we do function inlining, do this after, to sort out argument marshalling
         if self.untuple {
             UntuplePass::new(UntupleRecursive::Recursive).run(hugr)?;
         }
+        // Should propagate through untuple, so could do earlier, and must be before BorrowSquash
         if self.constant_fold {
             ConstantFoldPass::default().run(hugr)?;
         }
+        // Only improves compilation speed, not affected by anything else
+        // until we start removing untaken branches
         if self.dead_funcs {
             RemoveDeadFuncsPass::default().run(hugr)?;
         }
+        // Do earlier? Nothing creates DFGs
         if self.inline_dfgs {
             InlineDFGsPass.run(hugr).unwrap_or_else(|e| match e {})
         }
+        // Potentially, could (need to) do fixpoint here with untuple,
+        // as both create opportunities for the other
         if self.squash_borrows {
             BorrowSquashPass::default().run(hugr)?;
         }
