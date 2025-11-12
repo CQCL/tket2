@@ -103,7 +103,7 @@ jobs:
   release:
     name: Release qis-compiler
     needs: [check-tag, build_qis_compiler_wheels]
-    if: ${{ needs.check-tag.outputs.run == 'true' && github.event_name == 'pull_request' }}
+    if: ${{ needs.check-tag.outputs.run == 'true' && github.event_name == 'release' }}
     runs-on: ubuntu-latest
     # always do a full build and test before release of any package
     environment: release
