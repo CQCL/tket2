@@ -80,15 +80,13 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
     ("tket.quantum.QAlloc", 2), ("tket.quantum.CX", 2), ("tket.quantum.MeasureFree", 2)
 ])]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy(
+fn optimise_guppy<'a>(
     #[case] mut hugr: Hugr,
-    #[case] before: impl IntoIterator<Item = (&'static str, usize)>,
+    #[case] before: impl IntoIterator<Item = (&'a str, usize)>,
 ) {
     NormalizeGuppy::default().run(&mut hugr).unwrap();
-    assert_eq!(
-        count_gates(&hugr),
-        before.into_iter().map(|(k, v)| (k.into(), v)).collect()
-    );
+    let before = before.into_iter().map(|(k, v)| (k.into(), v)).collect();
+    assert_eq!(count_gates(&hugr), before);
 
     // TODO: Run pytket passes here, and check that the circuit is as optimized as possible at this point.
     //
