@@ -141,7 +141,7 @@ fn no_optimise_guppy<'a>(
 }
 
 /// Check that each example optimizes to the full extent given by the .opt (and .flat) .hugr files.
-#[should_panic] /// This does not yet pass for any case!
+#[should_panic] // This does not yet pass for any case!
 #[rstest]
 #[case::angles("angles")]
 #[case::false_branch("false_branch")]
