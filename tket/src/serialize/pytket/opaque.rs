@@ -138,7 +138,7 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
             return Ok(());
         };
         if !self.contains(subgraph_id) {
-            return Err(PytketEncodeError::custom(format!("Barrier operation with External Subgraph payload points to an unknown subgraph: {subgraph_id}")));
+            return Err(PytketEncodeError::custom(format!("Barrier operation with external subgraph payload points to an unknown subgraph: {subgraph_id}")));
         }
 
         let payload = OpaqueSubgraphPayload::new_inline(&self[subgraph_id], hugr)?;
