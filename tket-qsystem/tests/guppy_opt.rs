@@ -141,13 +141,13 @@ fn no_optimise_guppy<'a>(
 }
 
 /// Check that each example optimizes to the full extent given by the .opt (and .flat) .hugr files.
-#[should_panic] // This does not yet pass for any case!
 #[rstest]
 #[case::angles("angles")]
 #[case::false_branch("false_branch")]
 #[case::simple_cx("simple_cx")]
 #[case::nested("nested")]
 #[case::ranges("ranges")]
+#[should_panic] // This does not yet pass for any case!
 fn optimise_guppy_full(#[case] name: &str) {
     let hugr = load_guppy_circuit(&format!("{name}/{name}")).unwrap();
     let flat = load_guppy_circuit(&format!("{name}/{name}.flat")).unwrap_or(hugr.clone());
