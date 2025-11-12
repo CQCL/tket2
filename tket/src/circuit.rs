@@ -202,9 +202,7 @@ impl<T: HugrView> Circuit<T> {
                     && !IGNORED_EXTENSION_OPS.contains(&optype.to_smolstr())
                 {
                     count += 1;
-                } else if OpTag::DataflowParent.is_superset(optype.tag())
-                    | matches!(optype, OpType::CFG(_) | OpType::Conditional(_))
-                {
+                } else if self.hugr().first_child(node).is_some() {
                     roots.push(child);
                 }
             }
