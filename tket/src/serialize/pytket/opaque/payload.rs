@@ -16,6 +16,15 @@ use crate::serialize::pytket::{
 
 use super::SubgraphId;
 
+/// Pytket opgroup used to identify opaque barrier operations that encode opaque HUGR subgraphs.
+///
+/// See [`OpaqueSubgraphPayload`].
+#[deprecated(
+    note = "Opaque barriers do not set an opgroup anymore",
+    since = "0.16.1"
+)]
+pub const OPGROUP_OPAQUE_HUGR: &str = "OPAQUE_HUGR";
+
 /// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
 /// detached from the node IDs of the in-memory Hugr.
 ///
