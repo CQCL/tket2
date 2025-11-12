@@ -108,7 +108,7 @@ const BARRIER: &str = r#"{
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
             {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
-            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier"}},
+            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier", "data": "Something invalid"}},
             {"args": [["q", [2]], ["c", [1]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],

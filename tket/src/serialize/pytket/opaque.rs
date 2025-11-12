@@ -6,7 +6,10 @@ mod subgraph;
 
 pub use subgraph::OpaqueSubgraph;
 
-pub use payload::{EncodedEdgeID, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR};
+pub use payload::{EncodedEdgeID, OpaqueSubgraphPayload};
+
+#[expect(deprecated)]
+pub use payload::OPGROUP_OPAQUE_HUGR;
 
 use std::collections::BTreeMap;
 use std::ops::Index;
@@ -117,31 +120,25 @@ impl<N: HugrNode> OpaqueSubgraphs<N> {
     /// If the pytket command is a barrier operation encoding an opaque subgraph, replace its [`OpaqueSubgraphPayload::External`] pointer
     /// if present with a [`OpaqueSubgraphPayload::Inline`] payload.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if a barrier operation with the [`OPGROUP_OPAQUE_HUGR`] opgroup has an invalid payload.
+    /// Ignores barriers whose data payload cannot be decoded into an [`OpaqueSubgraphPayload`].
     pub(super) fn inline_if_payload(
         &self,
         command: &mut tket_json_rs::circuit_json::Command,
         hugr: &impl HugrView<Node = N>,
     ) -> Result<(), PytketEncodeError<N>> {
-        if command.op.op_type != tket_json_rs::OpType::Barrier
-            || command.opgroup.as_deref() != Some(OPGROUP_OPAQUE_HUGR)
-        {
+        if command.op.op_type != tket_json_rs::OpType::Barrier {
             return Ok(());
         }
         let Some(payload) = command.op.data.take() else {
-            return Err(PytketEncodeError::custom(format!(
-                "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has no data payload."
-            )));
+            return Ok(());
         };
 
-        let Some(subgraph_id) = parse_external_payload_id(&payload)? else {
-            // Inline payload, nothing to do.
+        let Some(subgraph_id) = OpaqueSubgraphPayload::parse_external_id(&payload) else {
+            // Not an External Payload, nothing to do.
             return Ok(());
         };
         if !self.contains(subgraph_id) {
-            return Err(PytketEncodeError::custom(format!("Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} points to an unknown subgraph: {subgraph_id}")));
+            return Err(PytketEncodeError::custom(format!("Barrier operation with external subgraph payload points to an unknown subgraph: {subgraph_id}")));
         }
 
         let payload = OpaqueSubgraphPayload::new_inline(&self[subgraph_id], hugr)?;
@@ -167,40 +164,5 @@ impl<N> Default for OpaqueSubgraphs<N> {
             next_local_id: 0,
             opaque_subgraphs: BTreeMap::new(),
         }
-    }
-}
-
-/// Parse an external payload from a string payload.
-///
-/// Returns `None` if the payload is inline.
-///
-/// # Errors
-///
-/// Returns an error if the payload is invalid.
-fn parse_external_payload_id<N: HugrNode>(
-    payload: &str,
-) -> Result<Option<SubgraphId>, PytketEncodeError<N>> {
-    // Check if the payload is inline, without fully copying it to memory.
-    #[derive(serde::Deserialize)]
-    struct PartialPayload {
-        pub typ: String,
-        pub id: Option<SubgraphId>,
-    }
-
-    // Don't do the full deserialization of the payload to avoid allocating a new String for the
-    // encoded envelope.
-    let partial_payload: PartialPayload =
-        serde_json::from_str(payload).map_err(|e: serde_json::Error| {
-            PytketEncodeError::custom(format!(
-            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has corrupt data payload: {e}"
-        ))
-        })?;
-
-    match (partial_payload.typ.as_str(), partial_payload.id) {
-        ("Inline", None) => Ok(None),
-        ("External", Some(id)) => Ok(Some(id)),
-        _ => Err(PytketEncodeError::custom(format!(
-            "Barrier operation with opgroup {OPGROUP_OPAQUE_HUGR} has invalid data payload: {payload:?}"
-        ))),
     }
 }
