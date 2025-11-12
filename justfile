@@ -75,6 +75,13 @@ miri *TEST_ARGS:
 recompile-eccs:
     scripts/compile-test-eccs.sh
 
+# Regenerates all hugr definitions inside `test_files/`
+recompile-test-hugrs:
+    @echo "---- Recompiling example guppy programs ----"
+    just test_files/guppy_examples/recompile
+    @echo "---- Recompiling optimization-target guppy programs ----"
+    just test_files/guppy_optimization/recompile
+
 # Generate serialized declarations for the tket extensions
 gen-extensions:
     cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
