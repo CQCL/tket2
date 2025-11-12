@@ -33,9 +33,7 @@ use crate::circuit::Circuit;
 use crate::serialize::pytket::circuit::{AdditionalNodesAndWires, EncodedCircuitInfo};
 use crate::serialize::pytket::config::PytketEncoderConfig;
 use crate::serialize::pytket::extension::RegisterCount;
-use crate::serialize::pytket::opaque::{
-    OpaqueSubgraph, OpaqueSubgraphPayload, OPGROUP_OPAQUE_HUGR,
-};
+use crate::serialize::pytket::opaque::{OpaqueSubgraph, OpaqueSubgraphPayload};
 
 /// The state of an in-progress [`SerialCircuit`] being built from a [`Circuit`].
 #[derive(derive_more::Debug)]
@@ -672,8 +670,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
         let mut pytket_op = make_tk1_operation(tket_json_rs::OpType::Barrier, args);
         pytket_op.data = Some(serde_json::to_string(&payload).unwrap());
 
-        let opgroup = Some(OPGROUP_OPAQUE_HUGR.to_string());
-        self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, opgroup);
+        self.emit_command(pytket_op, &op_values.qubits, &op_values.bits, None);
         Ok(())
     }
 
@@ -703,7 +700,9 @@ impl<H: HugrView> PytketEncoderContext<H> {
     ///   Normally obtained from a HUGR node's inputs using
     ///   [`PytketEncoderContext::get_input_values`] or allocated via
     ///   [`ValueTracker::new_bit`].
-    /// - `opgroup`: A tket1 operation group identifier, if any.
+    /// - `opgroup`: A tket1 [operation group
+    ///   identifier](https://docs.quantinuum.com/tket/user-guide/manual/manual_circuit.html#modifying-operations-within-circuits),
+    ///   if any.
     pub fn emit_command(
         &mut self,
         pytket_op: circuit_json::Operation,
