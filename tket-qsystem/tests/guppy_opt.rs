@@ -2,6 +2,7 @@
 
 use smol_str::SmolStr;
 use std::collections::HashMap;
+use rayon::iter::ParallelIterator;
 use std::fs;
 use std::io::BufReader;
 use std::path::Path;
@@ -11,6 +12,10 @@ use hugr::algorithms::ComposablePass;
 use hugr::{Hugr, HugrView};
 use rstest::{fixture, rstest};
 use tket::passes::NormalizeGuppy;
+use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
+use tket::Circuit;
+
+use tket1_passes::Tket1Circuit;
 use tket_qsystem::QSystemPass;
 
 const GUPPY_EXAMPLES_DIR: &str = "../test_files/guppy_optimization";
@@ -47,6 +52,24 @@ fn guppy_simple_cx() -> Hugr {
     load_guppy_circuit("simple_cx")
 }
 
+fn run_pytket(h: &mut Hugr) {
+    let circ = Circuit::new(h);
+    let mut encoded =
+        EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
+
+    encoded
+        .par_iter_mut()
+        .for_each(|(_region, serial_circuit)| {
+            let mut circuit_ptr = Tket1Circuit::from_serial_circuit(serial_circuit).unwrap();
+            circuit_ptr
+                .clifford_simp(tket_json_rs::OpType::CX, true)
+                .unwrap();
+            *serial_circuit = circuit_ptr.to_serial_circuit().unwrap();
+        });
+
+    encoded.reassemble_inplace(circ.into_hugr(), None).unwrap();
+}
+
 fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
     let mut counts = HashMap::new();
     for n in h.nodes() {
@@ -67,28 +90,46 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 #[case::angles(guppy_angles(), [
     ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1)
 ])]
-#[case::false_branch(guppy_false_branch(), [
-    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
-])]
 #[case::nested(guppy_nested(), [
     ("tket.quantum.CZ", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 3), ("tket.quantum.MeasureFree", 3)
 ])]
 #[case::ranges(guppy_ranges(), [
     ("tket.quantum.QAlloc", 4), ("tket.quantum.MeasureFree", 4), ("tket.quantum.H", 2), ("tket.quantum.CX", 2)
 ])]
+#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
+fn no_optimise_guppy<'a>(
+    #[case] hugr: Hugr,
+    #[case] before_after: impl IntoIterator<Item = (&'a str, usize)> + Clone,
+) {
+    optimise_guppy(hugr, before_after.clone(), before_after);
+}
+
+#[rstest]
+#[case::false_branch(guppy_false_branch(), [
+    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
+], [
+    ("TKET1.tk1op", 1), ("tket.quantum.QAlloc", 1), ("tket.quantum.H", 1), ("tket.quantum.MeasureFree", 1)
+])]
 #[case::simple_cx(guppy_simple_cx(), [
     ("tket.quantum.QAlloc", 2), ("tket.quantum.CX", 2), ("tket.quantum.MeasureFree", 2)
+], [
+    ("tket.quantum.MeasureFree", 2), ("tket.quantum.QAlloc", 2)
 ])]
-#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
 fn optimise_guppy<'a>(
     #[case] mut hugr: Hugr,
     #[case] before: impl IntoIterator<Item = (&'a str, usize)>,
+    #[case] after: impl IntoIterator<Item = (&'a str, usize)>,
 ) {
     NormalizeGuppy::default().run(&mut hugr).unwrap();
     let before = before.into_iter().map(|(k, v)| (k.into(), v)).collect();
     assert_eq!(count_gates(&hugr), before);
 
-    // TODO: Run pytket passes here, and check that the circuit is as optimized as possible at this point.
+    run_pytket(&mut hugr);
+
+    let after = after.into_iter().map(|(k, v)| (k.into(), v)).collect();
+    assert_eq!(count_gates(&hugr), after);
+
+    // TODO: check that the circuit is as optimized as possible at this point.
     //
     // Most example circuits optimize to identity functions, so it may be possible to check for that.
 
