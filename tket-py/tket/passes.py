@@ -13,6 +13,9 @@ from ._tket.passes import (
     lower_to_pytket,
     badger_optimise,
     chunks,
+    clifford_simp,
+    squash_phasedx_rz,
+    normalize_guppy,
     PullForwardError,
 )
 
@@ -25,6 +28,9 @@ __all__ = [
     "lower_to_pytket",
     "badger_optimise",
     "chunks",
+    "clifford_simp",
+    "squash_phasedx_rz",
+    "normalize_guppy",
     "PullForwardError",
 ]
 

@@ -4,7 +4,7 @@
 //! tracking within a specific region of a HUGR, computing resource paths and
 //! providing efficient lookup of circuit units associated with ports.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::{cmp, iter};
 
 use crate::resource::flow::{DefaultResourceFlow, ResourceFlow};
@@ -16,7 +16,7 @@ use hugr::hugr::views::sibling_subgraph::InvalidSubgraph;
 use hugr::hugr::views::SiblingSubgraph;
 use hugr::ops::OpTrait;
 use hugr::types::Signature;
-use hugr::{Direction, HugrView, IncomingPort, Port, PortIndex, Wire};
+use hugr::{Direction, HugrView, IncomingPort, OutgoingPort, Port, PortIndex, Wire};
 use hugr_core::hugr::internal::PortgraphNodeMap;
 use indexmap::map::Entry;
 use indexmap::IndexMap;
@@ -160,6 +160,14 @@ impl<H: HugrView> ResourceScope<H> {
         Some(*port_map.get(port))
     }
 
+    /// Get the [`ResourceId`] for a given port.
+    ///
+    /// Return None if the port is not a resource port.
+    pub fn get_resource_id(&self, node: H::Node, port: impl Into<Port>) -> Option<ResourceId> {
+        let unit = self.get_circuit_unit(node, port)?;
+        unit.as_resource()
+    }
+
     /// Get all [`CircuitUnit`]s for either the incoming or outgoing ports of a
     /// node.
     pub fn get_circuit_units_slice(
@@ -266,6 +274,41 @@ impl<H: HugrView> ResourceScope<H> {
                 .expect("linear resource");
             self.nodes().contains(&next_node).then_some(next_node)
         })
+    }
+
+    /// Whether any of the ends are reachable from any of the starts, within
+    /// `self`.
+    ///
+    /// Any nodes outside of `self` are ignored.
+    pub fn any_reachable_from(
+        &self,
+        starts: impl IntoIterator<Item = (H::Node, OutgoingPort)>,
+        ends: impl IntoIterator<Item = (H::Node, IncomingPort)>,
+    ) -> bool {
+        let end_nodes = BTreeSet::from_iter(ends.into_iter().map(|(n, _)| n));
+        let Some(max_end) = end_nodes.iter().filter_map(|&n| self.get_position(n)).max() else {
+            return false;
+        };
+        let mut visited_nodes = BTreeSet::new();
+
+        let mut curr_nodes = VecDeque::from_iter(
+            starts
+                .into_iter()
+                .flat_map(|(n, p)| self.hugr().linked_inputs(n, p))
+                .map(|(n, _)| n),
+        );
+
+        while let Some(node) = curr_nodes.pop_front() {
+            if self.get_position(node).is_none_or(|p| p > max_end) || !visited_nodes.insert(node) {
+                continue;
+            }
+            if end_nodes.contains(&node) {
+                return true;
+            }
+            curr_nodes.extend(self.hugr().output_neighbours(node));
+        }
+
+        false
     }
 }
 
@@ -590,6 +633,18 @@ pub(crate) mod tests {
     };
 
     pub type PathEl<N> = (Position, N, Port);
+
+    impl<H: HugrView> ResourceScope<H> {
+        /// A test helper to create scopes with modified positions.
+        ///
+        /// The transformation must preserve the order of positions, i.e. if
+        /// pos[n] < pos[m], then map_pos(pos[n]) < map_pos(pos[m]).
+        pub(crate) fn map_positions(&mut self, map_pos: impl Fn(Position) -> Position) {
+            for node_units in self.circuit_units.values_mut() {
+                node_units.position = map_pos(node_units.position);
+            }
+        }
+    }
 
     /// Statistics about a ResourceScope.
     #[derive(Debug, Clone)]

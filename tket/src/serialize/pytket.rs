@@ -1,25 +1,29 @@
 //! Serialization and deserialization of circuits using the `pytket` JSON format.
 
+mod circuit;
 mod config;
 pub mod decoder;
 pub mod encoder;
 mod error;
 pub mod extension;
+pub mod opaque;
 mod options;
 
+pub use circuit::EncodedCircuit;
 pub use config::{
     default_decoder_config, default_encoder_config, PytketDecoderConfig, PytketEncoderConfig,
     TypeTranslatorSet,
 };
 pub use encoder::PytketEncoderContext;
-pub use error::{OpConvertError, PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError};
+pub use error::{
+    PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError, PytketEncodeOpError,
+};
 pub use extension::PytketEmitter;
 pub use options::{DecodeInsertionTarget, DecodeOptions, EncodeOptions};
 
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::NodeHandle;
 use hugr::{Hugr, Node};
-
 #[cfg(test)]
 mod tests;
 
@@ -31,9 +35,8 @@ use std::{fs, io};
 use tket_json_rs::circuit_json::SerialCircuit;
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 
-use crate::circuit::Circuit;
-
 use self::decoder::PytketDecoderContext;
+use crate::circuit::Circuit;
 
 pub use crate::passes::pytket::lower_to_pytket;
 
@@ -114,7 +117,11 @@ impl TKETDecode for SerialCircuit {
 
     fn decode(&self, options: DecodeOptions) -> Result<Circuit, Self::DecodeError> {
         let mut hugr = Hugr::new();
-        let main_func = self.decode_inplace(&mut hugr, DecodeInsertionTarget::Function, options)?;
+        let main_func = self.decode_inplace(
+            &mut hugr,
+            DecodeInsertionTarget::Function { fn_name: None },
+            options,
+        )?;
         hugr.set_entrypoint(main_func);
         Ok(hugr.into())
     }
@@ -125,32 +132,14 @@ impl TKETDecode for SerialCircuit {
         target: DecodeInsertionTarget,
         options: DecodeOptions,
     ) -> Result<Node, Self::DecodeError> {
-        let config = options
-            .config
-            .unwrap_or_else(|| default_decoder_config().into());
-
-        let mut decoder = PytketDecoderContext::new(
-            self,
-            hugr,
-            target,
-            options.fn_name,
-            options.signature,
-            options.input_params,
-            config,
-        )?;
-        decoder.run_decoder(&self.commands)?;
-        Ok(decoder.finish()?.node())
+        let mut decoder = PytketDecoderContext::new(self, hugr, target, options, None)?;
+        decoder.run_decoder(&self.commands, None)?;
+        Ok(decoder.finish(&[])?.node())
     }
 
     fn encode(circuit: &Circuit, options: EncodeOptions) -> Result<Self, Self::EncodeError> {
-        let config = options
-            .config
-            .unwrap_or_else(|| default_encoder_config().into());
-        let region = circuit.parent();
-        let mut encoder = PytketEncoderContext::new(circuit, region, config)?;
-        encoder.run_encoder(circuit, region)?;
-        let (serial, _) = encoder.finish(circuit, region)?;
-        Ok(serial)
+        let mut encoded = EncodedCircuit::new_standalone(circuit, options)?;
+        Ok(std::mem::take(&mut encoded[circuit.parent()]))
     }
 }
 

@@ -60,8 +60,9 @@ impl PytketTypeTranslator for PreludeEmitter {
         _set: &TypeTranslatorSet,
     ) -> Option<RegisterCount> {
         match typ.name().as_str() {
-            "usize" => Some(RegisterCount::only_bits(64)),
             "qubit" => Some(RegisterCount::only_qubits(1)),
+            // We don't translate `usize`s currently, as none of the operations
+            // that use them are translated to pytket.
             _ => None,
         }
     }
@@ -93,12 +94,16 @@ impl PreludeEmitter {
         let args = op.args().first();
         match args {
             Some(TypeArg::Tuple(elems)) | Some(TypeArg::List(elems)) => {
+                if elems.is_empty() {
+                    return Ok(EncodeStatus::Unsupported);
+                }
+
                 for arg in elems {
                     let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty);
-                    if count.is_none() {
+                    if count.is_none_or(|c| c.params > 0) {
                         return Ok(EncodeStatus::Unsupported);
                     }
                 }

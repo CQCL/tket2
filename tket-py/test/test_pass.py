@@ -1,7 +1,15 @@
 from pytket import Circuit, OpType
 from dataclasses import dataclass
 from typing import Callable, Any
-from tket.passes import badger_pass, greedy_depth_reduce, chunks
+from tket.ops import TketOp
+from tket.passes import (
+    badger_pass,
+    greedy_depth_reduce,
+    chunks,
+    clifford_simp,
+    normalize_guppy,
+    squash_phasedx_rz,
+)
 from tket.circuit import Tk2Circuit
 from tket.pattern import Rule, RuleMatcher
 import hypothesis.strategies as st
@@ -138,3 +146,35 @@ def test_multiple_rules():
 
     out = circ.to_tket1()
     assert out == Circuit(3).CX(0, 1).X(0)
+
+
+def test_clifford_simp():
+    c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+
+    c = clifford_simp(c, allow_swaps=False)
+
+    assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
+
+
+def test_squash_phasedx_rz():
+    c = Tk2Circuit(Circuit(1).Rz(0.25, 0).Rz(0.75, 0).Rz(0.25, 0).Rz(-1.25, 0))
+
+    c = squash_phasedx_rz(c)
+
+    # TODO: We cannot use circuit_cost due to a panic on non-tket ops and there
+    # being some parameter loads...
+    assert c.num_operations() == 0
+
+
+def test_normalize_guppy():
+    """Test the normalize_guppy pass.
+
+    This won't actually do anything useful, we just want to check that the pass
+    runs without errors.
+    """
+
+    c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+
+    c = normalize_guppy(c)
+
+    assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 3

@@ -22,7 +22,7 @@ impl ResourceId {
     /// Create a new ResourceId.
     ///
     /// This method should only be called by ResourceAllocator and tests.
-    pub(super) fn new(id: usize) -> Self {
+    pub(crate) fn new(id: usize) -> Self {
         Self(id)
     }
 

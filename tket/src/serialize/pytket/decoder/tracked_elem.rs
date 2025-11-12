@@ -105,6 +105,11 @@ impl TrackedQubit {
         self.id
     }
 
+    /// Returns the hash of the pytket register for this tracked element.
+    pub(super) fn reg_hash(&self) -> RegisterHash {
+        self.reg_hash
+    }
+
     /// Returns `true` if the element has been overwritten by a new value.
     pub fn is_outdated(&self) -> bool {
         self.outdated
@@ -156,6 +161,11 @@ impl TrackedBit {
     /// Returns the id of this tracked bit.
     pub(super) fn id(&self) -> TrackedBitId {
         self.id
+    }
+
+    /// Returns the hash of the pytket register for this tracked element.
+    pub(super) fn reg_hash(&self) -> RegisterHash {
+        self.reg_hash
     }
 
     /// Returns `true` if the element has been overwritten by a new value.

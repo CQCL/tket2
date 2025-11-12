@@ -6,6 +6,8 @@ use hugr::core::HugrNode;
 use hugr::HugrView;
 use petgraph::unionfind::UnionFind;
 
+use crate::serialize::pytket::opaque::OpaqueSubgraph;
+use crate::serialize::pytket::PytketEncodeError;
 use crate::Circuit;
 
 /// A structure for tracking nodes in the hugr that cannot be encoded as TKET1
@@ -75,7 +77,11 @@ impl<N: HugrNode> UnsupportedTracker<N> {
     /// Once a component has been extracted, no new nodes can be added to it and
     /// calling [`UnsupportedTracker::record_node`] will use a new component
     /// instead.
-    pub fn extract_component(&mut self, node: N) -> BTreeSet<N> {
+    pub fn extract_component(
+        &mut self,
+        node: N,
+        hugr: &impl HugrView<Node = N>,
+    ) -> Result<OpaqueSubgraph<N>, PytketEncodeError<N>> {
         let node_data = self.nodes.remove(&node).unwrap();
         let component = node_data.component;
         let representative = self.components.find_mut(component);
@@ -95,7 +101,7 @@ impl<N: HugrNode> UnsupportedTracker<N> {
             self.nodes.remove(n);
         }
 
-        nodes
+        OpaqueSubgraph::try_from_nodes(nodes, hugr)
     }
 
     /// Returns an iterator over the unextracted nodes in the tracker.

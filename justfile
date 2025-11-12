@@ -6,12 +6,20 @@ _check_nextest_installed:
     #!/usr/bin/env bash
     cargo nextest --version >/dev/null 2>&1 || { echo "❌ cargo-nextest not found. Install binary from https://nexte.st/docs/installation/pre-built-binaries/"; exit 1; }
 
+# Create the default conan profile if it doesn't exist.
+_check_default_conan_profile:
+    #!/usr/bin/env bash
+    uv run conan profile list | grep "default" >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        uv run conan profile detect
+    fi
+
 # Prepare the environment for development, installing all the dependencies and
 # setting up the pre-commit hooks.
-setup:
+setup: _check_default_conan_profile _check_nextest_installed
+    uv tool install conan
     uv sync
     [[ -n "${TKET_JUST_INHIBIT_GIT_HOOKS:-}" ]] || uv run pre-commit install -t pre-commit
-    _check_nextest_installed
 
 # Run the pre-commit checks.
 check: _check_nextest_installed
@@ -71,9 +79,14 @@ recompile-eccs:
 gen-extensions:
     cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
 
+# Update snapshot tests for both rust and python (requires `cargo-insta`)
+update-snapshots: update-snapshots-rs update-snapshots-py
 # Interactively update snapshot tests (requires `cargo-insta`)
-update-snapshots:
+update-snapshots-rs:
     cargo insta review
+# Update python snapshot tests.
+update-snapshots-py *TEST_ARGS:
+    uv run pytest --snapshot-update {{TEST_ARGS}}
 
 # Build the sphinx API documentation
 build-pydocs:

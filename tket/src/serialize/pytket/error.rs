@@ -2,18 +2,20 @@
 
 use derive_more::{Display, Error, From};
 use hugr::core::HugrNode;
+use hugr::envelope::EnvelopeError;
 use hugr::ops::OpType;
 use hugr::Wire;
 use itertools::Itertools;
 use tket_json_rs::register::ElementId;
 
 use crate::serialize::pytket::extension::RegisterCount;
+use crate::serialize::pytket::opaque::SubgraphId;
 
 /// Error type for conversion between pytket operations and tket ops.
 #[derive(Display, derive_more::Debug, Error)]
 #[non_exhaustive]
 #[debug(bounds(N: HugrNode))]
-pub enum OpConvertError<N = hugr::Node> {
+pub enum PytketEncodeOpError<N: HugrNode = hugr::Node> {
     /// Tried to decode a tket1 operation with not enough parameters.
     #[display(
         "Operation {} is missing encoded parameters. Expected at least {expected} but only \"{}\" were specified.",
@@ -46,7 +48,7 @@ pub enum OpConvertError<N = hugr::Node> {
     /// Tried to query the values associated with an unexplored wire.
     ///
     /// This reflects a bug in the operation encoding logic of an operation.
-    #[display("Could not find values associated with wire {wire}.")]
+    #[display("Could not find values associated with {wire}.")]
     WireHasNoValues {
         /// The wire that has no values.
         wire: Wire<N>,
@@ -59,13 +61,20 @@ pub enum OpConvertError<N = hugr::Node> {
         /// The wire that already has values.
         wire: Wire<N>,
     },
+    /// Cannot encode subgraphs with nested structure or non-local edges in an standalone circuit.
+    #[display("Cannot encode subgraphs with nested structure or non-local edges in an standalone circuit. Unsupported nodes: {}",
+        nodes.iter().join(", "),
+    )]
+    UnsupportedStandaloneSubgraph {
+        /// The nodes that are part of the unsupported subgraph.
+        nodes: Vec<N>,
+    },
 }
 
 /// Error type for conversion between tket ops and pytket operations.
 #[derive(derive_more::Debug, Display, Error, From)]
 #[non_exhaustive]
-#[debug(bounds(N: HugrNode))]
-pub enum PytketEncodeError<N = hugr::Node> {
+pub enum PytketEncodeError<N: HugrNode = hugr::Node> {
     /// Tried to encode a non-dataflow region.
     #[display("Cannot encode non-dataflow region at {region} with type {optype}.")]
     NonDataflowRegion {
@@ -76,16 +85,32 @@ pub enum PytketEncodeError<N = hugr::Node> {
     },
     /// Operation conversion error.
     #[from]
-    OpConversionError(OpConvertError<N>),
+    OpEncoding(PytketEncodeOpError<N>),
     /// Custom user-defined error raised while encoding an operation.
     #[display("Error while encoding operation: {msg}")]
     CustomError {
         /// The custom error message
         msg: String,
     },
+    /// Tried to extract an standalone circuit from an
+    /// [`EncodedCircuit`][super::circuit::EncodedCircuit] whose head region is
+    /// not a dataflow container in the original hugr.
+    #[display("Tried to extract an standalone circuit from an `EncodedCircuit` whose head region is not a dataflow container in the original hugr. Head operation {head_op}")]
+    InvalidStandaloneHeadRegion {
+        /// The head region operation that is not a dataflow container.
+        head_op: String,
+    },
+    /// No qubits or bits to attach the barrier command to for unsupported nodes.
+    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to{}",
+        if params.is_empty() {"".to_string()} else {format!(" alongside its parameters [{}]", params.iter().join(", "))}
+    )]
+    UnsupportedSubgraphHasNoRegisters {
+        /// Parameter inputs to the unsupported subgraph.
+        params: Vec<String>,
+    },
 }
 
-impl<N> PytketEncodeError<N> {
+impl<N: HugrNode> PytketEncodeError<N> {
     /// Create a new error with a custom message.
     pub fn custom(msg: impl ToString) -> Self {
         Self::CustomError {
@@ -95,7 +120,7 @@ impl<N> PytketEncodeError<N> {
 }
 
 /// Error type for conversion between tket2 ops and pytket operations.
-#[derive(derive_more::Debug, Display, Error, Clone)]
+#[derive(derive_more::Debug, Display, Error)]
 #[non_exhaustive]
 #[display(
     "{inner}{context}",
@@ -167,7 +192,7 @@ impl From<PytketDecodeErrorInner> for PytketDecodeError {
 
 /// Error variants of [`PytketDecodeError`], signalling errors during the
 /// conversion between tket2 ops and pytket operations.
-#[derive(derive_more::Debug, Display, Error, Clone)]
+#[derive(derive_more::Debug, Display, Error)]
 #[non_exhaustive]
 pub enum PytketDecodeErrorInner {
     /// The pytket circuit uses multi-indexed registers.
@@ -213,15 +238,12 @@ pub enum PytketDecodeErrorInner {
     ///
     /// We don't do any kind of type conversion, so this depends solely on the last operation to update each register.
     #[display(
-        "The expected output types {expected_types} are not compatible with the actual output types {actual_types}, obtained from decoding the pytket circuit",
+        "The expected output types {expected_types} are not compatible with the pytket circuit definition",
         expected_types = expected_types.iter().join(", "),
-        actual_types = actual_types.iter().join(", "),
     )]
     InvalidOutputSignature {
         /// The expected types of the input wires.
         expected_types: Vec<String>,
-        /// The actual types of the input wires.
-        actual_types: Vec<String>,
     },
     /// A pytket operation had some input registers that couldn't be mapped to hugr wires.
     //
@@ -334,6 +356,12 @@ pub enum PytketDecodeErrorInner {
         /// The bit registers expected in the wire.
         bit_args: Vec<String>,
     },
+    /// We couldn't find a parameter of the required input type.
+    #[display("Could not find a parameter of the required input type '{ty}'")]
+    NoMatchingParameter {
+        /// The type that couldn't be found.
+        ty: String,
+    },
     /// The number of pytket registers passed to
     /// `PytketDecodeContext::wire_up_node` or `add_node_with_wires` does not
     /// match the number of registers required by the operation.
@@ -375,6 +403,53 @@ pub enum PytketDecodeErrorInner {
     OutdatedBit {
         /// The bit that was marked as outdated.
         bit: String,
+    },
+    /// Tried to reassemble a circuit from a region that was not contained in the [`EncodedCircuit`][super::circuit::EncodedCircuit].
+    #[display("Tried to reassemble a circuit from region {region}, but the circuit was not found in the `EncodedCircuit`")]
+    NotAnEncodedRegion {
+        /// The region we tried to decode
+        region: String,
+    },
+    /// Tried to decode a circuit into an existing region, but the region was modified since creating the [`EncodedCircuit`][super::circuit::EncodedCircuit].
+    #[display("Tried to decode a circuit into region {region}, but the region was modified since creating the `EncodedCircuit`. New region optype: {new_optype}")]
+    IncompatibleTargetRegion {
+        /// The region we tried to decode
+        region: hugr::Node,
+        /// The new region optype
+        new_optype: OpType,
+    },
+    /// The pytket circuit contains an opaque barrier representing a unsupported subgraph in the original HUGR,
+    /// but the corresponding subgraph is not present in the [`EncodedCircuit`][super::circuit::EncodedCircuit] structure.
+    #[display("The pytket circuit contains a barrier representing an opaque subgraph in the original HUGR, but the corresponding subgraph is not present in the `EncodedCircuit` structure. Subgraph ID {id}")]
+    OpaqueSubgraphNotFound {
+        /// The ID of the opaque subgraph.
+        id: SubgraphId,
+    },
+    /// The stored subgraph payload was not a valid flat subgraph in a dataflow region of the target hugr.
+    #[display("The stored subgraph {id} was not a valid flat subgraph in a dataflow region of the target hugr.")]
+    ExternalSubgraphWasModified {
+        /// The ID of the opaque subgraph.
+        id: SubgraphId,
+    },
+    /// Cannot decode Hugr from an unsupported subgraph payload in a pytket barrier operation.
+    #[display("Cannot decode Hugr from an inline subgraph payload in a pytket barrier operation. {source}")]
+    UnsupportedSubgraphInlinePayload {
+        /// The envelope decoding error.
+        source: EnvelopeError,
+    },
+    /// Cannot translate a wire from one type to another.
+    #[display("Cannot translate {wire} from type {initial_type} to type {target_type}{}",
+        context.as_ref().map(|s| format!(". {s}")).unwrap_or_default()
+    )]
+    CannotTranslateWire {
+        /// The wire that couldn't be translated.
+        wire: Wire,
+        /// The initial type of the wire.
+        initial_type: String,
+        /// The target type of the wire.
+        target_type: String,
+        /// The error that occurred while translating the wire.
+        context: Option<String>,
     },
 }
 
