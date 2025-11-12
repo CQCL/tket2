@@ -193,7 +193,7 @@ mod tests {
     use super::*;
     use rstest::*;
 
-    const CIRC_STR: &str = include_str!("../../test_files/2cx.json");
+    const CIRC_STR: &str = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0.0", "qubits": [["q", [0]], ["q", [1]]]}"#;
 
     // Mutex to ensure tests don't run in parallel, due to TKET1 bug, see
     // https://github.com/CQCL/tket/issues/2009
