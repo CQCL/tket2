@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.12](https://github.com/CQCL/tket2/compare/tket-py-v0.12.11...tket-py-v0.12.12) (2025-11-13)
+
+
+### Bug Fixes
+
+* document missing passes and types modules with sphinx ([#1259](https://github.com/CQCL/tket2/issues/1259)) ([07667a7](https://github.com/CQCL/tket2/commit/07667a765d21f488f7e40f8132f0fdc26c6cba80))
+
 ## [0.12.11](https://github.com/CQCL/tket2/compare/tket-py-v0.12.10...tket-py-v0.12.11) (2025-11-13)
 
 
