@@ -442,6 +442,16 @@ impl WireTracker {
         &self.bits[id.0]
     }
 
+    /// Returns `true` if the tracked qubit has been initialized.
+    ///
+    /// Qubits registers that have been registered but not associated to any
+    /// wires do not need to be consumed at the end of the decoding.
+    pub(super) fn qubit_is_initialized(&self, qubit: &TrackedQubit) -> bool {
+        self.qubit_wires
+            .get(&qubit.id())
+            .is_some_and(|ws| !ws.is_empty())
+    }
+
     /// Returns the list of known pytket registers, in the order we expect to
     /// see them at the output.
     ///
