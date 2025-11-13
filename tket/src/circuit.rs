@@ -194,7 +194,7 @@ impl<T: HugrView> Circuit<T> {
         Self: Sized,
     {
         let mut count = 0;
-        let mut roots = vec![self.parent()];
+        let mut roots = vec![self.hugr().module_root()];
         while let Some(node) = roots.pop() {
             for child in self.hugr().children(node) {
                 let optype = self.hugr().get_optype(child);
@@ -202,7 +202,7 @@ impl<T: HugrView> Circuit<T> {
                     && !IGNORED_EXTENSION_OPS.contains(&optype.to_smolstr())
                 {
                     count += 1;
-                } else if OpTag::DataflowParent.is_superset(optype.tag()) {
+                } else if self.hugr().first_child(node).is_some() {
                     roots.push(child);
                 }
             }
