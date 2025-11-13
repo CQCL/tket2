@@ -4,6 +4,7 @@
 
 .. autoclass:: {{ objname }}
    :members:
+   :exclude-members: __annotate_func__
    :undoc-members:
    :special-members:
 
