@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.22.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.22.0...tket-qsystem-v0.22.1) - 2025-11-13
+
+### New Features
+
+- `NormalizeGuppy` pass to simplify generated structure ([#1220](https://github.com/CQCL/tket2/pull/1220))
+
+### Testing
+
+- regenerate guppy_opt examples, and count gates ([#1249](https://github.com/CQCL/tket2/pull/1249))
+
 ## [0.22.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.21.0...tket-qsystem-v0.22.0) - 2025-10-20
 
 ### New Features
