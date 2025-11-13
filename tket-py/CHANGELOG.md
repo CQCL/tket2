@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.11](https://github.com/CQCL/tket2/compare/tket-py-v0.12.10...tket-py-v0.12.11) (2025-11-13)
+
+
+### Bug Fixes
+
+* **ci:** Make wheels compatible with MacOS 15.0 (https://github.com/CQCL/tket2/issues/1248) ([49c5996](https://github.com/CQCL/tket2/commit/49c599630a8e1a45f5a1e134a6783f787a5dbed6))
+* Don't use opgroup in pytket barrier encoding (https://github.com/CQCL/tket2/issues/1251) ([49c5996](https://github.com/CQCL/tket2/commit/49c599630a8e1a45f5a1e134a6783f787a5dbed6))
+* guppy_to_circuit always returns num_operations = 0 (https://github.com/CQCL/tket2/issues/1200) ([49c5996](https://github.com/CQCL/tket2/commit/49c599630a8e1a45f5a1e134a6783f787a5dbed6))
+* **pytket-decoder:** Avoid QAllocating and immediately freeing qubits ([#1256](https://github.com/CQCL/tket2/issues/1256)) ([228ff52](https://github.com/CQCL/tket2/commit/228ff52c890fd3ad0a461d06abe88c64205c179f))
+
 ## [0.12.10](https://github.com/CQCL/tket2/compare/tket-py-v0.12.9...tket-py-v0.12.10) (2025-11-11)
 
 
