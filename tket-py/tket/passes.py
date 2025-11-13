@@ -6,7 +6,7 @@ from pytket.passes import CustomPass, BasePass
 
 from tket import optimiser
 
-# Re-export native bindings
+# Re-export native bindings.
 from ._tket.passes import (
     CircuitChunks,
     greedy_depth_reduce,
