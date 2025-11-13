@@ -444,7 +444,7 @@ impl WireTracker {
 
     /// Returns `true` if the tracked qubit has been initialized.
     ///
-    /// Qubits registers that have been registered but not associated to any
+    /// Qubits that have been registered but not associated to any
     /// wires do not need to be consumed at the end of the decoding.
     pub(super) fn qubit_is_initialized(&self, qubit: &TrackedQubit) -> bool {
         self.qubit_wires
