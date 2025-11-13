@@ -13,4 +13,6 @@
    tket.optimiser
    tket.pattern
    tket.rewrite
+   tket.passes
+   tket.types
 ```
