@@ -9,9 +9,9 @@ _check_nextest_installed:
 # Create the default conan profile if it doesn't exist.
 _check_default_conan_profile:
     #!/usr/bin/env bash
-    uv run conan profile list | grep "default" >/dev/null 2>&1
+    uvx conan profile list | grep "default" >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        uv run conan profile detect
+        uvx conan profile detect
     fi
 
 # Prepare the environment for development, installing all the dependencies and
