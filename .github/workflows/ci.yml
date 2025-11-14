@@ -126,6 +126,10 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-codspeed
         run: cargo binstall cargo-codspeed --force
@@ -155,6 +159,10 @@ jobs:
           toolchain: "stable"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - uses: taiki-e/install-action@nextest
       - name: Build with no features
         run: cargo nextest r --verbose -p tket -p tket-py -p tket-qsystem --no-default-features --no-run
