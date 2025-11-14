@@ -804,7 +804,7 @@ fn json_roundtrip(
 
 #[rstest]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-#[case::barenco_tof_10("../test_files/barenco_tof_10.json")]
+#[case::barenco_tof_10("../test_files/pytket/barenco_tof_10.json")]
 fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();

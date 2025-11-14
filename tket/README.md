@@ -27,7 +27,7 @@ Defining a circuit in TKET is currently done by using the low-level [hugr Builde
 use tket::{Circuit, Hugr};
 
 // Load a tket1 circuit.
-let mut circ: Hugr = tket::json::load_tk1_json_file("test_files/barenco_tof_5.json").unwrap();
+let mut circ: Hugr = tket::json::load_tk1_json_file("test_files/pytket/barenco_tof_5.json").unwrap();
 
 assert_eq!(circ.qubit_count(), 9);
 assert_eq!(circ.num_gates(), 170);
