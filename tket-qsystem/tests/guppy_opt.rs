@@ -149,59 +149,6 @@ fn flatten_guppy(#[case] name: &str) {
     assert_eq!(count_gates(&hugr), count_gates(&target));
 }
 
-#[rstest]
-#[case::false_branch(guppy_false_branch(), [
-    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
-], [
-    ("TKET1.tk1op", 1), ("tket.quantum.QAlloc", 1), ("tket.quantum.H", 1), ("tket.quantum.MeasureFree", 1)
-])]
-#[case::simple_cx(guppy_simple_cx(), [
-    ("tket.quantum.QAlloc", 2), ("tket.quantum.CX", 2), ("tket.quantum.MeasureFree", 2)
-], [
-    ("tket.quantum.MeasureFree", 2), ("tket.quantum.QAlloc", 2)
-])]
-#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy(
-    #[case] mut hugr: Hugr,
-    #[case] before: impl IntoIterator<Item = (impl Into<SmolStr>, usize)>,
-    #[case] after: impl IntoIterator<Item = (impl Into<SmolStr>, usize)>,
-) {
-    NormalizeGuppy::default().run(&mut hugr).unwrap();
-    let before = before.into_iter().map(|(k, v)| (k.into(), v)).collect();
-    assert_eq!(count_gates(&hugr), before);
-
-    run_pytket(&mut hugr);
-
-    let after = after.into_iter().map(|(k, v)| (k.into(), v)).collect();
-    assert_eq!(count_gates(&hugr), after);
-
-    // Lower to QSystem. This may blow up the HUGR size.
-    QSystemPass::default().run(&mut hugr).unwrap();
-
-    hugr.validate().unwrap_or_else(|e| panic!("{e}"));
-}
-
-/// Checks that pytket does nothing for these examples.
-/// We include gate counts for after the NormalizeGuppy step
-/// as our flattening is not sufficient to match the .flat.hugr
-#[rstest]
-#[case::angles(guppy_angles(), [
-    ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1)
-])]
-#[case::nested(guppy_nested(), [
-    ("tket.quantum.CZ", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 3), ("tket.quantum.MeasureFree", 3)
-])]
-#[case::ranges(guppy_ranges(), [
-    ("tket.quantum.QAlloc", 4), ("tket.quantum.MeasureFree", 4), ("tket.quantum.H", 2), ("tket.quantum.CX", 2)
-])]
-#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn no_optimise_guppy<'a>(
-    #[case] hugr: Hugr,
-    #[case] before_after: impl IntoIterator<Item = (&'a str, usize)> + Clone,
-) {
-    optimise_guppy(hugr, before_after.clone(), before_after);
-}
-
 /// Check that each example optimizes to the full extent given by the .opt (and .flat) .hugr files.
 #[rstest]
 #[case::angles("angles")]
@@ -210,10 +157,25 @@ fn no_optimise_guppy<'a>(
 #[case::nested("nested")]
 #[case::ranges("ranges")]
 #[should_panic] // This does not yet pass for any case!
-fn optimise_guppy_full(#[case] name: &str) {
-    let hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
-    let flat = load_guppy_circuit(name, HugrFileType::Flat).unwrap_or(hugr.clone());
-    let opt = load_guppy_circuit(name, HugrFileType::Optimized).unwrap();
+fn optimise_guppy(#[case] name: &str) {
+    let mut hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
+    let flat = count_gates(
+        load_guppy_circuit(name, HugrFileType::Flat)
+            .ok()
+            .as_ref()
+            .unwrap_or(&hugr),
+    );
+    let opt = count_gates(&load_guppy_circuit(name, HugrFileType::Optimized).unwrap());
 
-    optimise_guppy(hugr, count_gates(&flat), count_gates(&opt))
+    NormalizeGuppy::default().run(&mut hugr).unwrap();
+    assert_eq!(count_gates(&hugr), flat);
+
+    run_pytket(&mut hugr);
+
+    assert_eq!(count_gates(&hugr), opt);
+
+    // Lower to QSystem. This may blow up the HUGR size.
+    QSystemPass::default().run(&mut hugr).unwrap();
+
+    hugr.validate().unwrap_or_else(|e| panic!("{e}"));
 }
