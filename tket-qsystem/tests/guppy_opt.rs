@@ -20,8 +20,19 @@ use tket_qsystem::QSystemPass;
 
 const GUPPY_EXAMPLES_DIR: &str = "../test_files/guppy_optimization";
 
-fn load_guppy_circuit(path: &str) -> std::io::Result<Hugr> {
-    let file = Path::new(GUPPY_EXAMPLES_DIR).join(format!("{path}.hugr"));
+enum HugrFileType {
+    Original,
+    Flat,
+    Optimized,
+}
+
+fn load_guppy_circuit(name: &str, file_type: HugrFileType) -> std::io::Result<Hugr> {
+    let suffix = match file_type {
+        HugrFileType::Original => "",
+        HugrFileType::Flat => ".flat",
+        HugrFileType::Optimized => ".opt",
+    };
+    let file = Path::new(GUPPY_EXAMPLES_DIR).join(format!("{name}/{name}{suffix}.hugr"));
     let reader = fs::File::open(file)?;
     let reader = BufReader::new(reader);
     Ok(Hugr::load(reader, None).unwrap())
@@ -29,27 +40,27 @@ fn load_guppy_circuit(path: &str) -> std::io::Result<Hugr> {
 
 #[fixture]
 fn guppy_angles() -> Hugr {
-    load_guppy_circuit("angles/angles").unwrap()
+    load_guppy_circuit("angles", HugrFileType::Original).unwrap()
 }
 
 #[fixture]
 fn guppy_false_branch() -> Hugr {
-    load_guppy_circuit("false_branch/false_branch").unwrap()
+    load_guppy_circuit("false_branch", HugrFileType::Original).unwrap()
 }
 
 #[fixture]
 fn guppy_nested() -> Hugr {
-    load_guppy_circuit("nested/nested").unwrap()
+    load_guppy_circuit("nested", HugrFileType::Original).unwrap()
 }
 
 #[fixture]
 fn guppy_ranges() -> Hugr {
-    load_guppy_circuit("ranges/ranges").unwrap()
+    load_guppy_circuit("ranges", HugrFileType::Original).unwrap()
 }
 
 #[fixture]
 fn guppy_simple_cx() -> Hugr {
-    load_guppy_circuit("simple_cx/simple_cx").unwrap()
+    load_guppy_circuit("simple_cx", HugrFileType::Original).unwrap()
 }
 
 fn run_pytket(h: &mut Hugr) {
@@ -149,9 +160,9 @@ fn no_optimise_guppy<'a>(
 #[case::ranges("ranges")]
 #[should_panic] // This does not yet pass for any case!
 fn optimise_guppy_full(#[case] name: &str) {
-    let hugr = load_guppy_circuit(&format!("{name}/{name}")).unwrap();
-    let flat = load_guppy_circuit(&format!("{name}/{name}.flat")).unwrap_or(hugr.clone());
-    let opt = load_guppy_circuit(&format!("{name}/{name}.opt")).unwrap();
+    let hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
+    let flat = load_guppy_circuit(name, HugrFileType::Flat).unwrap_or(hugr.clone());
+    let opt = load_guppy_circuit(name, HugrFileType::Optimized).unwrap();
 
     optimise_guppy(hugr, count_gates(&flat), count_gates(&opt))
 }
