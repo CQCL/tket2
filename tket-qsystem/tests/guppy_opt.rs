@@ -10,7 +10,7 @@ use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
 
 use hugr::algorithms::ComposablePass;
 use hugr::{Hugr, HugrView};
-use rstest::{fixture, rstest};
+use rstest::rstest;
 use tket::passes::NormalizeGuppy;
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::Circuit;
@@ -36,31 +36,6 @@ fn load_guppy_circuit(name: &str, file_type: HugrFileType) -> std::io::Result<Hu
     let reader = fs::File::open(file)?;
     let reader = BufReader::new(reader);
     Ok(Hugr::load(reader, None).unwrap())
-}
-
-#[fixture]
-fn guppy_angles() -> Hugr {
-    load_guppy_circuit("angles", HugrFileType::Original).unwrap()
-}
-
-#[fixture]
-fn guppy_false_branch() -> Hugr {
-    load_guppy_circuit("false_branch", HugrFileType::Original).unwrap()
-}
-
-#[fixture]
-fn guppy_nested() -> Hugr {
-    load_guppy_circuit("nested", HugrFileType::Original).unwrap()
-}
-
-#[fixture]
-fn guppy_ranges() -> Hugr {
-    load_guppy_circuit("ranges", HugrFileType::Original).unwrap()
-}
-
-#[fixture]
-fn guppy_simple_cx() -> Hugr {
-    load_guppy_circuit("simple_cx", HugrFileType::Original).unwrap()
 }
 
 fn run_pytket(h: &mut Hugr) {
