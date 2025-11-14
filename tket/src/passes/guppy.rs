@@ -9,6 +9,8 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::inline_dfg::InlineDFGError;
 use hugr::Node;
 
+use crate::passes::borrow_squash::{BorrowSquashError, BorrowSquashPass};
+
 /// Normalize the structure of a Guppy-generated circuit into something that can be optimized by tket.
 ///
 /// This is a mixture of global optimization passes, and operations that optimize the entrypoint.
@@ -23,7 +25,9 @@ pub struct NormalizeGuppy {
     /// Whether to remove dead functions.
     dead_funcs: bool,
     /// Whether to inline DFG operations.
-    inline: bool,
+    inline_dfgs: bool,
+    /// Whether to squash BorrowArray borrow/return ops
+    squash_borrows: bool,
 }
 
 impl NormalizeGuppy {
@@ -49,7 +53,12 @@ impl NormalizeGuppy {
     }
     /// Set whether to inline DFG operations.
     pub fn inline_dfgs(&mut self, inline: bool) -> &mut Self {
-        self.inline = inline;
+        self.inline_dfgs = inline;
+        self
+    }
+    /// Set whether to squash BorrowArray borrow/return ops
+    pub fn squash_borrows(&mut self, squash: bool) -> &mut Self {
+        self.squash_borrows = squash;
         self
     }
 }
@@ -61,7 +70,8 @@ impl Default for NormalizeGuppy {
             constant_fold: true,
             untuple: true,
             dead_funcs: true,
-            inline: true,
+            inline_dfgs: true,
+            squash_borrows: true,
         }
     }
 }
@@ -74,9 +84,7 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
             NormalizeCFGPass::default().run(hugr)?;
         }
         if self.untuple {
-            UntuplePass::new(UntupleRecursive::Recursive)
-                .run(hugr)
-                .map_err(NormalizeGuppyErrors::Untuple)?;
+            UntuplePass::new(UntupleRecursive::Recursive).run(hugr)?;
         }
         if self.constant_fold {
             ConstantFoldPass::default().run(hugr)?;
@@ -84,8 +92,11 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         if self.dead_funcs {
             RemoveDeadFuncsPass::default().run(hugr)?;
         }
-        if self.inline {
+        if self.inline_dfgs {
             InlineDFGsPass.run(hugr).unwrap_or_else(|e| match e {})
+        }
+        if self.squash_borrows {
+            BorrowSquashPass::default().run(hugr)?;
         }
 
         Ok(())
@@ -105,6 +116,8 @@ pub enum NormalizeGuppyErrors {
     DeadFuncs(RemoveDeadFuncsError),
     /// Error while inlining DFG operations.
     Inline(InlineDFGError),
+    /// Error in squashing Borrow/Return operations.
+    BorrowSquash(BorrowSquashError),
 }
 
 #[cfg(test)]
