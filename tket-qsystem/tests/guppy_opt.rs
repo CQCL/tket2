@@ -99,6 +99,57 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 ///
 
 #[rstest]
+#[should_panic = "xfail"]
+#[case::angles("angles", Some(vec![
+    ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1)
+]))]
+#[should_panic = "xfail"]
+#[case::simple_cx("simple_cx", Some(vec![
+    ("tket.quantum.QAlloc", 2), ("tket.quantum.MeasureFree", 2),
+]))]
+#[should_panic = "xfail"]
+#[case::nested("nested", Some(vec![
+    ("tket.quantum.CZ", 6), ("tket.quantum.QAlloc", 3), ("tket.quantum.MeasureFree", 3), ("tket.quantum.H", 6)
+]))]
+#[should_panic = "xfail"]
+#[case::ranges("ranges", Some(vec![
+    ("tket.quantum.H", 8), ("tket.quantum.MeasureFree", 4), ("tket.quantum.QAlloc", 4), ("tket.quantum.CX", 6)
+]))]
+#[should_panic = "xfail"]
+#[case::false_branch("false_branch", Some(vec![
+    ("TKET1.tk1op", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
+]))]
+#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
+fn optimise_guppy_pytket(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
+    let mut hugr = load_guppy_circuit(name, HugrFileType::Flat)
+        .unwrap_or_else(|_| load_guppy_circuit(name, HugrFileType::Original).unwrap());
+    run_pytket(&mut hugr);
+    let should_xfail = xfail.is_some();
+    let expected_counts = match xfail {
+        Some(counts) => counts.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        None => count_gates(&load_guppy_circuit(name, HugrFileType::Optimized).unwrap()),
+    };
+    assert_eq!(count_gates(&hugr), expected_counts);
+    if should_xfail {
+        panic!("xfail");
+    }
+}
+
+#[rstest]
+#[case::angles("angles")]
+#[should_panic]
+#[case::nested("nested")]
+#[should_panic]
+#[case::ranges("ranges")]
+#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
+fn flatten_guppy(#[case] name: &str) {
+    let mut hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
+    NormalizeGuppy::default().run(&mut hugr).unwrap();
+    let target = load_guppy_circuit(name, HugrFileType::Flat).unwrap();
+    assert_eq!(count_gates(&hugr), count_gates(&target));
+}
+
+#[rstest]
 #[case::false_branch(guppy_false_branch(), [
     ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
 ], [
