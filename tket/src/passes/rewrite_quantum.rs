@@ -58,11 +58,11 @@ impl Default for RewriteQuantumPass {
 
 impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
     type Error = RewriteQuantumPassError;
-    type Result = ();
+    type Result = bool;
 
-    fn run(&self, hugr: &mut H) -> Result<(), Self::Error> {
-        let _ = self.lowerer(self.find_or_create_funcs(hugr)?).run(hugr)?;
-        Ok(())
+    fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
+        let r = self.lowerer(self.find_or_create_funcs(hugr)?).run(hugr)?;
+        Ok(r)
     }
 }
 
