@@ -117,7 +117,7 @@ class CliffordSimplification(Tket1Pass):
 
 @dataclass
 class SquashRzPhasedX(Tket1Pass):
-    traverse_subcircuits: bool
+    traverse_subcircuits: bool = True
 
     def _apply_pass(
         self,
