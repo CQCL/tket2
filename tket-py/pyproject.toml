@@ -38,6 +38,7 @@ dependencies = [
 [tool.uv.sources]
 tket_eccs = { workspace = true }
 tket_exts = { workspace = true }
+hugr = { git = "https://github.com/CQCL/hugr", branch = "cm/overwrite_hugr_method", subdirectory = "hugr-py" }
 
 [project.urls]
 homepage = "https://github.com/CQCL/tket2/tree/main/tket-py"

@@ -94,7 +94,7 @@ class Tket1Pass(ComposablePass, Protocol):
     def __call__(self, hugr: Hugr) -> None:
         compiler_state = Tk2Circuit.from_bytes(hugr.to_bytes())
         new_compiler_state = self._apply_pass(compiler_state)
-        hugr = Hugr.from_str(new_compiler_state.to_str())
+        hugr.overwrite_hugr(new_hugr=Hugr.from_str(new_compiler_state.to_str()))
 
 
 @dataclass
