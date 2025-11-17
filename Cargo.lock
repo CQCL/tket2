@@ -2727,6 +2727,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "petgraph 0.8.3",
+ "rayon",
  "rstest",
  "serde",
  "serde_json",
@@ -2734,6 +2735,7 @@ dependencies = [
  "strum",
  "tket",
  "tket-json-rs",
+ "tket1-passes",
  "typetag",
 ]
 
