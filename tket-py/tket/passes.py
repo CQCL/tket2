@@ -1,5 +1,4 @@
 from pathlib import Path
-from functools import partial
 from typing import Optional, Literal, Protocol
 from dataclasses import dataclass
 from hugr.passes._composable_pass import ComposablePass
@@ -94,33 +93,38 @@ class Tket1Pass(ComposablePass, Protocol):
 
     def __call__(self, hugr: Hugr) -> None:
         compiler_state = Tk2Circuit.from_bytes(hugr.to_bytes())
-        compiler_state = self._apply_pass(compiler_state)
-        hugr = Hugr.from_str(compiler_state.to_str())
+        new_compiler_state = self._apply_pass(compiler_state)
+        hugr = Hugr.from_str(new_compiler_state.to_str())
 
 
 @dataclass
 class CliffordSimplification(Tket1Pass):
-    def __init__(
+    allow_swaps: bool = True
+    traverse_subcircuits: bool = True
+
+    def _apply_pass(
         self,
+        compiler_state: Tk2Circuit,
         allow_swaps: bool = True,
         traverse_subcircuits: bool = True,
-    ) -> None:
-        self.func = partial(
-            clifford_simp,
+    ) -> Tk2Circuit:
+        return clifford_simp(
+            compiler_state,
             allow_swaps=allow_swaps,
             traverse_subcircuits=traverse_subcircuits,
         )
 
-    def _apply_pass(self, compiler_state: Tk2Circuit) -> Tk2Circuit:
-        return self.func(compiler_state)
-
 
 @dataclass
 class SquashRzPhasedX(Tket1Pass):
-    def __init__(self, traverse_subcircuits: bool = True) -> None:
-        self.func = partial(
-            squash_phasedx_rz, traverse_subcircuits=traverse_subcircuits
-        )
+    traverse_subcircuits: bool
 
-    def _apply_pass(self, compiler_state: Tk2Circuit) -> Tk2Circuit:
-        return self.func(compiler_state)
+    def _apply_pass(
+        self,
+        compiler_state: Tk2Circuit,
+        traverse_subcircuits: bool = True,
+    ) -> Tk2Circuit:
+        return squash_phasedx_rz(
+            compiler_state,
+            traverse_subcircuits=traverse_subcircuits,
+        )
