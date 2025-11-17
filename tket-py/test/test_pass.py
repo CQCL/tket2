@@ -17,7 +17,6 @@ import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
 from hugr.build.base import Hugr
-from hugr.hugr.render import DotRenderer
 
 import pytest
 
@@ -184,12 +183,12 @@ def test_normalize_guppy():
 
 
 def test_clifford_simp_class() -> None:
+    cx_circ = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
+    hugr = Hugr.from_str(cx_circ.to_str())
+
     cliff_pass = CliffordSimplification(allow_swaps=True)
 
-    # c = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
-    c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
-
-    hugr = Hugr.from_str(c.to_str())
-
+    # Simplify 2 CX circuit to a single CX with an implicit swap.
     cliff_pass(hugr)
-    DotRenderer().store(hugr, "cliff_test")
+    opt_circ = Tk2Circuit.from_bytes(hugr.to_bytes())
+    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
