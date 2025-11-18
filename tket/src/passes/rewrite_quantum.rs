@@ -1,24 +1,36 @@
 #![allow(missing_docs)]
 
-use std::collections::BTreeMap;
 use itertools::Itertools as _;
+use std::collections::BTreeMap;
 
 use hugr::{
     algorithms::{
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, ReplaceTypes,
     },
-    builder::{handle::Outputs, BuildError, Container, DFGBuilder, Dataflow, DataflowHugr as _, DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer},
-    extension::{prelude::{bool_t, qb_t}, simple_op::MakeOpDef, SignatureError},
+    builder::{
+        handle::Outputs, BuildError, Container, DFGBuilder, Dataflow, DataflowHugr as _,
+        DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
+    },
+    extension::{
+        prelude::{bool_t, qb_t},
+        simple_op::MakeOpDef,
+        SignatureError,
+    },
     hugr::{hugrmut::HugrMut, ValidationError},
     ops::{handle::NodeHandle as _, Call, DataflowOpTrait, OpType},
-    std_extensions::{arithmetic::int_types::INT_TYPES, collections::borrow_array::BArrayOpBuilder},
+    std_extensions::{
+        arithmetic::int_types::INT_TYPES, collections::borrow_array::BArrayOpBuilder,
+    },
     types::{PolyFuncType, Type, TypeRV},
     HugrView, Node,
 };
 use strum::IntoEnumIterator as _;
 
-use crate::{extension::bool::{bool_type, BoolOpBuilder}, TketOp};
+use crate::{
+    extension::bool::{bool_type, BoolOpBuilder},
+    TketOp,
+};
 
 #[derive(derive_more::Error, Debug, derive_more::Display, derive_more::From)]
 #[non_exhaustive]
@@ -145,7 +157,6 @@ impl RewriteQuantumPass {
                     // TketOps return hugr bools, but guppy functions return
                     // opaque tket2 bools. Gross.  We insert wrapper functions
                     // for these two ops that read the result.
-
                     TketOp::Measure => {
                         let wrapper_sig = {
                             let mut sig = expected_sig.clone();
@@ -159,20 +170,31 @@ impl RewriteQuantumPass {
                         let (decl_hugr, (call_node, call_port)) = {
                             let mut builder = ModuleBuilder::new();
                             let dummy = builder.declare(name, expected_sig.clone().into())?;
-                            let (wrapper, call)  = {
-                                let mut wrapper = builder.define_function(format!("_Wrapped_{name}"), wrapper_sig.clone())?;
+                            let (wrapper, call) = {
+                                let mut wrapper = builder.define_function(
+                                    format!("_Wrapped_{name}"),
+                                    wrapper_sig.clone(),
+                                )?;
                                 let call = Call::try_new(expected_sig.clone().into(), [])?;
                                 let port = call.called_function_port();
                                 let call = wrapper.add_dataflow_op(call, wrapper.input_wires())?;
-                                wrapper.hugr_mut().connect(dummy.node(), 0, call.node(),  port);
-                                let call_outs: Vec<_> = itertools::zip_eq(wrapper_sig.output().iter(), call.outputs()).map(|(ty, wire)| {
-                                    if ty == &bool_t() {
-                                        Ok::<_,BuildError>(wrapper.add_bool_read(wire)?[0])
-                                    } else {
-                                        Ok(wire)
-                                    }
-                                }).try_collect()?;
-                                (wrapper.finish_with_outputs(call_outs)?.node(), (call.node(), port))
+                                wrapper
+                                    .hugr_mut()
+                                    .connect(dummy.node(), 0, call.node(), port);
+                                let call_outs: Vec<_> =
+                                    itertools::zip_eq(wrapper_sig.output().iter(), call.outputs())
+                                        .map(|(ty, wire)| {
+                                            if ty == &bool_t() {
+                                                Ok::<_, BuildError>(wrapper.add_bool_read(wire)?[0])
+                                            } else {
+                                                Ok(wire)
+                                            }
+                                        })
+                                        .try_collect()?;
+                                (
+                                    wrapper.finish_with_outputs(call_outs)?.node(),
+                                    (call.node(), port),
+                                )
                             };
 
                             let mut hugr = builder.finish_hugr()?;
@@ -181,10 +203,10 @@ impl RewriteQuantumPass {
                         };
                         let ir = hugr.insert_hugr(mod_node, decl_hugr);
                         hugr.disconnect(ir.node_map[&call_node], call_port);
-                        hugr.connect(func_node, 0, ir.node_map[&call_node],  call_port);
+                        hugr.connect(func_node, 0, ir.node_map[&call_node], call_port);
                         ir.inserted_entrypoint
                     }
-                    _ => func_node
+                    _ => func_node,
                 }
             };
             let _ = func_nodes.insert(op, node);
@@ -192,7 +214,10 @@ impl RewriteQuantumPass {
         Ok(func_nodes)
     }
 
-    pub fn lowerer(&self, funcs: BTreeMap<TketOp, Node>) -> Result<ReplaceTypes, RewriteQuantumPassError> {
+    pub fn lowerer(
+        &self,
+        funcs: BTreeMap<TketOp, Node>,
+    ) -> Result<ReplaceTypes, RewriteQuantumPassError> {
         let mut lw = ReplaceTypes::default();
         lw.replace_type(
             qb_t().as_extension().cloned().unwrap(),
@@ -233,11 +258,14 @@ mod test {
         let measure_node = {
             let t = &pass.qubit_to_ty;
             let mut measure = module
-                .define_function("_Measure", Signature::new(t.clone(), vec![t.clone(), bool_type()]))
+                .define_function(
+                    "_Measure",
+                    Signature::new(t.clone(), vec![t.clone(), bool_type()]),
+                )
                 .unwrap();
             let [q] = measure.input_wires_arr();
             let r = measure.add_load_value(ConstBool::new(true));
-            measure.finish_with_outputs([q,r]).unwrap().node()
+            measure.finish_with_outputs([q, r]).unwrap().node()
         };
 
         let main = {
