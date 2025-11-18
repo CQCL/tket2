@@ -9,8 +9,8 @@ use hugr::{
         ComposablePass, ReplaceTypes,
     },
     builder::{
-        handle::Outputs, BuildError, Container, DFGBuilder, Dataflow, DataflowHugr as _,
-        DataflowSubContainer, HugrBuilder, ModuleBuilder, SubContainer,
+        BuildError, Container, Dataflow,
+        DataflowSubContainer, HugrBuilder, ModuleBuilder,
     },
     extension::{
         prelude::{bool_t, qb_t},
@@ -19,9 +19,7 @@ use hugr::{
     },
     hugr::{hugrmut::HugrMut, ValidationError},
     ops::{handle::NodeHandle as _, Call, DataflowOpTrait, OpType},
-    std_extensions::{
-        arithmetic::int_types::INT_TYPES, collections::borrow_array::BArrayOpBuilder,
-    },
+    std_extensions::arithmetic::int_types::INT_TYPES,
     types::{PolyFuncType, Type, TypeRV},
     HugrView, Node,
 };
@@ -234,7 +232,7 @@ impl RewriteQuantumPass {
 mod test {
     use hugr::{
         algorithms::call_graph::CallGraph,
-        builder::{Dataflow, DataflowSubContainer as _, SubContainer},
+        builder::{Dataflow, DataflowSubContainer as _},
         type_row,
         types::Signature,
     };
