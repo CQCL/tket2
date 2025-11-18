@@ -94,7 +94,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           # ---------------- Mac
-          - runner: macos-26
+          - runner: macos-15
             target: aarch64-apple-darwin
             test-wheels: true
           - runner: macos-15-intel
