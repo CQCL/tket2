@@ -1,9 +1,5 @@
 from pathlib import Path
-from typing import Optional, Literal, Protocol
-from dataclasses import dataclass
-from hugr.passes._composable_pass import ComposablePass
-from hugr.build.base import Hugr
-from tket.circuit import Tk2Circuit
+from typing import Optional, Literal
 
 from pytket import Circuit
 from pytket.passes import CustomPass, BasePass
@@ -88,43 +84,26 @@ def badger_pass(
     return CustomPass(apply, label="tket.badger_pass")
 
 
-class Tket1Pass(ComposablePass, Protocol):
-    def _apply_pass(self, compiler_state: Tk2Circuit) -> Tk2Circuit: ...
-
-    def __call__(self, hugr: Hugr) -> None:
-        compiler_state = Tk2Circuit.from_bytes(hugr.to_bytes())
-        new_compiler_state = self._apply_pass(compiler_state)
-        hugr.overwrite_hugr(new_hugr=Hugr.from_str(new_compiler_state.to_str()))
-
-
-@dataclass
-class CliffordSimplification(Tket1Pass):
-    allow_swaps: bool = True
-    traverse_subcircuits: bool = True
-
-    def _apply_pass(
-        self,
-        compiler_state: Tk2Circuit,
-        allow_swaps: bool = True,
-        traverse_subcircuits: bool = True,
-    ) -> Tk2Circuit:
-        return clifford_simp(
-            compiler_state,
-            allow_swaps=allow_swaps,
-            traverse_subcircuits=traverse_subcircuits,
-        )
-
-
-@dataclass
-class SquashRzPhasedX(Tket1Pass):
-    traverse_subcircuits: bool = True
-
-    def _apply_pass(
-        self,
-        compiler_state: Tk2Circuit,
-        traverse_subcircuits: bool = True,
-    ) -> Tk2Circuit:
-        return squash_phasedx_rz(
-            compiler_state,
-            traverse_subcircuits=traverse_subcircuits,
-        )
+# class Tket1Pass(ComposablePass, Protocol):
+#    def _pytket_pass(self) -> BasePass: ...
+#
+#    def _apply(self, hugr: Hugr) -> Hugr:
+#        hugr = deepcopy(hugr)
+#        self._apply_inplace(hugr)
+#        return hugr
+#
+#
+# @dataclass
+# class CliffordSimplification(Tket1Pass):
+#    allow_swaps: bool = True
+#    target_2qb_gate: OpType = OpType.CX
+#
+#    def _pytket_pass(self) -> BasePass:
+#        return CliffordSimp(self.allow_swaps, self.target_2qb_gate)
+#
+#
+# @dataclass
+# class SquashRzPhasedX(Tket1Pass):
+#    def _pytket_pass(self) -> BasePass:
+#        return SquashRzPhasedX()
+#
