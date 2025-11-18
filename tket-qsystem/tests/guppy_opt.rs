@@ -92,12 +92,15 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 ]))]
 #[should_panic = "xfail"]
 #[case::false_branch("false_branch", Some(vec![
-    ("TKET1.tk1op", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
+    ("TKET1.tk1op", 1), ("tket.quantum.H", 1), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
 ]))]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
 fn optimise_guppy_pytket(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
     let mut hugr = load_guppy_circuit(name, HugrFileType::Flat)
         .unwrap_or_else(|_| load_guppy_circuit(name, HugrFileType::Original).unwrap());
+    // We don't need NormalizeGuppy to "flatten" control flow here, but we still want
+    // to get rid of other guppy artifacts.
+    NormalizeGuppy::default().run(&mut hugr).unwrap();
     run_pytket(&mut hugr);
     let should_xfail = xfail.is_some();
     let expected_counts = match xfail {
