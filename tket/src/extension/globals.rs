@@ -3,7 +3,7 @@
 use std::sync::{Arc, Weak};
 
 use hugr::{
-    extension::{prelude::option_type, simple_op::{try_from_name, HasConcrete, MakeExtensionOp, MakeOpDef, OpLoadError}, ExtensionId, SignatureError, SignatureFunc, Version}, ops::{ExtensionOp, OpName}, types::{type_param::{TermTypeError, TypeParam}, PolyFuncType, Signature, Type, TypeArg, TypeBound}, Extension
+    extension::{prelude::option_type, simple_op::{try_from_name, HasConcrete, MakeExtensionOp, MakeOpDef, MakeRegisteredOp, OpLoadError}, ExtensionId, SignatureError, SignatureFunc, Version}, ops::{ExtensionOp, OpName}, types::{type_param::{TermTypeError, TypeParam}, PolyFuncType, Signature, Type, TypeArg, TypeBound}, Extension
 };
 
 /// The ID of the `tket.bool` extension.
@@ -130,5 +130,15 @@ impl HasConcrete for GlobalsOpDef {
         };
 
         Ok(GlobalsOp::Swap {name, ty })
+    }
+}
+
+impl MakeRegisteredOp for GlobalsOp {
+    fn extension_id(&self) -> ExtensionId {
+        EXTENSION_ID
+    }
+
+    fn extension_ref(&self) -> Weak<Extension> {
+        Arc::downgrade(&EXTENSION)
     }
 }

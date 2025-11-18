@@ -14,7 +14,6 @@ use hugr::{
     },
     extension::{
         prelude::{bool_t, qb_t},
-        simple_op::MakeOpDef,
         SignatureError,
     },
     hugr::{hugrmut::HugrMut, ValidationError},
