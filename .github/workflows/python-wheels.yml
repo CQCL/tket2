@@ -36,7 +36,7 @@ env:
   LLVM_VERSION: "14.0"
   LLVM_FEATURE_NAME: "14-0"
   # macOS version compatibility for mac targets.
-  MACOS_DEPLOYMENT_TARGET: "15.0"
+  MACOSX_DEPLOYMENT_TARGET: "15.0"
 
 jobs:
   # Check if the tag matches the package name,
