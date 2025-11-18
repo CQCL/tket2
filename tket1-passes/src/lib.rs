@@ -2,6 +2,7 @@
 //!
 //! This crate provides safe Rust bindings to the `libtket1-passes` C library
 //! that exposes some of TKET1's passes as Rust functions.
+#![warn(clippy::undocumented_unsafe_blocks)] // TODO: Fix and move to the workspace lints.
 
 use std::ffi::{c_char, CStr, CString};
 use std::ptr;
