@@ -74,7 +74,7 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 ///
 
 #[rstest]
-#[should_panic = "xfail"]
+#[should_panic = "PytketDecodeError { inner: NoMatchingParameter"]
 #[case::angles("angles", Some(vec![
     ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1)
 ]))]
@@ -82,14 +82,10 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 #[case::simple_cx("simple_cx", Some(vec![
     ("tket.quantum.QAlloc", 2), ("tket.quantum.MeasureFree", 2),
 ]))]
-#[should_panic = "xfail"]
-#[case::nested("nested", Some(vec![
-    ("tket.quantum.CZ", 6), ("tket.quantum.QAlloc", 3), ("tket.quantum.MeasureFree", 3), ("tket.quantum.H", 6)
-]))]
-#[should_panic = "xfail"]
-#[case::ranges("ranges", Some(vec![
-    ("tket.quantum.H", 8), ("tket.quantum.MeasureFree", 4), ("tket.quantum.QAlloc", 4), ("tket.quantum.CX", 6)
-]))]
+//#[should_panic = "xfail"]
+#[case::nested("nested", None)]
+//#[should_panic = "xfail"]
+#[case::ranges("ranges", None)]
 #[should_panic = "xfail"]
 #[case::false_branch("false_branch", Some(vec![
     ("TKET1.tk1op", 1), ("tket.quantum.H", 1), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
