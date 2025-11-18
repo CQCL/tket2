@@ -451,16 +451,18 @@ mod test {
     #[rstest]
     fn test_nested_array() {
         let inner_array_type = BorrowArray::ty(5, qb_t());
-        let outer_array_type = BorrowArray::ty(10, inner_array_type.clone());
-        let reader =
-            BufReader::new(include_bytes!("../../../test_files/nested_array.hugr").as_slice());
+        let outer_array_type = BorrowArray::ty(3, inner_array_type.clone());
+        let reader = BufReader::new(
+            include_bytes!("../../../test_files/guppy_optimization/nested_array/nested_array.hugr")
+                .as_slice(),
+        );
         let mut h = Hugr::load(reader, Some(&REGISTRY)).unwrap();
         let array_func = h
             .children(h.module_root())
             .find(|n| {
                 h.get_optype(*n)
                     .as_func_defn()
-                    .is_some_and(|fd| fd.func_name() == "nested_array")
+                    .is_some_and(|fd| fd.func_name() == "main")
             })
             .unwrap();
         h.set_entrypoint(array_func);
