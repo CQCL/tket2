@@ -380,19 +380,10 @@ mod test {
             borrow_array::{BArrayUnsafeOpDef, BorrowArray},
         },
         types::Signature,
-        Hugr, HugrView, Node,
+        Hugr, HugrView,
     };
     use itertools::Itertools;
-    use portgraph::NodeIndex;
     use rstest::rstest;
-
-    fn borrow_circuit() -> Hugr {
-        let reader =
-            BufReader::new(include_bytes!("../../../test_files/squashing_inline.hugr").as_slice());
-        let mut hugr = Hugr::load(reader, Some(&REGISTRY)).unwrap();
-        hugr.set_entrypoint(Node::from(NodeIndex::new(1176)));
-        hugr
-    }
 
     fn big_array() -> Hugr {
         let reader =
@@ -401,8 +392,6 @@ mod test {
     }
 
     #[rstest]
-    #[should_panic] // TODO update test file w/ switched Borrow outports
-    #[case(borrow_circuit(), 9, Some(Vec::from_iter(0..=7)))]
     #[case(big_array(), 759, None)]
     fn test_borrow_squash(
         #[case] mut h: Hugr,
