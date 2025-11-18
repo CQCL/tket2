@@ -54,6 +54,7 @@ impl TryFrom<ffi::TketError> for PassError {
         if value == ffi::TketError_TKET_SUCCESS {
             return Err("No error occurred");
         }
+        // SAFETY: tket_error_string returns a valid pointer to a null-terminated string.
         let c_str = unsafe { CStr::from_ptr(ffi::tket_error_string(value)) };
         let s = c_str.to_string_lossy().to_string();
         Ok(PassError::Tket1Error(s))
@@ -89,6 +90,7 @@ impl Tket1Circuit {
     pub fn from_serial_circuit(serial_circuit: &SerialCircuit) -> Result<Self, PassError> {
         let json = serde_json::to_vec(&serial_circuit)?;
         let c_json = CString::new(json)?;
+        // SAFETY: c_json has been validated by CString::new.
         let circuit = unsafe { ffi::tket_circuit_from_json(c_json.as_ptr()) };
 
         if circuit.is_null() {
@@ -104,6 +106,7 @@ impl Tket1Circuit {
     pub fn to_serial_circuit(&self) -> Result<SerialCircuit, PassError> {
         let mut json_ptr: *mut c_char = ptr::null_mut();
 
+        // SAFETY: json_ptr is a valid pointer to a null-terminated string.
         let error_code = unsafe { ffi::tket_circuit_to_json(self.inner, &mut json_ptr) };
 
         if let Ok(pass_error) = error_code.try_into() {
@@ -114,9 +117,14 @@ impl Tket1Circuit {
             return Err(PassError::NullPointer);
         }
 
-        let c_str = unsafe { CStr::from_ptr(json_ptr) };
-        let serial_circuit = serde_json::from_str(c_str.to_string_lossy().as_ref())?;
+        let serial_circuit = {
+            // SAFETY: json_ptr is a valid pointer to a null-terminated string.
+            let c_str = unsafe { CStr::from_ptr(json_ptr) };
+            serde_json::from_str(c_str.to_string_lossy().as_ref())?
+        };
 
+        // SAFETY: json_ptr is a valid pointer to a null-terminated string.
+        // c_str is not usable after this point.
         unsafe { ffi::tket_free_string(json_ptr) };
 
         Ok(serial_circuit)
@@ -126,6 +134,7 @@ impl Tket1Circuit {
 impl Drop for Tket1Circuit {
     fn drop(&mut self) {
         if !self.inner.is_null() {
+            // SAFETY: self.inner is a valid pointer to a TKET1 circuit.
             unsafe { ffi::tket_free_circuit(self.inner) };
         }
     }
@@ -141,6 +150,7 @@ impl Tket1Pass {
     /// Load a json-encoded pass into memory.
     pub fn from_json(json: &str) -> Result<Self, PassError> {
         let c_json = CString::new(json)?;
+        // SAFETY: c_json has been validated by CString::new.
         let pass = unsafe { ffi::tket_pass_from_json(c_json.as_ptr()) };
         if pass.is_null() {
             return Err(PassError::JsonError(
@@ -152,7 +162,8 @@ impl Tket1Pass {
 
     /// Apply the pass to a circuit
     pub fn run(&self, circuit: &mut Tket1Circuit) -> Result<(), PassError> {
-        let error_code: u32 = unsafe { ffi::tket_apply_pass(circuit.inner, self.inner) };
+        // SAFETY: circuit.inner and self.inner are valid pointers to TKET1 circuits and passes respectively, or NULL.
+        let error_code: ffi::TketError = unsafe { ffi::tket_apply_pass(circuit.inner, self.inner) };
         if let Ok(pass_error) = error_code.try_into() {
             return Err(pass_error);
         }
@@ -169,6 +180,7 @@ impl Tket1Pass {
 impl Drop for Tket1Pass {
     fn drop(&mut self) {
         if !self.inner.is_null() {
+            // SAFETY: self.inner is a valid pointer to a TKET1 pass.
             unsafe { ffi::tket_free_pass(self.inner) };
         }
     }
@@ -232,6 +244,7 @@ mod tests {
         // badly formatted JSON
         let circuit_json = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0.0", "qubits": [["q", [0]] ["q", [1]]]}"#;
         let c_str = CString::new(circuit_json).unwrap();
+        // SAFETY: c_str has been validated by CString::new.
         let circ_ptr = unsafe { ffi::tket_circuit_from_json(c_str.as_ptr()) };
         assert!(circ_ptr.is_null());
     }
