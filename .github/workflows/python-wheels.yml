@@ -92,12 +92,14 @@ jobs:
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           # ---------------- Mac
-          - runner: macos-26
+          - runner: macos-14
             target: aarch64-apple-darwin
             test-wheels: true
+            macos-compatibility: "13.0"
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             test-wheels: true
+            macos-compatibility: "15.0"
           # ---------------- Windows
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
@@ -143,6 +145,7 @@ jobs:
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.macos-compatibility }}" >> $GITHUB_ENV
               ;;
             Linux)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
@@ -209,7 +212,6 @@ jobs:
         shell: bash
         run: |
           # Copy the DLL to the package directory so maturin can include it in the wheel
-          # The maturin.include in pyproject.toml expects it relative to the package root
           if [ -f "$TKET_C_API_PATH/bin/tket-c-api.dll" ]; then
             cp "$TKET_C_API_PATH/bin/tket-c-api.dll" "$MODULE_DIR/tket/tket-c-api.dll"
             echo "Copied DLL to $MODULE_DIR/tket/tket-c-api.dll"
@@ -230,6 +232,7 @@ jobs:
             --out ../dist \
             --target ${{ matrix.platform.target }} \
             --strip
+
       - name: Build free-threaded wheels
         # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
         if: false
@@ -244,10 +247,30 @@ jobs:
             --out ../dist \
             --target ${{ matrix.platform.target }} \
             --strip
+
+      - name: Repair macOS wheels with delocate
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "Repairing macOS wheels with delocate..."
+          ls -lh dist || true
+          MAC_WHEELS=$(ls dist/*macosx*.whl 2>/dev/null || true)
+          if [ -z "$MAC_WHEELS" ]; then
+            echo "No macOS wheels found to repair; skipping delocate."
+            exit 0
+          fi
+          uvx --from delocate delocate-listdeps $MAC_WHEELS || true
+          uvx --from delocate delocate-wheel -v -w dist/repaired $MAC_WHEELS
+          rm -v -f $MAC_WHEELS
+          mv -v dist/repaired/*.whl dist/
+          rmdir -v dist/repaired || true
+          echo "Repaired wheels:"
+          ls -lh dist/*macosx*.whl
+
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
-          name: wheels-linux-${{ matrix.platform.target }}
+          name: wheels-${{ matrix.platform.target }}
           path: dist
           if-no-files-found: error
 
@@ -256,10 +279,14 @@ jobs:
         run: |
           echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
           if [ "$TEST_INSTALL" = "true" ]; then
+            # Make sure we only use the tket lib from the wheel itself
+            rm -rf $WORKSPACE\tket-c-api\lib
+            rm -rf $WORKSPACE\tket-c-api\bin
             uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
           fi
           uvx twine check --strict dist/*
         env:
+          WORKSPACE: ${{ github.workspace }}
           TEST_INSTALL: ${{ matrix.platform.test-wheels }}
 
   sdist:

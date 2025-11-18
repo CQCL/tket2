@@ -40,6 +40,14 @@ use crate::serialize::pytket::{
 };
 use crate::TketOp;
 
+const EMPTY_CIRCUIT: &str = r#"{
+        "phase": "0",
+        "bits": [["c", [0]]],
+        "qubits": [["q", [0]], ["q", [1]]],
+        "commands": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+    }"#;
+
 const SIMPLE_JSON: &str = r#"{
         "phase": "0",
         "bits": [],
@@ -108,7 +116,7 @@ const BARRIER: &str = r#"{
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
             {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
-            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier"}},
+            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier", "data": "Something invalid"}},
             {"args": [["q", [2]], ["c", [1]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],
@@ -1108,4 +1116,24 @@ fn test_inplace_decoding() {
 
     assert!(hugr.get_optype(func1).is_func_defn());
     assert!(hugr.get_optype(dfg).is_dfg());
+}
+
+/// Test the lazy qubit/bit decoding behaviour when the registers are not
+/// present in the decoded region signature.
+///
+/// If the registers are never consumed, they won't be initialized at all.
+#[rstest]
+fn test_qubit_elision() {
+    let ser: circuit_json::SerialCircuit = serde_json::from_str(EMPTY_CIRCUIT).unwrap();
+    assert_eq!(ser.commands.len(), 0);
+
+    let circ: Circuit = ser
+        .decode(DecodeOptions::new().with_signature(Signature::new_endo(vec![])))
+        .unwrap();
+    assert_eq!(circ.qubit_count(), 0);
+
+    check_no_tk1_ops(&circ);
+
+    // The circuit should have no alloc/frees or const definitions
+    assert_eq!(circ.num_operations(), 0);
 }

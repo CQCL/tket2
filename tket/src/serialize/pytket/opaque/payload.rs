@@ -19,6 +19,10 @@ use super::SubgraphId;
 /// Pytket opgroup used to identify opaque barrier operations that encode opaque HUGR subgraphs.
 ///
 /// See [`OpaqueSubgraphPayload`].
+#[deprecated(
+    note = "Opaque barriers do not set an opgroup anymore",
+    since = "0.16.1"
+)]
 pub const OPGROUP_OPAQUE_HUGR: &str = "OPAQUE_HUGR";
 
 /// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
@@ -77,11 +81,13 @@ pub enum OpaqueSubgraphPayload {
     /// A reference to a subgraph tracked by an `OpaqueSubgraphs` registry
     /// in an [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
     /// structure.
+    #[serde(rename = "HugrExternal")]
     External {
         /// The ID of the subgraph in the `OpaqueSubgraphs` registry.
         id: SubgraphId,
     },
     /// An inline payload, carrying the encoded envelope for the HUGR subgraph.
+    #[serde(rename = "HugrInline")]
     Inline {
         /// A string envelope containing the encoded HUGR subgraph.
         hugr_envelope: String,
@@ -207,5 +213,44 @@ impl OpaqueSubgraphPayload {
     /// Returns `true` if the payload is an external payload.
     pub fn is_external(&self) -> bool {
         matches!(self, Self::External { .. })
+    }
+
+    /// Parse the contents of an [`OpaqueSubgraphPayload::External`] from a string payload.
+    ///
+    /// Returns `None` if the payload is [`OpaqueSubgraphPayload::Inline`] or not an
+    /// [`OpaqueSubgraphPayload`].
+    ///
+    /// This method is more efficient than calling [Self::load_str], as it
+    /// requires no allocations.
+    pub fn parse_external_id(payload: &str) -> Option<SubgraphId> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename = "HugrExternal")]
+        #[serde(tag = "typ")]
+        struct PartialPayload {
+            pub id: SubgraphId,
+        }
+
+        // Deserialize the payload if it is External, avoiding a full copy to memory
+        // for the other variant.
+        serde_json::from_str::<PartialPayload>(payload)
+            .ok()
+            .map(|payload| payload.id)
+    }
+
+    /// Returns `true` if a string encodes an [`OpaqueSubgraphPayload`].
+    ///
+    /// This method is more efficient than calling [Self::load_str], as it
+    /// requires no allocations.
+    pub fn is_valid_payload(payload: &str) -> bool {
+        #[derive(serde::Deserialize)]
+        #[serde(tag = "typ")]
+        enum PartialPayload {
+            HugrExternal {},
+            HugrInline {},
+        }
+
+        // Deserialize the payload if it is External, avoiding a full copy to memory
+        // for the other variant.
+        serde_json::from_str::<PartialPayload>(payload).is_ok()
     }
 }

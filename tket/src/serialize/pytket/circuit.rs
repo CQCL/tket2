@@ -376,11 +376,7 @@ impl<Node: HugrNode> EncodedCircuit<Node> {
     /// [`OpaqueSubgraphPayload::External`][super::opaque::OpaqueSubgraphPayload::External]
     /// payloads in opaque barriers with inline payloads.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if a barrier operation with the
-    /// [`OPGROUP_OPAQUE_HUGR`][super::opaque::OPGROUP_OPAQUE_HUGR]
-    /// opgroup has an invalid payload.
+    /// Barrier operation with unrecognised payloads will be ignored.
     pub fn ensure_standalone(
         &mut self,
         hugr: &impl HugrView<Node = Node>,

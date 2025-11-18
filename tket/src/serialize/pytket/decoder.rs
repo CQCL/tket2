@@ -426,6 +426,11 @@ impl<'h> PytketDecoderContext<'h> {
         let mut bit_args: &[TrackedBit] = &[];
         let mut params: &[LoadedParameter] = &[];
         for q in qubits.iter() {
+            // Ignore qubits that didn't get initialized
+            if !self.wire_tracker.qubit_is_initialized(q) {
+                continue;
+            }
+
             let mut qubit_args: &[TrackedQubit] = std::slice::from_ref(q);
             let Ok(FoundWire::Register(wire)) = self.wire_tracker.find_typed_wire(
                 &self.config,
