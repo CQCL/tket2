@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.12](https://github.com/CQCL/tket2/compare/tket-py-v0.12.11...tket-py-v0.12.12) (2025-11-18)
+
+
+### Bug Fixes
+
+* Support MacOs ≥13.0 on Apple-Silicon (https://github.com/CQCL/tket2/pull/1264) ([07667a7](https://github.com/CQCL/tket2/commit/07667a765d21f488f7e40f8132f0fdc26c6cba80))
+
+
+### Documentation
+
+* Document missing passes and types modules with sphinx (https://github.com/CQCL/tket2/pull/1259) ([07667a7](https://github.com/CQCL/tket2/commit/07667a765d21f488f7e40f8132f0fdc26c6cba80))
+
 ## [0.12.11](https://github.com/CQCL/tket2/compare/tket-py-v0.12.10...tket-py-v0.12.11) (2025-11-13)
 
 
