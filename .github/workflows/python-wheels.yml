@@ -35,8 +35,6 @@ env:
   # adapted from https://github.com/TheDan64/inkwell/blob/master/.github/workflows/test.yml
   LLVM_VERSION: "14.0"
   LLVM_FEATURE_NAME: "14-0"
-  # macOS version compatibility for mac targets.
-  MACOSX_DEPLOYMENT_TARGET: "15.0"
 
 jobs:
   # Check if the tag matches the package name,
@@ -94,12 +92,14 @@ jobs:
             target: x86_64-unknown-linux-musl
             manylinux: "musllinux_1_2"
           # ---------------- Mac
-          - runner: macos-15
+          - runner: macos-14
             target: aarch64-apple-darwin
             test-wheels: true
+            macos-compatibility: "13.0"
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             test-wheels: true
+            macos-compatibility: "15.0"
           # ---------------- Windows
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
@@ -145,6 +145,7 @@ jobs:
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
+              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.macos-compatibility }}" >> $GITHUB_ENV
               ;;
             Linux)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
