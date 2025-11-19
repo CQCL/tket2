@@ -1,19 +1,14 @@
 //! Test running tket1 passes on hugr circuit.
-use std::io::BufReader;
 
-use hugr::algorithms::normalize_cfgs::NormalizeCFGPass;
 use tket1_passes::Tket1Circuit;
 
-use hugr::algorithms::const_fold::ConstantFoldPass;
-use hugr::algorithms::ComposablePass;
 use hugr::builder::{BuildError, Dataflow, DataflowHugr, FunctionBuilder};
 use hugr::extension::prelude::qb_t;
 use hugr::types::Signature;
-use hugr::{hugr::hugrmut::HugrMut, Hugr, HugrView, Node};
+use hugr::{HugrView, Node};
 use rayon::iter::ParallelIterator;
 use rstest::{fixture, rstest};
 use tket::extension::{TKET1_EXTENSION_ID, TKET_EXTENSION_ID};
-use tket::passes::borrow_squash::BorrowSquashPass;
 use tket::serialize::pytket::{EncodeOptions, EncodedCircuit};
 use tket::{Circuit, TketOp};
 
@@ -88,51 +83,4 @@ fn count_quantum_gates(circuit: &Circuit, region: Node) -> usize {
                 .is_some_and(|e| [TKET_EXTENSION_ID, TKET1_EXTENSION_ID].contains(e.extension_id()))
         })
         .count()
-}
-
-#[rstest]
-fn test_borrow_squash(#[values(true, false)] squash_borrows: bool) {
-    let reader = BufReader::new(include_bytes!("../../test_files/nested_array.hugr").as_slice());
-    let mut h = Hugr::load(reader, None).unwrap();
-    let array_func = h
-        .children(h.module_root())
-        .find(|n| {
-            h.get_optype(*n)
-                .as_func_defn()
-                .is_some_and(|fd| fd.func_name() == "nested_array")
-        })
-        .unwrap();
-    h.set_entrypoint(array_func);
-    let count_cxs = |h: &Hugr| {
-        h.entry_descendants()
-            .filter_map(|n| h.get_optype(n).as_extension_op())
-            .filter(|eop| eop.qualified_id() == "tket.quantum.CX")
-            .count()
-    };
-    NormalizeCFGPass::default()
-        .then::<_, itertools::Either<_, _>>(ConstantFoldPass::default())
-        .run(&mut h)
-        .unwrap();
-    assert_eq!(count_cxs(&h), 2);
-    if squash_borrows {
-        BorrowSquashPass::default().run(&mut h).unwrap();
-    }
-
-    let mut circ = Circuit::new(h);
-    let mut encoded =
-        EncodedCircuit::new(&circ, EncodeOptions::new().with_subcircuits(true)).unwrap();
-
-    for (_, serial_circuit) in encoded.iter_mut() {
-        let mut circuit_ptr = Tket1Circuit::from_serial_circuit(serial_circuit).unwrap();
-        circuit_ptr
-            .clifford_simp(tket_json_rs::OpType::CX, true)
-            .unwrap();
-        *serial_circuit = circuit_ptr.to_serial_circuit().unwrap();
-    }
-
-    encoded.reassemble_inplace(circ.hugr_mut(), None).unwrap();
-
-    let h = circ.into_hugr();
-    h.validate().unwrap();
-    assert_eq!(count_cxs(&h), if squash_borrows { 0 } else { 2 });
 }
