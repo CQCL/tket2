@@ -32,7 +32,11 @@ fn load_guppy_circuit(name: &str, file_type: HugrFileType) -> std::io::Result<Hu
         HugrFileType::Flat => ".flat",
         HugrFileType::Optimized => ".opt",
     };
-    let file = Path::new(GUPPY_EXAMPLES_DIR).join(format!("{name}/{name}{suffix}.hugr"));
+    load_guppy_example(&format!("{name}/{name}{suffix}.hugr"))
+}
+
+fn load_guppy_example(path: &str) -> std::io::Result<Hugr> {
+    let file = Path::new(GUPPY_EXAMPLES_DIR).join(path);
     let reader = fs::File::open(file)?;
     let reader = BufReader::new(reader);
     Ok(Hugr::load(reader, None).unwrap())
@@ -110,6 +114,33 @@ fn optimize_flattened_guppy(#[case] name: &str, #[case] xfail: Option<Vec<(&str,
     if should_xfail {
         panic!("xfail");
     }
+}
+
+#[rstest]
+#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
+fn optimize_guppy_ranges_array() {
+    // Demonstrates we can fully optimize the array operations in ranges
+    // (after control flow is flattened) if we play around with the entrypoint.
+    use hugr::algorithms::const_fold::ConstantFoldPass;
+    use hugr::hugr::hugrmut::HugrMut;
+    use tket::passes::borrow_squash::BorrowSquashPass;
+    let mut hugr = load_guppy_example("ranges/ranges.flat.array.hugr").unwrap();
+
+    let f = hugr
+        .children(hugr.module_root())
+        .find(|n| {
+            hugr.get_optype(*n)
+                .as_func_defn()
+                .is_some_and(|fd| fd.func_name() == "f")
+        })
+        .unwrap();
+    hugr.set_entrypoint(f);
+    ConstantFoldPass::default().run(&mut hugr).unwrap();
+    BorrowSquashPass::default().run(&mut hugr).unwrap();
+    run_pytket(&mut hugr);
+    let expected_counts =
+        count_gates(&load_guppy_circuit("ranges", HugrFileType::Optimized).unwrap());
+    assert_eq!(count_gates(&hugr), expected_counts);
 }
 
 #[rstest]
