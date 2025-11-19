@@ -75,15 +75,12 @@ jobs:
         # Since we have it as a dependency, wheels built for other platforms will be unusable.
         platform:
           # ---------------- Linux
-          # aarch64 cross-compilation with maturin was causing linking issues
-          # (it doesn't seem to be using zig even though we set --zig)
-          # so it's temporarily disabled
-          #- runner: ubuntu-24.04
-          #  target: aarch64-unknown-linux-gnu
-          #  manylinux: "manylinux2014"
-          #- runner: ubuntu-24.04
-          #  target: aarch64-unknown-linux-musl
-          #  manylinux: "musllinux_1_2"
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            manylinux: "manylinux2014"
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            manylinux: "musllinux_1_2"
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             manylinux: "manylinux2014"
