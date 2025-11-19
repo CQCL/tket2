@@ -412,9 +412,9 @@ mod test {
 
         if h != h2 {
             // Hugr equality very under-approximates
-            assert_eq!(h.num_nodes(), h2.num_nodes());
             assert_eq!(h.nodes().collect_vec(), h2.nodes().collect_vec());
             for n in h.nodes() {
+                assert_eq!(h.get_parent(n), h2.get_parent(n));
                 assert_eq!(h.get_optype(n), h2.get_optype(n));
                 for p in h.all_node_ports(n) {
                     let ins_h = h.linked_ports(n, p).collect_vec();
