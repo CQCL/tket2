@@ -80,7 +80,7 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for BorrowSquashPass {
 }
 
 /// Reasons a [BorrowSquashPass] may fail
-#[derive(Debug, Display, Error)]
+#[derive(Clone, Debug, Display, Error, PartialEq)]
 #[non_exhaustive]
 pub enum BorrowSquashError {}
 
@@ -368,7 +368,7 @@ mod test {
     use crate::extension::REGISTRY;
     use hugr::{
         algorithms::{const_fold::ConstantFoldPass, ComposablePass},
-        builder::{Dataflow, DataflowHugr, FunctionBuilder},
+        builder::{endo_sig, DFGBuilder, Dataflow, DataflowHugr, FunctionBuilder},
         extension::{
             prelude::{qb_t, usize_t, ConstUsize},
             simple_op::MakeExtensionOp,
@@ -377,13 +377,53 @@ mod test {
         ops::{handle::NodeHandle, OpTrait},
         std_extensions::collections::{
             array::ArrayKind,
-            borrow_array::{BArrayUnsafeOpDef, BorrowArray},
+            borrow_array::{BArrayOpBuilder, BArrayUnsafeOpDef, BorrowArray},
         },
         types::Signature,
         Hugr, HugrView,
     };
     use itertools::Itertools;
     use rstest::{fixture, rstest};
+
+    #[rstest]
+    fn simple() {
+        let mut dfb = DFGBuilder::new(endo_sig(BorrowArray::ty(3, qb_t()))).unwrap();
+        let [arr] = dfb.input_wires_arr();
+        let idx = dfb.add_load_value(ConstUsize::new(1));
+        let (arr, q) = dfb.add_borrow_array_borrow(qb_t(), 3, arr, idx).unwrap();
+        let arr2 = dfb.add_borrow_array_return(qb_t(), 3, arr, idx, q).unwrap();
+        let (arr3, q2) = dfb.add_borrow_array_borrow(qb_t(), 3, arr2, idx).unwrap();
+        let arr4 = dfb
+            .add_borrow_array_return(qb_t(), 3, arr3, idx, q2)
+            .unwrap();
+        let mut h = dfb.finish_hugr_with_outputs([arr4]).unwrap();
+        h.validate().unwrap();
+
+        // Hand-construct expected hugr after elision
+        let mut h2 = h.clone();
+        h2.remove_node(arr2.node());
+        h2.remove_node(arr3.node());
+        h2.connect(q.node(), q.source(), arr4.node(), 2);
+        h2.connect(q.node(), 0, arr4.node(), 0);
+        h2.validate().unwrap();
+
+        let r = BorrowSquashPass::default().run(&mut h).unwrap();
+        assert_eq!(r, vec![(arr2.node(), arr3.node())]);
+
+        if h != h2 {
+            // Hugr equality very under-approximates
+            assert_eq!(h.num_nodes(), h2.num_nodes());
+            assert_eq!(h.nodes().collect_vec(), h2.nodes().collect_vec());
+            for n in h.nodes() {
+                assert_eq!(h.get_optype(n), h2.get_optype(n));
+                for p in h.all_node_ports(n) {
+                    let ins_h = h.linked_ports(n, p).collect_vec();
+                    let ins_h2 = h2.linked_ports(n, p).collect_vec();
+                    assert_eq!(ins_h, ins_h2);
+                }
+            }
+        }
+    }
 
     #[fixture]
     fn ranges_array() -> Hugr {
