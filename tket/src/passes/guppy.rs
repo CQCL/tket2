@@ -9,7 +9,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::inline_dfg::InlineDFGError;
 use hugr::Node;
 
-use crate::passes::borrow_squash::{BorrowSquashError, BorrowSquashPass};
+use crate::passes::BorrowSquashPass;
 
 /// Normalize the structure of a Guppy-generated circuit into something that can be optimized by tket.
 ///
@@ -103,7 +103,9 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         // Potentially, could (need to) do fixpoint here with untuple,
         // as both create opportunities for the other
         if self.squash_borrows {
-            BorrowSquashPass::default().run(hugr)?;
+            BorrowSquashPass::default()
+                .run(hugr)
+                .unwrap_or_else(|e| match e {});
         }
 
         Ok(())
@@ -123,8 +125,6 @@ pub enum NormalizeGuppyErrors {
     DeadFuncs(RemoveDeadFuncsError),
     /// Error while inlining DFG operations.
     Inline(InlineDFGError),
-    /// Error in squashing Borrow/Return operations.
-    BorrowSquash(BorrowSquashError),
 }
 
 #[cfg(test)]
