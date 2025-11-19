@@ -94,10 +94,10 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 #[case::false_branch("false_branch", Some(vec![
     ("TKET1.tk1op", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
 ]))]
-//nested_array works (see `optimise_guppy` below), but only with NormalizeGuppy (BorrowSquash),
+//nested_array works (see `optimize_guppy` below), but only with NormalizeGuppy (BorrowSquash),
 //and there is no easy way to express that in guppy
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy_pytket(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
+fn optimize_flattened_guppy(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
     let mut hugr = load_guppy_circuit(name, HugrFileType::Flat)
         .unwrap_or_else(|_| load_guppy_circuit(name, HugrFileType::Original).unwrap());
     run_pytket(&mut hugr);
@@ -126,7 +126,7 @@ fn flatten_guppy(#[case] name: &str) {
     assert_eq!(count_gates(&hugr), count_gates(&target));
 }
 
-/// Check that each example optimizes to the full extent given by the .opt (and .flat) .hugr files.
+/// Check that each example optimizes to the full extent given by the .opt .hugr files.
 #[rstest]
 #[case::nested_array("nested_array")]
 #[should_panic]
@@ -139,7 +139,7 @@ fn flatten_guppy(#[case] name: &str) {
 #[case::nested("nested")]
 #[should_panic]
 #[case::ranges("ranges")]
-fn optimise_guppy(#[case] name: &str) {
+fn optimize_guppy(#[case] name: &str) {
     let mut hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
     let flat = count_gates(
         load_guppy_circuit(name, HugrFileType::Flat)
