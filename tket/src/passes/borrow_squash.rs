@@ -383,38 +383,52 @@ mod test {
         Hugr, HugrView,
     };
     use itertools::Itertools;
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
-    fn big_array() -> Hugr {
-        let reader =
-            BufReader::new(include_bytes!("../../../test_files/big_array.hugr").as_slice());
+    #[fixture]
+    fn ranges_array() -> Hugr {
+        let reader = BufReader::new(
+            include_bytes!("../../../test_files/guppy_optimization/ranges/ranges.flat.array.hugr")
+                .as_slice(),
+        );
         Hugr::load(reader, Some(&REGISTRY)).unwrap()
     }
 
     #[rstest]
-    #[case(big_array(), 759, None)]
-    fn test_borrow_squash(
-        #[case] mut h: Hugr,
-        #[case] expected_elisions: usize,
-        #[case] expected_indices: Option<Vec<u64>>,
-    ) {
+    fn test_borrow_squash(ranges_array: Hugr) {
+        let counts = |h: &Hugr| {
+            let mut brs = vec![(0, 0); 4];
+            for n in find_borrows(h) {
+                brs[get_index(h, n) as usize].0 += 1;
+            }
+            for n in find_returns(h) {
+                brs[get_index(h, n) as usize].1 += 1;
+            }
+            brs
+        };
+
+        let f = ranges_array
+            .children(ranges_array.module_root())
+            .find(|n| {
+                ranges_array
+                    .get_optype(*n)
+                    .as_func_defn()
+                    .is_some_and(|fd| fd.func_name() == "f")
+            })
+            .unwrap();
+
+        let mut h = ranges_array;
+        h.set_entrypoint(f);
+
         ConstantFoldPass::default().run(&mut h).unwrap();
+        assert_eq!(counts(&h), vec![(4, 4), (6, 6), (6, 6), (4, 4)]);
         let orig_num_nodes = h.num_nodes();
         let res = BorrowSquashPass::default().run(&mut h).unwrap();
         h.validate().unwrap();
+        let expected_elisions = 16;
         assert_eq!(res.len(), expected_elisions);
         assert_eq!(h.num_nodes(), orig_num_nodes - 2 * expected_elisions);
-
-        if let Some(exp_indices) = expected_indices {
-            assert_eq!(
-                find_borrows(&h).map(|n| get_index(&h, n)).collect_vec(),
-                exp_indices
-            );
-            assert_eq!(
-                find_returns(&h).map(|n| get_index(&h, n)).collect_vec(),
-                exp_indices
-            );
-        }
+        assert_eq!(counts(&h), vec![(1, 1); 4]);
     }
 
     fn find_borrows<H: HugrView>(h: &H) -> impl Iterator<Item = H::Node> + '_ {
