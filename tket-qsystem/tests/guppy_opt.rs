@@ -125,7 +125,7 @@ fn optimize_guppy_ranges_array() {
     // (after control flow is flattened) if we play around with the entrypoint.
     use hugr::algorithms::const_fold::ConstantFoldPass;
     use hugr::hugr::hugrmut::HugrMut;
-    use tket::passes::borrow_squash::BorrowSquashPass;
+    use tket::passes::BorrowSquashPass;
     let mut hugr = load_guppy_example("ranges/ranges.flat.array.hugr").unwrap();
 
     let f = hugr
