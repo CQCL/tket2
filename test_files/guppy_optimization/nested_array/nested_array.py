@@ -18,5 +18,6 @@ def main(arr: array[array[qubit, 5], 3]) -> None:
     cx(arr[0][1], arr[0][2])
     cx(arr[0][1], arr[0][2])
 
+
 program = main.compile_function()
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())

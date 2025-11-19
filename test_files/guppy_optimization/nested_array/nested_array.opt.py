@@ -24,5 +24,6 @@ def main(arr: array[array[qubit, 5], 3]) -> None:
     # inner(ar[0])
     pass
 
+
 program = main.compile_function()
 Path(argv[0]).with_suffix(".hugr").write_bytes(program.to_bytes())

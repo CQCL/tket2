@@ -27,6 +27,7 @@ def main() -> None:
     result("b3", b3)
     result("b4", b4)
 
+
 # Version of f with flattened control flow but retaining array accesses
 @guppy
 def f(qs: array[qubit, 4] @ owned) -> array[qubit, 4]:
