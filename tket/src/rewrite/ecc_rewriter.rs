@@ -406,7 +406,7 @@ mod tests {
     /// obtain convex patterns
     #[test]
     fn ecc_rewriter_empty_params() {
-        let test_file = "../test_files/cx_cx_eccs.json";
+        let test_file = "../test_files/eccs/cx_cx_eccs.json";
         let rewriter = ECCRewriter::try_from_eccs_json_file(test_file).unwrap();
 
         let cx_cx = cx_cx();

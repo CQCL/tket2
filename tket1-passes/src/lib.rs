@@ -192,7 +192,7 @@ mod tests {
     use super::*;
     use rstest::*;
 
-    const CIRC_STR: &str = include_str!("../../test_files/2cx.json");
+    const CIRC_STR: &str = r#"{"bits": [], "commands": [{"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}, {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}}], "created_qubits": [], "discarded_qubits": [], "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]], "phase": "0.0", "qubits": [["q", [0]], ["q", [1]]]}"#;
     const TWO_QUBIT_SQUASH_STR: &str = r#"{"StandardPass": {"allow_swaps": true, "fidelity": 1.0, "name": "KAKDecomposition", "target_2qb_gate": "CX"}, "pass_class": "StandardPass"}"#;
     const CLIFFORD_SIMP_STR: &str = r#"{"StandardPass": {"allow_swaps": true, "name": "CliffordSimp", "target_2qb_gate": "CX"}, "pass_class": "StandardPass"}"#;
 
