@@ -272,8 +272,6 @@ jobs:
           echo "Repaired wheels:"
           ls -lh dist/*macosx*.whl
 
-      - name: Repair linux wheels with rep
-
       - name: Upload wheels
         uses: actions/upload-artifact@v5
         with:
