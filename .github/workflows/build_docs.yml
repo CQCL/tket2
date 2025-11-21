@@ -55,6 +55,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
