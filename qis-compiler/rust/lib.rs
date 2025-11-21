@@ -25,6 +25,7 @@ use inkwell::targets::{
 use itertools::Itertools;
 use pyo3::prelude::*;
 use tket::hugr::ops::DataflowParent;
+use tket_qsystem::llvm::globals::GlobalsCodegenExtension;
 
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
@@ -33,7 +34,7 @@ use std::rc::Rc;
 use std::vec::Vec;
 use std::{fs, str, vec};
 use tket::extension::rotation::ROTATION_EXTENSION;
-use tket::extension::{TKET_EXTENSION, TKET1_EXTENSION};
+use tket::extension::{self, TKET_EXTENSION, TKET1_EXTENSION, globals};
 use tket::hugr::extension::{ExtensionRegistry, prelude};
 use tket::hugr::std_extensions::arithmetic::{
     conversions, float_ops, float_types, int_ops, int_types,
@@ -81,6 +82,7 @@ static REGISTRY: std::sync::LazyLock<ExtensionRegistry> = std::sync::LazyLock::n
         ROTATION_EXTENSION.to_owned(),
         TKET_EXTENSION.to_owned(),
         TKET1_EXTENSION.to_owned(),
+        tket::extension::globals::EXTENSION.to_owned(),
         tket::extension::bool::BOOL_EXTENSION.to_owned(),
         tket::extension::debug::DEBUG_EXTENSION.to_owned(),
         tket_qsystem::extension::gpu::EXTENSION.to_owned(),
@@ -176,6 +178,7 @@ fn codegen_extensions() -> CodegenExtsMap<'static, Hugr> {
         // State results use standard arrays.
         .add_extension(DebugCodegenExtension::new(SeleneHeapArrayCodegen::LOWERING))
         .add_extension(gpu::GpuCodegen)
+        .add_extension(GlobalsCodegenExtension)
         .finish()
 }
 

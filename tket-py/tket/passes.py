@@ -17,6 +17,7 @@ from ._tket.passes import (
     squash_phasedx_rz,
     normalize_guppy,
     PullForwardError,
+    replace_qubits,
 )
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "squash_phasedx_rz",
     "normalize_guppy",
     "PullForwardError",
+    "replace_qubits",
 ]
 
 
