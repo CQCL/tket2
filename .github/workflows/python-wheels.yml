@@ -65,46 +65,35 @@ jobs:
         # Each entry defines:
         # - runner: The github runner to use for the build.
         # - target: The target platform used when building the rust code.
-        # - manylinux: (optional) If doing manylinux-compatible wheels,
-        #    the manylinux version to use. Setting this option causes the wheels
-        #    to be built with zig.
-        # - test-wheels: Whether to test installing the wheels.
-        #    This is only done when the target platform matches the runner platform.
-        #
-        # Note that platform support is limited by the pytket wheels' availability.
-        # Since we have it as a dependency, wheels built for other platforms will be unusable.
+        # - compatibility: target-specific compatibility option, e.g.:
+        #   - manylinux/musllinux for ubuntu
+        #   - MACOSX_DEPLOYMENT_TARGET for macos
+        #   - c library target for windows (currently only msvc supported)
         platform:
           # ---------------- Linux
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             compatibility: manylinux_2_28
-            test-wheels: true
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
             compatibility: musllinux_1_2
-            test-wheels: true
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             compatibility: manylinux_2_28
-            test-wheels: true
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
             compatibility: musllinux_1_2
-            test-wheels: true
           # ---------------- Mac
           - runner: macos-14
             target: aarch64-apple-darwin
-            test-wheels: true
             compatibility: "13.0"
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            test-wheels: true
             compatibility: "15.0"
           # ---------------- Windows
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
             compatibility: msvc
-            test-wheels: true
 
     steps:
       - uses: actions/checkout@v5
@@ -165,7 +154,7 @@ jobs:
           compatibility: ${{ matrix.platform.compatibility }}
 
       - uses: mlugg/setup-zig@v2
-        if: ${{ matrix.platform.manylinux }}
+        if: contains(matrix.platform.target, "linux")
 
       - name: Set compatibility flag
         id: compatibility-flag
@@ -283,12 +272,10 @@ jobs:
         shell: bash
         run: |
           echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
-          if [ "$TEST_INSTALL" = "true" ]; then
-            # Make sure we only use the tket lib from the wheel itself
-            rm -rf $WORKSPACE\tket-c-api\lib
-            rm -rf $WORKSPACE\tket-c-api\bin
-            uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
-          fi
+          # Make sure we only use the tket lib from the wheel itself
+          rm -rf $WORKSPACE\tket-c-api\lib
+          rm -rf $WORKSPACE\tket-c-api\bin
+          uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
           uvx twine check --strict dist/*
         env:
           WORKSPACE: ${{ github.workspace }}
