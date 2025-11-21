@@ -82,3 +82,28 @@ def badger_pass(
         )
 
     return CustomPass(apply, label="tket.badger_pass")
+
+
+# class Tket1Pass(ComposablePass, Protocol):
+#    def _pytket_pass(self) -> BasePass: ...
+#
+#    def _apply(self, hugr: Hugr) -> Hugr:
+#        hugr = deepcopy(hugr)
+#        self._apply_inplace(hugr)
+#        return hugr
+#
+#
+# @dataclass
+# class CliffordSimplification(Tket1Pass):
+#    allow_swaps: bool = True
+#    target_2qb_gate: OpType = OpType.CX
+#
+#    def _pytket_pass(self) -> BasePass:
+#        return CliffordSimp(self.allow_swaps, self.target_2qb_gate)
+#
+#
+# @dataclass
+# class SquashRzPhasedX(Tket1Pass):
+#    def _pytket_pass(self) -> BasePass:
+#        return SquashRzPhasedX()
+#
