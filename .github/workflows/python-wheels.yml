@@ -77,30 +77,35 @@ jobs:
           # ---------------- Linux
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            manylinux: "manylinux2014"
+            compatibility: manylinux_2_28
+            test-wheels: true
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-            manylinux: "musllinux_1_2"
+            compatibility: musllinux_1_2
+            test-wheels: true
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            manylinux: "manylinux2014"
+            compatibility: manylinux_2_28
             test-wheels: true
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            manylinux: "musllinux_1_2"
+            compatibility: musllinux_1_2
+            test-wheels: true
           # ---------------- Mac
           - runner: macos-14
             target: aarch64-apple-darwin
             test-wheels: true
-            macos-compatibility: "13.0"
+            compatibility: "13.0"
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             test-wheels: true
-            macos-compatibility: "15.0"
+            compatibility: "15.0"
           # ---------------- Windows
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
+            compatibility: msvc
             test-wheels: true
+
     steps:
       - uses: actions/checkout@v5
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -113,6 +118,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
+
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
@@ -142,7 +148,7 @@ jobs:
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.macos-compatibility }}" >> $GITHUB_ENV
+              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.compatibility }}" >> $GITHUB_ENV
               ;;
             Linux)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
@@ -156,15 +162,17 @@ jobs:
         with:
           install-path: ${{ steps.tket-paths.outputs.tket_c_api_path }}
           target: ${{ matrix.platform.target }}
+          compatibility: ${{ matrix.platform.compatibility }}
 
       - uses: mlugg/setup-zig@v2
         if: ${{ matrix.platform.manylinux }}
 
       - name: Set compatibility flag
         id: compatibility-flag
+        if: ${{ matrix.platform.
         shell: bash
         run: |
-          if [ -n "${{ matrix.platform.manylinux }}" ]; then
+          if [ "${{ matrix.platform.compatibility }}" == *"linux"* ]; then
             WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
             COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
           else
@@ -240,6 +248,7 @@ jobs:
             ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
             maturin build \
             ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
+            --auditwheel=repair
             --release \
             --out ../dist \
             --target ${{ matrix.platform.target }} \
@@ -263,6 +272,8 @@ jobs:
           rmdir -v dist/repaired || true
           echo "Repaired wheels:"
           ls -lh dist/*macosx*.whl
+
+      - name: Repair linux wheels with rep
 
       - name: Upload wheels
         uses: actions/upload-artifact@v5
