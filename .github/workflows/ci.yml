@@ -73,6 +73,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - name: Check formatting
         run: cargo fmt -- --check
       - name: Install LLVM and Clang
@@ -103,6 +105,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - name: Install Python ${{ env.PYTHON_HIGHEST }}
         run: uv python install ${{ env.PYTHON_HIGHEST }}
       - name: Setup dependencies
@@ -130,6 +134,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-codspeed
         run: cargo binstall cargo-codspeed --force
@@ -163,6 +169,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - uses: taiki-e/install-action@nextest
       - name: Build with no features
         run: cargo nextest r --verbose -p tket -p tket-py -p tket-qsystem --no-default-features --no-run
@@ -192,6 +200,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - uses: taiki-e/install-action@nextest
       - name: Build with all features
         run: cargo nextest r --verbose --workspace --all-features --no-run
@@ -226,6 +236,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
       - uses: taiki-e/install-action@nextest
@@ -260,6 +272,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Run tests with coverage instrumentation
@@ -307,6 +321,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-minimal-versions
         run: |
@@ -348,6 +364,8 @@ jobs:
         uses: ./.github/actions/tket-c-api
         with:
           install-path: ${{ env.TKET_C_API_PATH }}
+          target: x86_64-unknown-linux-gnu
+          compatibility: manylinux_2_28
       - name: Install Python ${{ env.PYTHON_LOWEST }}
         run: uv python install ${{ env.PYTHON_LOWEST }}
       - name: Setup dependencies
