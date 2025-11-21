@@ -113,6 +113,7 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
+          env: true
 
         # Set the path to the cached tket-c-api library
         # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
