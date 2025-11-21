@@ -171,9 +171,9 @@ jobs:
         id: compatibility-flag
         shell: bash
         run: |
-          if [ "${{ matrix.platform.compatibility }}" == *"linux"* ]; then
+          if [ "${{ matrix.platform.target }}" == *"linux"* ]; then
             WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
-            COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
+            COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.compatibility }} --zig"
           else
             WITH_ZIG_FLAG=""
             COMPATIBILITY_FLAG=""

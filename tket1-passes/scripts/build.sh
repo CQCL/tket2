@@ -41,7 +41,7 @@ case "${target}" in
     ;;
     *"windows-msvc")
         echo "Building tket-c-api for Windows with MSVC..." 
-        pwsh -File "$(dirname "$0")"/build/windows.sh ${output_abs}
+        pwsh -File "$(dirname "$0")"/build/windows.ps1 ${output_abs}
     ;;
     *)
       echo "Unsupported target: ${target}"
