@@ -13,7 +13,7 @@ output_dir="$1"
 
 echo "Building tket-c-api on aarch64-apple-darwin with MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}..."
 
-cd "$(dirname "$0")/"../../
+cd "$(dirname "$0")/"../../../
 
 brew install jq
 

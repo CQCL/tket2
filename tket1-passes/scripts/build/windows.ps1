@@ -1,12 +1,12 @@
-$ErrorActionPreference = "Stop"
-Set-StrictMode -Version Latest
-
 param (
     [Parameter(Mandatory = $true)]
     [string]$OutputDir
 )
 
-Set-Location (Join-Path $PSScriptRoot "..\..\")
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+Set-Location (Join-Path $PSScriptRoot "..\..\..\")
 
 choco install jq -y
 pipx install conan
