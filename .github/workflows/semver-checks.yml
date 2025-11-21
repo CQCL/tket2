@@ -34,6 +34,9 @@ jobs:
     steps:
       - name: Checkout tket
         uses: actions/checkout@v5
+      # NOTE: We're fetching the tket-c-api configuration from `main` here.
+      # This may cause errors on PRs that modify the tket-c-api version or conan profiles,
+      # but it should be fine for most PRs.
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:

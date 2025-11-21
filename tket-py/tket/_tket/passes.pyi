@@ -86,31 +86,20 @@ def badger_optimise(
 def chunks(c: Circuit | Tk2Circuit, max_chunk_size: int) -> CircuitChunks:
     """Split a circuit into chunks of at most `max_chunk_size` gates."""
 
-def clifford_simp(
+def tket1_pass(
     circ: CircuitClass,
-    *,
-    allow_swaps: bool = True,
-    traverse_subcircuits: bool = True,
-) -> CircuitClass:
-    """Apply a number of rewrite rules for simplifying Clifford gate sequences,
-    similar to Duncan & Fagan (https://arxiv.org/abs/1901.10114). Produces a
-    circuit comprising TK1 and CX gates.
-
-    Parameters:
-    - allow_swaps: whether the rewriting may introduce implicit wire swaps.
-    - traverse_subcircuits: Whether to apply the optimisation to subregions
-      nested inside other subregions of the circuit.
-    """
-
-def squash_phasedx_rz(
-    circ: CircuitClass,
+    pass_json: str,
     *,
     traverse_subcircuits: bool = True,
 ) -> CircuitClass:
-    """Squash single qubit gates into PhasedX and Rz gates. Also remove identity
-    gates. Commute Rz gates to the back if possible.
+    """Runs a pytket pass on all circuit-like regions under the entrypoint of the
+    HUGR.
 
     Parameters:
-    - traverse_subcircuits: Whether to apply the optimisation to subregions
+    - pass_json: The JSON string of the pytket pass to run. See [pytket
+      documentation](https://docs.quantinuum.com/tket/api-docs/passes.html#pytket.passes.BasePass.to_dict)
+      for more details.
+    - traverse_subcircuits: Whether to recurse into the children of the
+      circuit-like regions, and optimise them too.
       nested inside other subregions of the circuit.
     """
