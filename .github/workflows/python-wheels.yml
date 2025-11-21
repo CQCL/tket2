@@ -106,10 +106,10 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
       - name: Install LLVM and Clang
-        if: ${{ !contains(matrix.platform.target, 'linux') }}
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: ${{ env.LLVM_VERSION }}
@@ -174,24 +174,8 @@ jobs:
           working-directory: ${{ env.MODULE_DIR }}
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.compatibility }}
-          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }}
+          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }} -e TKET_C_API_PATH -e LLVM_PATH
           sccache: true
-          before-script-linux: |
-            mkdir -p /tmp/llvm;
-            if [ "$(uname -m)" = "x86_64" ];
-            then
-                curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz;
-                tar xf clang+llvm-14.0.6-x86_64-linux-gnu-rhel-8.4.tar.xz -C /tmp/llvm --strip-components=1;
-            else
-                dnf install ncurses-compat-libs ncurses-devel -y;
-                curl -LO https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/clang+llvm-14.0.6-aarch64-linux-gnu.tar.xz
-                tar xf clang+llvm-14.0.6-aarch64-linux-gnu.tar.xz -C /tmp/llvm --strip-components=1;
-            fi;
-            export LLVM_SYS_140_PREFIX=/tmp/llvm
-            export WSPACE=${{ env.GITHUB_WORKSPACE }};
-            export TKET_C_API_PATH=${WSPACE}/tket-c-api;
-            export LD_LIBRARY_PATH=${WSPACE}/tket-c-api/lib:/tmp/llvm/${LD_LIBRARY_PATH};
-            export PATH=${WSPACE}/tket-c-api/lib:${PATH}
 
 
       #- name: Build free-threaded wheels
