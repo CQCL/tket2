@@ -174,7 +174,8 @@ jobs:
           working-directory: ${{ env.MODULE_DIR }}
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.compatibility }}
-          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }} -e TKET_C_API_PATH -e LLVM_PATH
+          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }}
+          docker-options: -e TKET_C_API_PATH -e LLVM_PATH
           sccache: true
 
 
