@@ -153,54 +153,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           compatibility: ${{ matrix.platform.compatibility }}
 
-      - uses: mlugg/setup-zig@v2
-        if: contains(matrix.platform.target, 'linux')
-
-      - name: Set compatibility flag
-        id: compatibility-flag
-        shell: bash
-        run: |
-          if [ "${{ matrix.platform.target }}" == *"linux"* ]; then
-            WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
-            COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.compatibility }} --zig"
-          else
-            WITH_ZIG_FLAG=""
-            COMPATIBILITY_FLAG=""
-          fi
-          echo "COMPATIBILITY_FLAG: $COMPATIBILITY_FLAG"
-          echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
-          echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> "$GITHUB_OUTPUT"
-          echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> "$GITHUB_OUTPUT"
-
-      - name: Check tket-c-api shared library
-        shell: bash
-        run: |
-          echo "tket-c-api files:"
-          find $TKET_C_API_PATH -type f
-          find $TKET_C_API_PATH -type f -name "*.so" | while IFS= read -r sofile; do
-            echo "======= objdump -f $sofile ======="
-            objdump -f "$sofile" || echo "objdump failed for $sofile"
-            echo "======= readelf -h $sofile ======="
-            readelf -h "$sofile" 2>/dev/null | head -20 || echo "readelf failed for $sofile"
-            echo "======= file $sofile ======="
-            file "$sofile" || echo "file failed for $sofile"
-            echo
-          done
-          find $TKET_C_API_PATH -type f -name "*.dylib" | while IFS= read -r dylibfile; do
-            echo "======= otool -L $dylibfile ======="
-            otool -L "$dylibfile" || echo "otool failed for $dylibfile"
-            echo "======= file $dylibfile ======="
-            file "$dylibfile" || echo "file failed for $dylibfile"
-            echo
-          done
-          find $TKET_C_API_PATH -type f -name "*.lib" | while IFS= read -r libfile; do
-            echo "======= Checking Windows library: $libfile ======="
-            echo "======= file $libfile ======="
-            file "$libfile" || echo "file failed for $libfile"
-            echo
-          done
-
-      - name: Copy DLL to package directory (Windows)
+      - name: Copy tket-c-api DLL to package directory (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -215,16 +168,13 @@ jobs:
           fi
 
       - name: Build wheels
-        shell: bash
-        run: |
-          cd ${{ env.MODULE_DIR }}
-          uv run --python ${{ env.PYTHON_VERSION }} \
-            ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
-            maturin build ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
-            --release \
-            --out ../dist \
-            --target ${{ matrix.platform.target }} \
-            --strip
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.MODULE_DIR }}
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.compatibility }}
+          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }}
+          sccache: true
 
       - name: Build free-threaded wheels
         # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
