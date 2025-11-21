@@ -15,7 +15,7 @@ echo "Building tket-c-api on aarch64-apple-darwin with MACOSX_DEPLOYMENT_TARGET=
 
 cd "$(dirname "$0")/"../../
 
-brew install --cask jq
+brew install jq
 pipx install conan
 
 # Install and run conan
