@@ -2,9 +2,9 @@
 pub mod array_utils;
 pub mod debug;
 pub mod futures;
+pub mod globals;
 pub mod prelude;
 pub mod qsystem;
 pub mod random;
 pub mod result;
 pub mod utils;
-pub mod globals;

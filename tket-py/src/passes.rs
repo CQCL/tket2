@@ -105,9 +105,14 @@ fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, Py
 
 /// TODO
 #[pyfunction]
-fn replace_qubits<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, bool)> {
+#[pyo3(signature = (circ, entrypoint = None))]
+fn replace_qubits<'py>(circ: &Bound<'py, PyAny>, entrypoint: Option<&str>) -> PyResult<(Bound<'py, PyAny>, bool)> {
     let py = circ.py();
-    let pass = passes::rewrite_quantum::RewriteQuantumPass::default();
+    let pass = {
+        let mut p = passes::rewrite_quantum::RewriteQuantumPass::default();
+        p.entrypoint = entrypoint.map(|s| s.to_owned());
+        p
+    };
     try_with_circ(circ, move |mut circ, _| {
         let r = pass.run(&mut circ.hugr_mut()).convert_pyerrs()?;
         let circ = CircuitType::Tket.convert(py, circ)?;

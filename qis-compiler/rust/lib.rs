@@ -34,7 +34,7 @@ use std::rc::Rc;
 use std::vec::Vec;
 use std::{fs, str, vec};
 use tket::extension::rotation::ROTATION_EXTENSION;
-use tket::extension::{self, globals, TKET1_EXTENSION, TKET_EXTENSION};
+use tket::extension::{self, TKET_EXTENSION, TKET1_EXTENSION, globals};
 use tket::hugr::extension::{ExtensionRegistry, prelude};
 use tket::hugr::std_extensions::arithmetic::{
     conversions, float_ops, float_types, int_ops, int_types,

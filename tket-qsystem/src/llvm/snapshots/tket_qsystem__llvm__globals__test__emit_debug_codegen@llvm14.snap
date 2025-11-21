@@ -1,6 +1,5 @@
 ---
 source: tket-qsystem/src/llvm/globals.rs
-assertion_line: 75
 expression: mod_str
 ---
 ; ModuleID = 'test_context'

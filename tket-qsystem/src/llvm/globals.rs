@@ -1,8 +1,17 @@
 #![allow(missing_docs)]
 
-use hugr::{extension::{prelude::option_type, simple_op::HasConcrete as _}, llvm::{emit::{EmitFuncContext, EmitOpArgs}, inkwell::{types::BasicType as _, AddressSpace}, CodegenExtension, CodegenExtsBuilder}, ops::ExtensionOp, HugrView, Node};
-use tket::extension::globals::{self, GlobalsOp, GlobalsOpDef};
 use anyhow::{bail, ensure, Result};
+use hugr::{
+    extension::{prelude::option_type, simple_op::HasConcrete as _},
+    llvm::{
+        emit::{EmitFuncContext, EmitOpArgs},
+        inkwell::{types::BasicType as _, AddressSpace},
+        CodegenExtension, CodegenExtsBuilder,
+    },
+    ops::ExtensionOp,
+    HugrView, Node,
+};
+use tket::extension::globals::{self, GlobalsOp, GlobalsOpDef};
 
 pub struct GlobalsCodegenExtension;
 
@@ -18,7 +27,11 @@ impl CodegenExtension for GlobalsCodegenExtension {
     }
 }
 
-fn emit_globals_op<'c, H: HugrView<Node=Node>>(context: &mut EmitFuncContext<'c, '_, H>, args: EmitOpArgs<'c, '_, ExtensionOp, H>, op: GlobalsOpDef) -> Result<()> {
+fn emit_globals_op<'c, H: HugrView<Node = Node>>(
+    context: &mut EmitFuncContext<'c, '_, H>,
+    args: EmitOpArgs<'c, '_, ExtensionOp, H>,
+    op: GlobalsOpDef,
+) -> Result<()> {
     let op = op.instantiate(args.node().args())?;
     const PREFIX: &str = "__globals__";
 
@@ -46,7 +59,7 @@ fn emit_globals_op<'c, H: HugrView<Node=Node>>(context: &mut EmitFuncContext<'c,
             let result = builder.build_load(global.as_pointer_value(), "current_value")?;
             let _ = builder.build_store(global.as_pointer_value(), new_value.clone())?;
             args.outputs.finish(builder, [result])?
-        },
+        }
     }
 
     Ok(())
@@ -56,23 +69,26 @@ fn emit_globals_op<'c, H: HugrView<Node=Node>>(context: &mut EmitFuncContext<'c,
 mod test {
     use super::*;
     use hugr::extension::prelude::usize_t;
+    use hugr::extension::simple_op::MakeRegisteredOp as _;
     use hugr::llvm::check_emission;
+    use hugr::llvm::test::llvm_ctx;
     use hugr::llvm::test::single_op_hugr;
     use hugr::llvm::test::TestContext;
-    use hugr::llvm::test::llvm_ctx;
     use hugr::std_extensions::arithmetic::int_types::INT_TYPES;
-    use hugr::extension::simple_op::MakeRegisteredOp as _;
 
     #[rstest::rstest]
-    fn emit_debug_codegen(
-        mut llvm_ctx: TestContext,
-    ) {
-        llvm_ctx.add_extensions(move |ceb| ceb.add_default_prelude_extensions().add_extension(GlobalsCodegenExtension));
-        let hugr = single_op_hugr(GlobalsOp::Swap {
-            name: "my_global".to_string(),
-            ty: usize_t()
-        }.into());
+    fn emit_debug_codegen(mut llvm_ctx: TestContext) {
+        llvm_ctx.add_extensions(move |ceb| {
+            ceb.add_default_prelude_extensions()
+                .add_extension(GlobalsCodegenExtension)
+        });
+        let hugr = single_op_hugr(
+            GlobalsOp::Swap {
+                name: "my_global".to_string(),
+                ty: usize_t(),
+            }
+            .into(),
+        );
         check_emission!(hugr, llvm_ctx);
     }
-    
 }

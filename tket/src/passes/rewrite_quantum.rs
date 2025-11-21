@@ -1,17 +1,14 @@
 #![allow(missing_docs)]
 
 use itertools::Itertools as _;
-use std::collections::BTreeMap;
+use petgraph::visit::Walker;
+use std::collections::{BTreeMap, BTreeSet};
 
 use hugr::{
     algorithms::{
-        replace_types::{NodeTemplate, ReplaceTypesError},
-        ComposablePass, ReplaceTypes,
+        call_graph::{CallGraph, CallGraphNode}, replace_types::{NodeTemplate, ReplaceTypesError}, ComposablePass, ReplaceTypes
     },
-    builder::{
-        BuildError, Container, Dataflow,
-        DataflowSubContainer, HugrBuilder, ModuleBuilder,
-    },
+    builder::{BuildError, Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
     extension::{
         prelude::{bool_t, qb_t},
         SignatureError,
@@ -46,11 +43,14 @@ pub enum RewriteQuantumPassError {
         expected: PolyFuncType,
         found: PolyFuncType,
     },
+    #[display("Missing function '{name}'")]
+    MissingFunction { name: String },
 }
 
 #[derive(Debug, Clone)]
 pub struct RewriteQuantumPass {
     qubit_to_ty: Type,
+    pub entrypoint: Option<String>,
     funcs: BTreeMap<TketOp, String>,
 }
 
@@ -59,6 +59,7 @@ impl Default for RewriteQuantumPass {
         let int: TypeRV = INT_TYPES[6].clone().into();
         Self {
             qubit_to_ty: Type::new_tuple(vec![int.clone(), int]),
+            entrypoint: None,
             funcs: TketOp::iter()
                 .map(|op| {
                     let name: &'static str = op.into();
@@ -74,9 +75,26 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
     type Result = bool;
 
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
-        let r = self.lowerer(self.find_or_create_funcs(hugr)?)?.run(hugr)?;
-        eprintln!("{}", hugr.mermaid_string());
+        let mut lowerer = self.lowerer(self.find_or_create_funcs(hugr)?)?;
+        if let Some(entrypoint) = self.entrypoint.as_ref() {
+            let n = all_funcs_by_name(hugr)
+                .get(entrypoint)
+                .ok_or(RewriteQuantumPassError::MissingFunction {
+                    name: entrypoint.clone(),
+                })?
+                .0;
+
+            let cg = CallGraph::new(hugr);
+            let dfs = petgraph::visit::Dfs::new(cg.graph(), cg.node_index(n).unwrap());
+            lowerer.set_regions(dfs.iter(cg.graph()).filter_map(|n| if let CallGraphNode::FuncDefn(n) = cg.graph()[n] {
+                Some(n)
+            } else {
+                None
+            }))
+        };
+        let r = lowerer.run(hugr)?;
         hugr.validate()?;
+        eprintln!("{}", hugr.mermaid_string());
         Ok(r)
     }
 }
