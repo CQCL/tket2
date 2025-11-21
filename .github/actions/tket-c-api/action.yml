@@ -17,11 +17,11 @@ runs:
   using: composite
   steps:
     - name: Attempt to retrieve cached tket-c-api
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       id: cache
       with:
         path: ${{ inputs.install-path }}
-        key: ${{ runner.os }}-${{ inputs.target }}-${{ hashFiles('tket1-passes/conanfile.txt') }}-${{ hashFiles('tket1-passes/scripts/build.sh') }}-${{ hashFiles('tket1-passes/scripts/build/${{ inputs.target }}.sh') }}-${{ hashFiles('.github/actions/tket-c-api/action.yml') }}
+        key: ${{ runner.os }}-${{ inputs.target }}-${{ hashFiles('tket1-passes/conanfile.txt') }}
 
     - name: Run install script
       if: steps.cache.outputs.cache-hit != 'true'
@@ -31,6 +31,13 @@ runs:
           "${{ inputs.target }}" \
           "${{ inputs.compatibility }}" \
           "${{ inputs.install-path }}"
+
+    - name: Save the cached tket-c-api
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ inputs.install-path }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
 
     - name: List tket-c-api library files
       shell: bash
