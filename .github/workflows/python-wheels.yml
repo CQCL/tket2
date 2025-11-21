@@ -169,7 +169,6 @@ jobs:
 
       - name: Set compatibility flag
         id: compatibility-flag
-        if: ${{ matrix.platform.
         shell: bash
         run: |
           if [ "${{ matrix.platform.compatibility }}" == *"linux"* ]; then

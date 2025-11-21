@@ -17,6 +17,7 @@ if [ ! -d "${output_dir}" ]; then
     echo "Output directory ${output_dir} does not exist. Creating it."
     mkdir -p "${output_dir}"
 fi
+output_abs="$(realpath "${output_dir}")"
 
 # For linux builds use docker containers for compatibility
 case "${target}" in
@@ -28,19 +29,19 @@ case "${target}" in
         # The output directory is mounted to /out in the container,
         # and is writable.
         docker run -i \
-            -v "$(dirname "$0")/../":/tket1-passes:ro \
-            -v "${output_dir}":/out \
+            -v "$(realpath $(dirname "$0")/../)":/tket1-passes:ro \
+            -v "${output_abs}":/out \
             quay.io/pypa/${compatibility}:latest \
             /bin/bash /tket1-passes/scripts/build/linux.sh /out
     ;;
     *"apple-darwin")
         echo "Building tket-c-api with MACOSX_DEPLOYMENT_TARGET=${compatibility}..."
         MACOSX_DEPLOYMENT_TARGET="${compatibility}" \
-          bash -c "$(dirname "$0")/build/macos.sh ${output_dir}"
+          bash -c "$(dirname "$0")/build/macos.sh ${output_abs}"
     ;;
     *"windows-msvc")
         echo "Building tket-c-api for Windows with MSVC..." 
-        pwsh -File "$(dirname "$0")"/build/windows.sh ${output_dir}
+        pwsh -File "$(dirname "$0")"/build/windows.sh ${output_abs}
     ;;
     *)
       echo "Unsupported target: ${target}"
