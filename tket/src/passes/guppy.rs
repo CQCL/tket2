@@ -4,7 +4,9 @@ use hugr::algorithms::const_fold::{ConstFoldError, ConstantFoldPass};
 use hugr::algorithms::inline_dfgs::InlineDFGsPass;
 use hugr::algorithms::normalize_cfgs::{NormalizeCFGError, NormalizeCFGPass};
 use hugr::algorithms::untuple::{UntupleError, UntupleRecursive};
-use hugr::algorithms::{ComposablePass, RemoveDeadFuncsError, RemoveDeadFuncsPass, UntuplePass};
+use hugr::algorithms::{
+    inline_acyclic, ComposablePass, RemoveDeadFuncsError, RemoveDeadFuncsPass, UntuplePass,
+};
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::inline_dfg::InlineDFGError;
 use hugr::Node;
@@ -70,6 +72,10 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
     type Error = NormalizeGuppyErrors;
     type Result = ();
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
+        // We probably shouldn't inline quite as aggressively as this, but
+        // the results demonstrate how much we need to do at least some of it:
+        inline_acyclic(hugr, |_, _| true).unwrap();
+
         if self.simplify_cfgs {
             NormalizeCFGPass::default().run(hugr)?;
         }
