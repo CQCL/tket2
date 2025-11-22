@@ -4,6 +4,9 @@ mod commutation;
 
 pub use commutation::{apply_greedy_commutation, PullForwardError};
 
+pub mod borrow_squash;
+pub use borrow_squash::BorrowSquashPass;
+
 pub mod chunks;
 pub use chunks::CircuitChunks;
 
