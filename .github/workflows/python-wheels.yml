@@ -175,7 +175,9 @@ jobs:
           target: ${{ matrix.platform.target }}
           manylinux: ${{ matrix.platform.compatibility }}
           args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }}
-          docker-options: -e TKET_C_API_PATH -e LLVM_PATH -e LD_LIBRARY_PATH -e PATH
+          docker-options: -e TKET_C_API_PATH
+          before-script-linux:
+            export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$TKET_C_API_PATH/lib:/home/runner/work/tket2/tket2/llvm/lib";
           sccache: true
 
 
