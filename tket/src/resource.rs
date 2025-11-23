@@ -129,8 +129,9 @@ pub(crate) mod tests {
     use hugr::{
         builder::{DFGBuilder, Dataflow, DataflowHugr},
         extension::prelude::qb_t,
+        ops::{OpType, Value},
         types::Signature,
-        CircuitUnit, Hugr,
+        Hugr, HugrView, IncomingPort, Wire,
     };
 
     use itertools::Itertools;
@@ -138,7 +139,7 @@ pub(crate) mod tests {
 
     use crate::{
         extension::rotation::{rotation_type, ConstRotation},
-        resource::scope::tests::ResourceScopeReport,
+        resource::{scope::tests::ResourceScopeReport, CircuitUnit},
         utils::build_simple_circuit,
         Circuit, TketOp,
     };
@@ -157,7 +158,12 @@ pub(crate) mod tests {
         .into_hugr()
     }
 
-    // Gate being commuted has a non-linear input
+    /// A test circuit, with n_qubits qubits and the following layers of gates:
+    ///
+    /// - a layer of Hadamards (one on each qubit)
+    /// - a layer of CX (qubits grouped pairwise)
+    /// - if add_rz == true, a layer of rotations, with angle given as input to the circuit
+    /// - if add_const_rz == true, a layer of rotations, with angle pi/2
     pub fn cx_rz_circuit(n_qubits: usize, add_rz: bool, add_const_rz: bool) -> Hugr {
         let build = || {
             let out_qb_row = vec![qb_t(); n_qubits];
@@ -189,7 +195,7 @@ pub(crate) mod tests {
                 for i in 0..n_qubits {
                     circ.append_and_consume(
                         TketOp::Rz,
-                        [CircuitUnit::Linear(i), CircuitUnit::Wire(f)],
+                        [hugr::CircuitUnit::Linear(i), hugr::CircuitUnit::Wire(f)],
                     )?;
                 }
             }
@@ -198,7 +204,10 @@ pub(crate) mod tests {
                 for i in 0..n_qubits {
                     circ.append_and_consume(
                         TketOp::Rz,
-                        [CircuitUnit::Linear(i), CircuitUnit::Wire(const_angle)],
+                        [
+                            hugr::CircuitUnit::Linear(i),
+                            hugr::CircuitUnit::Wire(const_angle),
+                        ],
                     )?;
                 }
             }
@@ -241,5 +250,24 @@ pub(crate) mod tests {
         assert_eq!(info.resource_paths.len(), n_qubits);
         assert_eq!(info.n_copyable, add_const_rz as usize + add_rz as usize);
         insta::assert_snapshot!(name, info);
+    }
+
+    #[test]
+    fn test_as_const_value() {
+        let circ = cx_rz_circuit(2, false, true);
+        let rz_op = circ
+            .nodes()
+            .find(|&n| circ.get_optype(n) == &OpType::from(TketOp::Rz))
+            .unwrap();
+        let angle_inp = CircuitUnit::Copyable(Wire::from_connected_port(
+            rz_op,
+            IncomingPort::from(1),
+            &circ,
+        ));
+        let scope = ResourceScope::from_circuit(Circuit::from(&circ));
+        assert_eq!(
+            scope.as_const_value(angle_inp).unwrap(),
+            &Value::from(ConstRotation::PI_2)
+        );
     }
 }
