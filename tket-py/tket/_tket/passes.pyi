@@ -114,3 +114,9 @@ def squash_phasedx_rz(
     - traverse_subcircuits: Whether to apply the optimisation to subregions
       nested inside other subregions of the circuit.
     """
+
+def replace_qubits(
+    circ: CircuitClass,
+) -> tuple[CircuitClass, bool]:
+    """TODO
+    """
