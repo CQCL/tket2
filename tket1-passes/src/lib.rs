@@ -125,7 +125,7 @@ impl Tket1Circuit {
         };
 
         // SAFETY: json_ptr is a valid pointer to a null-terminated string.
-        // c_str is not usable after this point.
+        // The pointer is not shared with any other living object at this point, so it is safe to free
         unsafe { ffi::tket_free_string(json_ptr) };
 
         Ok(serial_circuit)
