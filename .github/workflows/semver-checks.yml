@@ -16,7 +16,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/check-changes
         id: filter
 
@@ -33,7 +33,7 @@ jobs:
       LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
     steps:
       - name: Checkout tket
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
