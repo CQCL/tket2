@@ -54,7 +54,10 @@ impl<T: HugrView> Circuit<T> {
     /// Wrap the circuit in a package.
     fn wrap_package(&self) -> Result<Package, EnvelopeError> {
         let hugr = Circuit::to_owned(self).into_hugr();
-        Ok(Package::from_hugr(hugr))
+        let extensions = hugr.extensions().clone();
+        let mut package = Package::from_hugr(hugr);
+        package.extensions.extend(extensions);
+        Ok(package)
     }
 }
 
