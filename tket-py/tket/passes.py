@@ -11,7 +11,6 @@ from pytket.passes import (
 
 from tket import optimiser
 from tket.circuit import Tk2Circuit
-from pytket.circuit import OpType as TketOp
 
 from hugr.passes._composable_pass import (
     ComposablePass,
