@@ -17,8 +17,9 @@ from tket.pattern import Rule, RuleMatcher
 import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
-# from hugr.build.base import Hugr
-# from hugr.passes._composable_pass import ComposedPass
+
+from tket.passes import CliffordSimplification
+from hugr.build.base import Hugr
 
 import pytest
 
@@ -184,16 +185,14 @@ def test_normalize_guppy():
     assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
 
 
-# def test_clifford_simp_class() -> None:
-#    cx_circ = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
-#    hugr = Hugr.from_str(cx_circ.to_str())
-#
-#    cliff_pass_perm = CliffordSimplification(allow_swaps=True)
-#
-#    # Simplify 2 CX circuit to a single CX with an implicit swap.
-#    cliff_pass_perm(hugr)
-#    opt_circ = Tk2Circuit.from_bytes(hugr.to_bytes())
-#    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
+def test_clifford_simp_class() -> None:
+    cx_circ = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
+    hugr = Hugr.from_str(cx_circ.to_str())
+    cliff_pass_perm = CliffordSimplification(allow_swaps=True)
+    # Simplify 2 CX circuit to a single CX with an implicit swap.
+    res = cliff_pass_perm.run(hugr)
+    opt_circ = Tk2Circuit.from_bytes(res.hugr.to_bytes())
+    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
 
 
 # def test_pass_composition() -> None:

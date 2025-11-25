@@ -1,6 +1,7 @@
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Optional, Literal, Protocol
 import json
+from dataclasses import dataclass
 
 from pytket import Circuit
 from pytket.passes import (
@@ -13,6 +14,16 @@ from pytket.passes import (
 from pytket.circuit import OpType as PyTketOp
 
 from tket import optimiser
+from tket.circuit import Tk2Circuit
+
+from hugr.passes._composable_pass import (
+    ComposablePass,
+    implement_pass_run,
+    PassResult,
+)
+
+
+from hugr.hugr.base import Hugr
 
 # Re-export native bindings.
 from ._tket.passes import (
@@ -92,29 +103,30 @@ def badger_pass(
     return CustomPass(apply, label="tket.badger_pass")
 
 
-# class Tket1Pass(ComposablePass, Protocol):
-#    def _pytket_pass(self) -> BasePass: ...
-#
-#    def _apply(self, hugr: Hugr) -> Hugr:
-#        hugr = deepcopy(hugr)
-#        self._apply_inplace(hugr)
-#        return hugr
-#
-#
-# @dataclass
-# class CliffordSimplification(Tket1Pass):
-#    allow_swaps: bool = True
-#    target_2qb_gate: OpType = OpType.CX
-#
-#    def _pytket_pass(self) -> BasePass:
-#        return CliffordSimp(self.allow_swaps, self.target_2qb_gate)
-#
-#
-# @dataclass
-# class SquashRzPhasedX(Tket1Pass):
-#    def _pytket_pass(self) -> BasePass:
-#        return SquashRzPhasedX()
-#
+class Tket1Pass(ComposablePass, Protocol):
+    def _pytket_pass(self) -> BasePass: ...
+
+    def run(self, hugr: Hugr, *, inplace: bool = False) -> PassResult:
+        return implement_pass_run(
+            self, hugr=hugr, inplace=False, inplace_call=self._run_pytket_pass_on_hugr
+        )
+
+    def _run_pytket_pass_on_hugr(self, hugr: Hugr) -> PassResult:
+        pass_json = json.dumps(self._pytket_pass().to_dict())
+        compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
+        opt_program = tket1_pass(compiler_state, pass_json, traverse_subcircuits=True)
+        hugr = Hugr.from_str(opt_program.to_str())
+        return PassResult(hugr=hugr, inplace=False, results=[(self.name, hugr)])
+
+
+@dataclass
+class CliffordSimplification(Tket1Pass):
+    allow_swaps: bool = True
+    target_2qb_gate: PyTketOp = PyTketOp.CX
+
+    def _pytket_pass(self) -> BasePass:
+        return CliffordSimp(self.allow_swaps, self.target_2qb_gate)
+
 
 def clifford_simp(
     circ: Circuit,
