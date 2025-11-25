@@ -16,7 +16,7 @@ from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
 
 from tket.passes import PytketPass
-from pytket.passes import CliffordSimp, SquashRzPhasedX
+from pytket.passes import CliffordSimp, SquashRzPhasedX, SequencePass
 from hugr.build.base import Hugr
 
 import pytest
@@ -179,6 +179,19 @@ def test_squash_phasedx_rz():
     # TODO: We cannot use circuit_cost due to a panic on non-tket ops and there
     # being some parameter loads...
     assert opt_circ.num_operations() == 0
+
+
+def test_sequence_pass():
+    c = Tk2Circuit(
+        Circuit(2).CX(0, 1).CX(1, 0).Rz(0.25, 0).Rz(0.75, 0).Rz(0.25, 0).Rz(-1.25, 0)
+    )
+    hugr = Hugr.from_str(c.to_str())
+    seq_pass = SequencePass([SquashRzPhasedX(), CliffordSimp(allow_swaps=True)])
+    clifford_and_squash_pass = PytketPass(seq_pass)
+    res_hugr = clifford_and_squash_pass(hugr)
+    opt_circ = Tk2Circuit.from_bytes(res_hugr.to_bytes())
+    assert opt_circ.num_operations() == 1
+    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
 
 
 def test_normalize_guppy():
