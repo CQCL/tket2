@@ -99,9 +99,9 @@ def badger_pass(
 
 @dataclass
 class PytketPass(ComposablePass):
-    _pytket_pass: type[BasePass]
+    _pytket_pass: BasePass
 
-    def __init__(self, pytket_pass: type[BasePass]) -> None:
+    def __init__(self, pytket_pass: BasePass) -> None:
         self._pytket_pass = pytket_pass
 
     def __call__(self, hugr: Hugr, *, inplace: bool = False) -> Hugr:
