@@ -128,4 +128,4 @@ class PytketPass(ComposablePass):
         compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
         opt_program = tket1_pass(compiler_state, pass_json, traverse_subcircuits=True)
         new_hugr = Hugr.from_str(opt_program.to_str())
-        return PassResult(hugr=new_hugr, inplace=False, results=[(self.name, new_hugr)])
+        return PassResult.for_pass(self, new_hugr, inplace=False)
