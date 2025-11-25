@@ -53,6 +53,7 @@ fn emit_globals_op<'c, H: HugrView<Node = Node>>(
             let global = module.get_global(&sym).unwrap_or_else(|| {
                 let global = module.add_global(sym_ty, Some(AddressSpace::default()), &sym);
                 global.set_initializer(&none_value);
+                global.set_thread_local(true);
                 global
             });
 
