@@ -98,10 +98,10 @@ def badger_pass(
 
 @dataclass
 class PytketPass(ComposablePass):
-    _pytket_pass: BasePass
+    pytket_pass: BasePass
 
     def __init__(self, pytket_pass: BasePass) -> None:
-        self._pytket_pass = pytket_pass
+        self.pytket_pass = pytket_pass
 
     def __call__(self, hugr: Hugr, *, inplace: bool = False) -> Hugr:
         """Call the pass to transform a HUGR, returning a Hugr."""
@@ -116,7 +116,7 @@ class PytketPass(ComposablePass):
         )
 
     def _run_pytket_pass_on_hugr(self, hugr: Hugr) -> PassResult:
-        pass_json = json.dumps(self._pytket_pass.to_dict())
+        pass_json = json.dumps(self.pytket_pass.to_dict())
         compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
         opt_program = tket1_pass(compiler_state, pass_json, traverse_subcircuits=True)
         new_hugr = Hugr.from_str(opt_program.to_str())
