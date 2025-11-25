@@ -10,7 +10,6 @@ from tket.passes import (
 )
 from tket.circuit import Tk2Circuit
 
-# from tket.passes import CliffordSimplification, SquashRzPhasedX
 from tket.pattern import Rule, RuleMatcher
 import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
