@@ -49,6 +49,8 @@ cool_asserts.workspace = true
 petgraph.workspace = true
 rstest.workspace = true
 serde_json.workspace = true
+tket1-passes = { path = "../tket1-passes" }
+rayon.workspace = true
 
 [lints]
 workspace = true
