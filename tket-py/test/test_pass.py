@@ -156,7 +156,6 @@ def test_clifford_simp_no_swaps():
     c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
     hugr = Hugr.from_str(c.to_str())
     cliff_pass = PytketPass(CliffordSimp(allow_swaps=False))
-    print(cliff_pass)
     res = cliff_pass.run(hugr)
     opt_circ = Tk2Circuit.from_bytes(res.hugr.to_bytes())
     assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
