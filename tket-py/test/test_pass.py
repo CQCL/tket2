@@ -6,9 +6,7 @@ from tket.passes import (
     badger_pass,
     greedy_depth_reduce,
     chunks,
-    clifford_simp,
     normalize_guppy,
-    squash_phasedx_rz,
 )
 from tket.circuit import Tk2Circuit
 
@@ -18,7 +16,8 @@ import hypothesis.strategies as st
 from hypothesis.strategies._internal import SearchStrategy
 from hypothesis import given, settings
 
-from tket.passes import CliffordSimplification
+from tket.passes import PytketPass
+from pytket.passes import CliffordSimp, SquashRzPhasedX
 from hugr.build.base import Hugr
 
 import pytest
@@ -153,22 +152,35 @@ def test_multiple_rules():
     assert out == Circuit(3).CX(0, 1).X(0)
 
 
-def test_clifford_simp():
+def test_clifford_simp_no_swaps():
     c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+    hugr = Hugr.from_str(c.to_str())
+    cliff_pass = PytketPass(CliffordSimp(allow_swaps=False))
+    print(cliff_pass)
+    res = cliff_pass.run(hugr)
+    opt_circ = Tk2Circuit.from_bytes(res.hugr.to_bytes())
+    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
 
-    c = clifford_simp(c, allow_swaps=False)
 
-    assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
+def test_clifford_simp_with_swaps() -> None:
+    cx_circ = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
+    hugr = Hugr.from_str(cx_circ.to_str())
+    cliff_pass_perm = PytketPass(CliffordSimp(allow_swaps=True))
+    # Simplify 2 CX circuit to a single CX with an implicit swap.
+    res = cliff_pass_perm.run(hugr)
+    opt_circ = Tk2Circuit.from_bytes(res.hugr.to_bytes())
+    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
 
 
 def test_squash_phasedx_rz():
     c = Tk2Circuit(Circuit(1).Rz(0.25, 0).Rz(0.75, 0).Rz(0.25, 0).Rz(-1.25, 0))
-
-    c = squash_phasedx_rz(c)
-
+    hugr = Hugr.from_str(c.to_str())
+    squash_pass = PytketPass(SquashRzPhasedX())
+    opt_hugr = squash_pass(hugr)
+    opt_circ = Tk2Circuit.from_bytes(opt_hugr.to_bytes())
     # TODO: We cannot use circuit_cost due to a panic on non-tket ops and there
     # being some parameter loads...
-    assert c.num_operations() == 0
+    assert opt_circ.num_operations() == 0
 
 
 def test_normalize_guppy():
@@ -183,27 +195,3 @@ def test_normalize_guppy():
     c = normalize_guppy(c)
 
     assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
-
-
-def test_clifford_simp_class() -> None:
-    cx_circ = Tk2Circuit(Circuit(2).CX(0, 1).CX(1, 0))
-    hugr = Hugr.from_str(cx_circ.to_str())
-    cliff_pass_perm = CliffordSimplification(allow_swaps=True)
-    # Simplify 2 CX circuit to a single CX with an implicit swap.
-    res = cliff_pass_perm.run(hugr)
-    opt_circ = Tk2Circuit.from_bytes(res.hugr.to_bytes())
-    assert opt_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 1
-
-
-# def test_pass_composition() -> None:
-#    test_circ = Circuit(2).CX(0, 1).CX(1, 0).Rz(0.4, 0).Rz(0.4, 0)
-#    test_hugr1 = Hugr.from_str(Tk2Circuit(test_circ).to_str())
-#    test_hugr2 = Tk2Circuit(test_circ.copy())
-#
-#    clifford_simp_callable = CliffordSimplification()
-#    squash = SquashRzPhasedX()
-#
-#    clifford_simp_callable.then(test_hugr1)
-#
-#    my_composed_pass = ComposedPass(passes=[clifford_simp_callable, squash])
-#    my_composed_pass(test_hugr2)
