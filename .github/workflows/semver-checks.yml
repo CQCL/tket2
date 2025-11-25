@@ -34,6 +34,9 @@ jobs:
     steps:
       - name: Checkout tket
         uses: actions/checkout@v6
+        # NOTE: here we are using tket-c-api configuration (version and conanfile.txt) from main
+        # to determine the APIs of both main and the PR branch before we look for breaking changes.
+        # This may give incorrect results / CI errors if the PR changes that configuration.
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api
         with:
