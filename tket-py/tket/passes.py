@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Literal, Type
+from typing import Optional, Literal
 import json
 from dataclasses import dataclass
 
@@ -11,6 +11,7 @@ from pytket.passes import (
 
 from tket import optimiser
 from tket.circuit import Tk2Circuit
+from pytket.circuit import OpType as TketOp
 
 from hugr.passes._composable_pass import (
     ComposablePass,
@@ -103,7 +104,11 @@ class PytketPass(ComposablePass):
     def __init__(self, pytket_pass: type[BasePass]) -> None:
         self._pytket_pass = pytket_pass
 
-    def run(self, hugr: Hugr, *, inplace: bool = True) -> PassResult:
+    def __call__(self, hugr: Hugr, *, inplace: bool = False) -> Hugr:
+        """Call the pass to transform a HUGR, returning a Hugr."""
+        return self.run(hugr, inplace=inplace).hugr
+
+    def run(self, hugr: Hugr, *, inplace: bool = False) -> PassResult:
         return implement_pass_run(
             self,
             hugr=hugr,
