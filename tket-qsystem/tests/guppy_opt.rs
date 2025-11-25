@@ -35,7 +35,11 @@ fn load_guppy_circuit(name: &str, file_type: HugrFileType) -> std::io::Result<Hu
         HugrFileType::Flat => ".flat",
         HugrFileType::Optimized => ".opt",
     };
-    let file = Path::new(GUPPY_EXAMPLES_DIR).join(format!("{name}/{name}{suffix}.hugr"));
+    load_guppy_example(&format!("{name}/{name}{suffix}.hugr"))
+}
+
+fn load_guppy_example(path: &str) -> std::io::Result<Hugr> {
+    let file = Path::new(GUPPY_EXAMPLES_DIR).join(path);
     let reader = fs::File::open(file)?;
     let reader = BufReader::new(reader);
     Ok(Hugr::load(reader, None).unwrap())
@@ -75,6 +79,7 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 ///
 
 #[rstest]
+#[case::nested_array("nested_array", None)]
 #[should_panic = "xfail"]
 #[case::angles("angles", Some(vec![
     ("tket.quantum.Rz", 2), ("tket.quantum.MeasureFree", 1), ("tket.quantum.H", 2), ("tket.quantum.QAlloc", 1)
@@ -93,12 +98,15 @@ fn count_gates(h: &impl HugrView) -> HashMap<SmolStr, usize> {
 ]))]
 #[should_panic = "xfail"]
 #[case::false_branch("false_branch", Some(vec![
-    ("TKET1.tk1op", 2), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
+    ("TKET1.tk1op", 1), ("tket.quantum.H", 1), ("tket.quantum.QAlloc", 1), ("tket.quantum.MeasureFree", 1)
 ]))]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-fn optimise_guppy_pytket(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
+fn optimize_flattened_guppy(#[case] name: &str, #[case] xfail: Option<Vec<(&str, usize)>>) {
     let mut hugr = load_guppy_circuit(name, HugrFileType::Flat)
         .unwrap_or_else(|_| load_guppy_circuit(name, HugrFileType::Original).unwrap());
+    // We don't need NormalizeGuppy to "flatten" control flow here, but we still want
+    // to get rid of other guppy artifacts.
+    NormalizeGuppy::default().run(&mut hugr).unwrap();
     run_pytket(&mut hugr);
     let should_xfail = xfail.is_some();
     let expected_counts = match xfail {
@@ -109,6 +117,33 @@ fn optimise_guppy_pytket(#[case] name: &str, #[case] xfail: Option<Vec<(&str, us
     if should_xfail {
         panic!("xfail");
     }
+}
+
+#[rstest]
+#[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
+fn optimize_guppy_ranges_array() {
+    // Demonstrates we can fully optimize the array operations in ranges
+    // (after control flow is flattened) if we play around with the entrypoint.
+    use hugr::algorithms::const_fold::ConstantFoldPass;
+    use hugr::hugr::hugrmut::HugrMut;
+    use tket::passes::BorrowSquashPass;
+    let mut hugr = load_guppy_example("ranges/ranges.flat.array.hugr").unwrap();
+
+    let f = hugr
+        .children(hugr.module_root())
+        .find(|n| {
+            hugr.get_optype(*n)
+                .as_func_defn()
+                .is_some_and(|fd| fd.func_name() == "f")
+        })
+        .unwrap();
+    hugr.set_entrypoint(f);
+    ConstantFoldPass::default().run(&mut hugr).unwrap();
+    BorrowSquashPass::default().run(&mut hugr).unwrap();
+    run_pytket(&mut hugr);
+    let expected_counts =
+        count_gates(&load_guppy_circuit("ranges", HugrFileType::Optimized).unwrap());
+    assert_eq!(count_gates(&hugr), expected_counts);
 }
 
 #[rstest]
@@ -125,15 +160,20 @@ fn flatten_guppy(#[case] name: &str) {
     assert_eq!(count_gates(&hugr), count_gates(&target));
 }
 
-/// Check that each example optimizes to the full extent given by the .opt (and .flat) .hugr files.
+/// Check that each example optimizes to the full extent given by the .opt .hugr files.
 #[rstest]
+#[case::nested_array("nested_array")]
+#[should_panic]
 #[case::angles("angles")]
+#[should_panic]
 #[case::false_branch("false_branch")]
+#[should_panic]
 #[case::simple_cx("simple_cx")]
+#[should_panic]
 #[case::nested("nested")]
+#[should_panic]
 #[case::ranges("ranges")]
-#[should_panic] // This does not yet pass for any case!
-fn optimise_guppy(#[case] name: &str) {
+fn optimize_guppy(#[case] name: &str) {
     let mut hugr = load_guppy_circuit(name, HugrFileType::Original).unwrap();
     let flat = count_gates(
         load_guppy_circuit(name, HugrFileType::Flat)
