@@ -11,7 +11,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::inline_dfg::InlineDFGError;
 use hugr::Node;
 
-use crate::passes::BorrowSquashPass;
+use crate::passes::{unpack_container::TypeUnpacker, BorrowSquashPass};
 
 /// Normalize the structure of a Guppy-generated circuit into something that can be optimized by tket.
 ///
@@ -84,7 +84,15 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
         // We probably shouldn't inline quite as aggressively as this, but
         // the results demonstrate how much we need to do at least some of it:
-        inline_acyclic(hugr, |_, _| true).unwrap();
+        let qubit_finder = TypeUnpacker::for_qubits();
+        inline_acyclic(hugr, |h, call| {
+            let inst = &h.get_optype(call).as_call().unwrap().instantiation;
+            inst.input_types()
+                .into_iter()
+                .chain(inst.output_types())
+                .any(|ty| qubit_finder.contains_element_type(&ty))
+        })
+        .unwrap();
 
         if self.simplify_cfgs {
             NormalizeCFGPass::default().run(hugr)?;
