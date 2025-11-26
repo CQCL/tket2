@@ -41,7 +41,7 @@ jobs:
           - resolution: "lowest-direct"
             python: "3.10"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install tket-c-api library
         uses: ./.github/actions/tket-c-api

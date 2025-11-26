@@ -29,8 +29,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_function(wrap_pyfunction!(normalize_guppy, &m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;
     m.add_function(wrap_pyfunction!(self::chunks::chunks, &m)?)?;
-    m.add_function(wrap_pyfunction!(self::tket1::clifford_simp, &m)?)?;
-    m.add_function(wrap_pyfunction!(self::tket1::squash_phasedx_rz, &m)?)?;
+    m.add_function(wrap_pyfunction!(self::tket1::tket1_pass, &m)?)?;
     m.add("PullForwardError", py.get_type::<PyPullForwardError>())?;
     m.add("TK1PassError", py.get_type::<tket1::PytketPassError>())?;
     Ok(m)
