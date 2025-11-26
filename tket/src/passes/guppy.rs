@@ -90,9 +90,9 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
             // (e.g. container) functions as this might enable better qubit tracking.
             let inst = &h.get_optype(call).as_call().unwrap().instantiation;
             inst.input_types()
-                .into_iter()
+                .iter()
                 .chain(inst.output_types())
-                .any(|ty| qubit_finder.contains_element_type(&ty))
+                .any(|ty| qubit_finder.contains_element_type(ty))
         })
         .unwrap();
 
