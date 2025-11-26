@@ -86,6 +86,8 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         // the results demonstrate how much we need to do at least some of it:
         let qubit_finder = TypeUnpacker::for_qubits();
         inline_acyclic(hugr, |h, call| {
+            // Look for qubits. Use instantiated type so that we inline generic
+            // (e.g. container) functions as this might enable better qubit tracking.
             let inst = &h.get_optype(call).as_call().unwrap().instantiation;
             inst.input_types()
                 .into_iter()
