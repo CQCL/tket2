@@ -110,10 +110,6 @@ class PytketPass(ComposablePass):
         """Initialize a PytketPass from a :py:class:`~pytket.passes.BasePass` instance."""
         self.pytket_pass = pytket_pass
 
-    def __call__(self, hugr: Hugr, *, inplace: bool = False) -> Hugr:
-        """Call the pytket pass to transform a HUGR, returning a Hugr."""
-        return self.run(hugr, inplace=inplace).hugr
-
     def run(self, hugr: Hugr, *, inplace: bool = False) -> PassResult:
         """Run the pytket pass as a HUGR transform returning a PassResult."""
         return implement_pass_run(
