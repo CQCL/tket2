@@ -116,12 +116,15 @@ class PytketPass(ComposablePass):
             self,
             hugr=hugr,
             inplace=inplace,
-            copy_call=lambda h: self._run_pytket_pass_on_hugr(h),
+            copy_call=lambda h: self._run_pytket_pass_on_hugr(h, inplace),
         )
 
-    def _run_pytket_pass_on_hugr(self, hugr: Hugr) -> PassResult:
+    def _run_pytket_pass_on_hugr(self, hugr: Hugr, inplace: bool) -> PassResult:
         pass_json = json.dumps(self.pytket_pass.to_dict())
         compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
         opt_program = tket1_pass(compiler_state, pass_json, traverse_subcircuits=True)
         new_hugr = Hugr.from_str(opt_program.to_str())
-        return PassResult(hugr=new_hugr, inplace=False)
+        # `for_pass` assumes Modified is true by default
+        # TODO: if we can extract better info from tket1 as to what happened, use it. 
+        # Are there better results  we can use too?
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=())
