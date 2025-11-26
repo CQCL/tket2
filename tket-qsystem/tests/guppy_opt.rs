@@ -115,23 +115,9 @@ fn optimize_flattened_guppy(#[case] name: &str, #[case] xfail: Option<Vec<(&str,
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
 fn optimize_guppy_ranges_array() {
     // Demonstrates we can fully optimize the array operations in ranges
-    // (after control flow is flattened) if we play around with the entrypoint.
-    use hugr::algorithms::const_fold::ConstantFoldPass;
-    use hugr::hugr::hugrmut::HugrMut;
-    use tket::passes::BorrowSquashPass;
+    // (starting with a Hugr where only control flow has been flattened, not arrays)
     let mut hugr = load_guppy_example("ranges/ranges.flat.array.hugr").unwrap();
-
-    let f = hugr
-        .children(hugr.module_root())
-        .find(|n| {
-            hugr.get_optype(*n)
-                .as_func_defn()
-                .is_some_and(|fd| fd.func_name() == "f")
-        })
-        .unwrap();
-    hugr.set_entrypoint(f);
-    ConstantFoldPass::default().run(&mut hugr).unwrap();
-    BorrowSquashPass::default().run(&mut hugr).unwrap();
+    NormalizeGuppy::default().run(&mut hugr).unwrap();
     run_pytket(&mut hugr);
     let expected_counts =
         count_gates(&load_guppy_circuit("ranges", HugrFileType::Optimized).unwrap());
