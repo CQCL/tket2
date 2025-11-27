@@ -2,12 +2,7 @@ from pytket import Circuit, OpType
 from dataclasses import dataclass
 from typing import Callable, Any
 from tket.ops import TketOp
-from tket.passes import (
-    badger_pass,
-    greedy_depth_reduce,
-    chunks,
-    normalize_guppy,
-)
+from tket.passes import badger_pass, greedy_depth_reduce, chunks, NormalizeGuppy
 from tket.circuit import Tk2Circuit
 
 from tket.pattern import Rule, RuleMatcher
@@ -202,7 +197,9 @@ def test_normalize_guppy():
     """
 
     c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
+    hugr = Hugr.from_str(c.to_str())
+    normalize = NormalizeGuppy()
+    clean_hugr = normalize(hugr)
+    clean_circ = Tk2Circuit.from_bytes(clean_hugr.to_bytes())
 
-    c = normalize_guppy(c)
-
-    assert c.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
+    assert clean_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
