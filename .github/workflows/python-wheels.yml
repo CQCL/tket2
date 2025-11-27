@@ -65,45 +65,36 @@ jobs:
         # Each entry defines:
         # - runner: The github runner to use for the build.
         # - target: The target platform used when building the rust code.
-        # - manylinux: (optional) If doing manylinux-compatible wheels,
-        #    the manylinux version to use. Setting this option causes the wheels
-        #    to be built with zig.
-        # - test-wheels: Whether to test installing the wheels.
-        #    This is only done when the target platform matches the runner platform.
-        #
-        # Note that platform support is limited by the pytket wheels' availability.
-        # Since we have it as a dependency, wheels built for other platforms will be unusable.
+        # - compatibility: target-specific compatibility option, e.g.:
+        #   - manylinux/musllinux for ubuntu
+        #   - MACOSX_DEPLOYMENT_TARGET for macos
+        #   - c library target for windows (currently only msvc supported)
         platform:
           # ---------------- Linux
-          # aarch64 cross-compilation with maturin was causing linking issues
-          # (it doesn't seem to be using zig even though we set --zig)
-          # so it's temporarily disabled
-          #- runner: ubuntu-24.04
-          #  target: aarch64-unknown-linux-gnu
-          #  manylinux: "manylinux2014"
-          #- runner: ubuntu-24.04
-          #  target: aarch64-unknown-linux-musl
-          #  manylinux: "musllinux_1_2"
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            compatibility: manylinux_2_28
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            compatibility: musllinux_1_2
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
-            manylinux: "manylinux2014"
-            test-wheels: true
+            compatibility: manylinux_2_28
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-            manylinux: "musllinux_1_2"
+            compatibility: musllinux_1_2
           # ---------------- Mac
           - runner: macos-14
             target: aarch64-apple-darwin
-            test-wheels: true
-            macos-compatibility: "13.0"
+            compatibility: "13.0"
           - runner: macos-15-intel
             target: x86_64-apple-darwin
-            test-wheels: true
-            macos-compatibility: "15.0"
+            compatibility: "15.0"
           # ---------------- Windows
           - runner: windows-2025
             target: x86_64-pc-windows-msvc
-            test-wheels: true
+            compatibility: msvc
+
     steps:
       - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -115,7 +106,9 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
+
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
@@ -145,7 +138,7 @@ jobs:
               echo "TKET_C_API_PATH=$WORKSPACE/tket-c-api" >> $GITHUB_ENV
               echo "$WORKSPACE/tket-c-api/lib" >> $GITHUB_PATH
               echo "DYLD_LIBRARY_PATH=$WORKSPACE/tket-c-api/lib" >> $GITHUB_ENV
-              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.macos-compatibility }}" >> $GITHUB_ENV
+              echo "MACOSX_DEPLOYMENT_TARGET=${{ matrix.platform.compatibility }}" >> $GITHUB_ENV
               ;;
             Linux)
               echo "tket_c_api_path=$WORKSPACE/tket-c-api" >> $GITHUB_OUTPUT
@@ -159,55 +152,9 @@ jobs:
         with:
           install-path: ${{ steps.tket-paths.outputs.tket_c_api_path }}
           target: ${{ matrix.platform.target }}
+          compatibility: ${{ matrix.platform.compatibility }}
 
-      - uses: mlugg/setup-zig@v2
-        if: ${{ matrix.platform.manylinux }}
-
-      - name: Set compatibility flag
-        id: compatibility-flag
-        shell: bash
-        run: |
-          if [ -n "${{ matrix.platform.manylinux }}" ]; then
-            WITH_ZIG_FLAG="--with ziglang --with maturin[zig]"
-            COMPATIBILITY_FLAG="--compatibility ${{ matrix.platform.manylinux }} --zig"
-          else
-            WITH_ZIG_FLAG=""
-            COMPATIBILITY_FLAG=""
-          fi
-          echo "COMPATIBILITY_FLAG: $COMPATIBILITY_FLAG"
-          echo "WITH_ZIG_FLAG: $WITH_ZIG_FLAG"
-          echo "COMPATIBILITY_FLAG=$COMPATIBILITY_FLAG" >> "$GITHUB_OUTPUT"
-          echo "WITH_ZIG_FLAG=$WITH_ZIG_FLAG" >> "$GITHUB_OUTPUT"
-
-      - name: Check tket-c-api shared library
-        shell: bash
-        run: |
-          echo "tket-c-api files:"
-          find $TKET_C_API_PATH -type f
-          find $TKET_C_API_PATH -type f -name "*.so" | while IFS= read -r sofile; do
-            echo "======= objdump -f $sofile ======="
-            objdump -f "$sofile" || echo "objdump failed for $sofile"
-            echo "======= readelf -h $sofile ======="
-            readelf -h "$sofile" 2>/dev/null | head -20 || echo "readelf failed for $sofile"
-            echo "======= file $sofile ======="
-            file "$sofile" || echo "file failed for $sofile"
-            echo
-          done
-          find $TKET_C_API_PATH -type f -name "*.dylib" | while IFS= read -r dylibfile; do
-            echo "======= otool -L $dylibfile ======="
-            otool -L "$dylibfile" || echo "otool failed for $dylibfile"
-            echo "======= file $dylibfile ======="
-            file "$dylibfile" || echo "file failed for $dylibfile"
-            echo
-          done
-          find $TKET_C_API_PATH -type f -name "*.lib" | while IFS= read -r libfile; do
-            echo "======= Checking Windows library: $libfile ======="
-            echo "======= file $libfile ======="
-            file "$libfile" || echo "file failed for $libfile"
-            echo
-          done
-
-      - name: Copy DLL to package directory (Windows)
+      - name: Copy tket-c-api DLL to package directory (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
@@ -222,31 +169,33 @@ jobs:
           fi
 
       - name: Build wheels
-        shell: bash
-        run: |
-          cd ${{ env.MODULE_DIR }}
-          uv run --python ${{ env.PYTHON_VERSION }} \
-            ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
-            maturin build ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
-            --release \
-            --out ../dist \
-            --target ${{ matrix.platform.target }} \
-            --strip
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: ${{ env.MODULE_DIR }}
+          target: ${{ matrix.platform.target }}
+          manylinux: ${{ matrix.platform.compatibility }}
+          args: --release --out ../dist --strip -i ${{ env.PYTHON_VERSION }}
+          docker-options: -e TKET_C_API_PATH
+          before-script-linux:
+            export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$TKET_C_API_PATH/lib:/home/runner/work/tket2/tket2/llvm/lib";
+          sccache: true
 
-      - name: Build free-threaded wheels
-        # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
-        if: false
-        shell: bash
-        run: |
-          cd ${{ env.MODULE_DIR }}
-          uv run --python ${{ env.PYTHON_VERSION }}+freethreaded \
-            ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
-            maturin build \
-            ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
-            --release \
-            --out ../dist \
-            --target ${{ matrix.platform.target }} \
-            --strip
+
+      #- name: Build free-threaded wheels
+      #  # TODO: pytket is a required dependency of tket-py, but it doesn't build free-threaded wheels yet
+      #  if: false
+      #  shell: bash
+      #  run: |
+      #    cd ${{ env.MODULE_DIR }}
+      #    uv run --python ${{ env.PYTHON_VERSION }}+freethreaded \
+      #      ${{ steps.compatibility-flag.outputs.WITH_ZIG_FLAG }} \
+      #      maturin build \
+      #      ${{ steps.compatibility-flag.outputs.COMPATIBILITY_FLAG }} \
+      #      --auditwheel=repair
+      #      --release \
+      #      --out ../dist \
+      #      --target ${{ matrix.platform.target }} \
+      #      --strip
 
       - name: Repair macOS wheels with delocate
         if: runner.os == 'macOS'
@@ -278,12 +227,10 @@ jobs:
         shell: bash
         run: |
           echo "Testing the newly built ${{ matrix.platform.target }} wheels..."
-          if [ "$TEST_INSTALL" = "true" ]; then
-            # Make sure we only use the tket lib from the wheel itself
-            rm -rf $WORKSPACE\tket-c-api\lib
-            rm -rf $WORKSPACE\tket-c-api\bin
-            uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
-          fi
+          # Make sure we only use the tket lib from the wheel itself
+          rm -rf $WORKSPACE\tket-c-api\lib
+          rm -rf $WORKSPACE\tket-c-api\bin
+          uv run -f dist --with tket --refresh-package tket --no-project -- python -c "import tket"
           uvx twine check --strict dist/*
         env:
           WORKSPACE: ${{ github.workspace }}
