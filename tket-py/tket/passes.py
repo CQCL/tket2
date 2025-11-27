@@ -164,7 +164,9 @@ class NormalizeGuppy(ComposablePass):
             compiler_state,
             simplify_cfgs=self.simplify_cfgs,
             remove_tuple_untuple=self.remove_tuple_untuple,
+            constant_folding=self.constant_folding,
             remove_dead_funcs=self.remove_dead_funcs,
+            inline_dfgs=self.inline_dfgs,
         )
         new_hugr = Hugr.from_str(opt_program.to_str())
         return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=())
