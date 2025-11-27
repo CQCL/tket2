@@ -127,7 +127,7 @@ class PytketPass(ComposablePass):
         # `for_pass` assumes Modified is true by default
         # TODO: if we can extract better info from tket1 as to what happened, use it.
         # Are there better results  we can use too?
-        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=())
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)
 
 
 @dataclass
@@ -169,4 +169,4 @@ class NormalizeGuppy(ComposablePass):
             inline_dfgs=self.inline_dfgs,
         )
         new_hugr = Hugr.from_str(opt_program.to_str())
-        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=())
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)
