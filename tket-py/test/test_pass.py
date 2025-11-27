@@ -2,7 +2,13 @@ from pytket import Circuit, OpType
 from dataclasses import dataclass
 from typing import Callable, Any
 from tket.ops import TketOp
-from tket.passes import badger_pass, greedy_depth_reduce, chunks, NormalizeGuppy
+from tket.passes import (
+    badger_pass,
+    greedy_depth_reduce,
+    chunks,
+    NormalizeGuppy,
+    normalize_guppy,
+)
 from tket.circuit import Tk2Circuit
 
 from tket.pattern import Rule, RuleMatcher
@@ -196,10 +202,18 @@ def test_normalize_guppy():
     runs without errors.
     """
 
-    c = Tk2Circuit(Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2))
-    hugr = Hugr.from_str(c.to_str())
+    pytket_circ = Circuit(4).CX(0, 2).CX(1, 2).CX(1, 2)
+    # TODO: add a more thorough test which checks that the hugr is normalized as expected.
+    # test NormalizeGuppy as a ComposablePass
+    c1 = Tk2Circuit(pytket_circ)
+    hugr = Hugr.from_str(c1.to_str())
     normalize = NormalizeGuppy()
     clean_hugr = normalize(hugr)
-    clean_circ = Tk2Circuit.from_bytes(clean_hugr.to_bytes())
+    normal_circ1 = Tk2Circuit.from_bytes(clean_hugr.to_bytes())
+    assert normal_circ1.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
 
-    assert clean_circ.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
+    # test normalize_guppy as a function call
+    c2 = Tk2Circuit(pytket_circ)
+    normal_circ2 = normalize_guppy(c2)
+    c2 = Tk2Circuit(pytket_circ)
+    assert normal_circ2.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
