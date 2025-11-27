@@ -99,7 +99,6 @@ def badger_pass(
 @dataclass
 class PytketPass(ComposablePass):
     pytket_pass: BasePass
-
     """
     A class which provides an interface to apply pytket passes to Hugr programs.
 
@@ -127,4 +126,46 @@ class PytketPass(ComposablePass):
         # `for_pass` assumes Modified is true by default
         # TODO: if we can extract better info from tket1 as to what happened, use it.
         # Are there better results  we can use too?
-        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=())
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)
+
+
+@dataclass
+class NormalizeGuppy(ComposablePass):
+    simplify_cfgs: bool = True
+    remove_tuple_untuple: bool = True
+    constant_folding: bool = False
+    remove_dead_funcs: bool = True
+    inline_dfgs: bool = True
+
+    """Flatten the structure of a Guppy-generated program to enable additional optimisations.
+
+    This should normally be called first before other optimisations.
+
+    Parameters:
+    - simplify_cfgs: Whether to simplify CFG control flow.
+    - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+    - constant_folding: Whether to constant fold the program.
+    - remove_dead_funcs: Whether to remove dead functions.
+    - inline_dfgs: Whether to inline DFG operations.
+    """
+
+    def run(self, hugr: Hugr, *, inplace: bool = True) -> PassResult:
+        return implement_pass_run(
+            self,
+            hugr=hugr,
+            inplace=inplace,
+            copy_call=lambda h: self._run_pytket_pass_on_hugr(h, inplace),
+        )
+
+    def _normalize(self, hugr: Hugr, inplace: bool) -> PassResult:
+        compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
+        opt_program = normalize_guppy(
+            compiler_state,
+            simplify_cfgs=self.simplify_cfgs,
+            remove_tuple_untuple=self.remove_tuple_untuple,
+            constant_folding=self.constant_folding,
+            remove_dead_funcs=self.remove_dead_funcs,
+            inline_dfgs=self.inline_dfgs,
+        )
+        new_hugr = Hugr.from_str(opt_program.to_str())
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)
