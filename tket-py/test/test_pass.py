@@ -215,5 +215,4 @@ def test_normalize_guppy():
     # test normalize_guppy as a function call
     c2 = Tk2Circuit(pytket_circ)
     normal_circ2 = normalize_guppy(c2)
-    c2 = Tk2Circuit(pytket_circ)
     assert normal_circ2.circuit_cost(lambda op: int(op == TketOp.CX)) == 3
