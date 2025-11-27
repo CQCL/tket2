@@ -151,6 +151,14 @@ class NormalizeGuppy(ComposablePass):
     """
 
     def run(self, hugr: Hugr, *, inplace: bool = True) -> PassResult:
+        return implement_pass_run(
+            self,
+            hugr=hugr,
+            inplace=inplace,
+            copy_call=lambda h: self._normalize(h, inplace),
+        )
+
+    def _normalize(self, hugr: Hugr, inplace: bool) -> PassResult:
         compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
         opt_program = normalize_guppy(
             compiler_state,
