@@ -95,6 +95,12 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
                 .any(|ty| qubit_finder.contains_element_type(ty))
         })
         .unwrap();
+        // Many functions now unreachable, so remove - this may improve compilation speed,
+        // although not if all remaining phases operate only beneath the entrypoint.
+        // Shouldn't be affected by anything else until we start removing untaken branches.
+        if self.dead_funcs {
+            RemoveDeadFuncsPass::default().run(hugr)?;
+        }
 
         if self.simplify_cfgs {
             NormalizeCFGPass::default().run(hugr)?;
@@ -106,11 +112,6 @@ impl<H: HugrMut<Node = Node> + 'static> ComposablePass<H> for NormalizeGuppy {
         // Should propagate through untuple, so could do earlier, and must be before BorrowSquash
         if self.constant_fold {
             ConstantFoldPass::default().run(hugr)?;
-        }
-        // Only improves compilation speed, not affected by anything else
-        // until we start removing untaken branches
-        if self.dead_funcs {
-            RemoveDeadFuncsPass::default().run(hugr)?;
         }
         // Do earlier? Nothing creates DFGs
         if self.inline_dfgs {
