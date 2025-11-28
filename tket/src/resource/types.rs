@@ -4,6 +4,7 @@
 //! copyable values throughout a HUGR circuit, including resource identifiers,
 //! positions, and the mapping structures that associate them with operations.
 
+use derive_more::From;
 use hugr::{
     core::HugrNode, types::Signature, Direction, IncomingPort, OutgoingPort, Port, PortIndex, Wire,
 };
@@ -21,7 +22,8 @@ pub struct ResourceId(usize);
 impl ResourceId {
     /// Create a new ResourceId.
     ///
-    /// This method should only be called by ResourceAllocator and tests.
+    /// ResourceIds should typically be obtained from [`ResourceAllocator`].
+    /// Only use this in testing.
     pub(crate) fn new(id: usize) -> Self {
         Self(id)
     }
@@ -38,7 +40,7 @@ impl ResourceId {
 /// Initially assigned as contiguous integers, they may become non-integer
 /// when operations are inserted or removed.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Position(Rational64);
+pub struct Position(pub(crate) Rational64);
 
 impl std::fmt::Debug for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -51,8 +53,8 @@ impl Position {
     ///
     /// This method should only be called by allocators and tests.
     #[allow(unused)]
-    pub(super) fn new_integer(i: i64) -> Self {
-        Self(Rational64::from_integer(i))
+    pub(super) fn new_integer(numer: i64) -> Self {
+        Self(Rational64::from_integer(numer))
     }
 
     /// Get position as f64, rounded to the given precision.
@@ -69,12 +71,19 @@ impl Position {
 
 /// A value associated with a dataflow port, identified either by a resource ID
 /// (for linear values) or by its wire (for copyable values).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// This can currently be converted to and from [`hugr::CircuitUnit`], but
+/// linear wires are assigned to resources with typed resource IDs instead of
+/// integers.
+///
+/// Equivalence with [`hugr::CircuitUnit`] is not guaranteed in the future: we
+/// may expand expressivity, e.g. identifying copyable units by their ASTs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, From)]
 pub enum CircuitUnit<N: HugrNode> {
     /// A linear resource.
-    Resource(ResourceId),
+    Resource(#[from] ResourceId),
     /// A copyable value.
-    Copyable(Wire<N>),
+    Copyable(#[from] Wire<N>),
 }
 
 impl<N: HugrNode> CircuitUnit<N> {
