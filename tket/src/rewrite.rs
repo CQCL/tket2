@@ -91,7 +91,7 @@ impl<N: HugrNode> CircuitRewrite<N> {
 }
 
 /// Generate rewrite rules for circuits.
-pub trait Rewriter<N> {
+pub trait Rewriter {
     /// Get the rewrite rules for a circuit.
-    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = N>>) -> Vec<CircuitRewrite<N>>;
+    fn get_rewrites(&self, circ: &Circuit<impl HugrView<Node = Node>>) -> Vec<CircuitRewrite>;
 }
