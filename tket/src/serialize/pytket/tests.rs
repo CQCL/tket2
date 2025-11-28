@@ -9,6 +9,7 @@ use hugr::builder::{
     ModuleBuilder, SubContainer,
 };
 use hugr::extension::prelude::{bool_t, option_type, qb_t, UnwrapBuilder};
+use hugr::std_extensions::arithmetic::float_types::{float64_type, ConstF64};
 use rayon::iter::ParallelIterator;
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ use hugr::hugr::hugrmut::HugrMut;
 use hugr::ops::handle::FuncID;
 use hugr::ops::{OpParent, OpType, Value};
 use hugr::std_extensions::arithmetic::float_ops::FloatOps;
-use hugr::types::Signature;
+use hugr::types::{Signature, SumType};
 use hugr::HugrView;
 use itertools::Itertools;
 use rstest::{fixture, rstest};
@@ -26,7 +27,7 @@ use tket_json_rs::register;
 
 use super::{TKETDecode, METADATA_INPUT_PARAMETERS, METADATA_Q_REGISTERS};
 use crate::circuit::Circuit;
-use crate::extension::bool::BoolOp;
+use crate::extension::bool::{bool_type, BoolOp};
 use crate::extension::rotation::{rotation_type, ConstRotation, RotationOp};
 use crate::extension::sympy::SympyOpDef;
 use crate::extension::TKET1_EXTENSION_ID;
@@ -38,6 +39,14 @@ use crate::serialize::pytket::{
     PytketEncodeOpError, PytketEncoderConfig,
 };
 use crate::TketOp;
+
+const EMPTY_CIRCUIT: &str = r#"{
+        "phase": "0",
+        "bits": [["c", [0]]],
+        "qubits": [["q", [0]], ["q", [1]]],
+        "commands": [],
+        "implicit_permutation": [[["q", [0]], ["q", [0]]], [["q", [1]], ["q", [1]]]]
+    }"#;
 
 const SIMPLE_JSON: &str = r#"{
         "phase": "0",
@@ -107,7 +116,7 @@ const BARRIER: &str = r#"{
         "qubits": [["q", [0]], ["q", [1]], ["q", [2]]],
         "commands": [
             {"args": [["q", [0]], ["q", [1]]], "op": {"type": "CX"}},
-            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier"}},
+            {"args": [["q", [1]], ["q", [2]]], "op": {"type": "Barrier", "data": "Something invalid"}},
             {"args": [["q", [2]], ["c", [1]]], "op": {"type": "Measure"}}
         ],
         "created_qubits": [],
@@ -623,6 +632,126 @@ fn circ_unsupported_io_wire() -> Circuit {
     hugr.into()
 }
 
+// Nodes with order edges should be marked as unsupported to preserve the connection.
+#[fixture]
+fn circ_order_edge() -> Circuit {
+    let input_t = vec![qb_t(), qb_t()];
+    let output_t = vec![qb_t(), qb_t()];
+    let mut h = FunctionBuilder::new("order_edge", Signature::new(input_t, output_t)).unwrap();
+
+    let [q1, q2] = h.input_wires_arr();
+
+    let cx1 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx1.outputs_arr();
+
+    let cx2 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx2.outputs_arr();
+
+    let cx3 = h.add_dataflow_op(TketOp::CX, [q1, q2]).unwrap();
+    let [q1, q2] = cx3.outputs_arr();
+
+    h.set_order(&cx1, &cx3);
+
+    let hugr = h.finish_hugr_with_outputs([q1, q2]).unwrap();
+    hugr.into()
+}
+
+// Bool types get converted automatically between native and tket representations.
+#[fixture]
+fn circ_bool_conversion() -> Circuit {
+    let input_t = vec![bool_t(), bool_type()];
+    let output_t = vec![bool_t(), bool_type()];
+    let mut h = FunctionBuilder::new("bool_conversion", Signature::new(input_t, output_t)).unwrap();
+
+    let [native_b0, tket_b1] = h.input_wires_arr();
+
+    let [tket_b0] = h
+        .add_dataflow_op(BoolOp::make_opaque, [native_b0])
+        .unwrap()
+        .outputs_arr();
+    let [native_b1] = h
+        .add_dataflow_op(BoolOp::read, [tket_b1])
+        .unwrap()
+        .outputs_arr();
+
+    let hugr = h.finish_hugr_with_outputs([native_b1, tket_b0]).unwrap();
+    hugr.into()
+}
+
+/// A circuit that requires tracking info in `extra_subgraph` or `straight_through_wires`
+/// (see `EncodedCircuitInfo`), for a nested circuit in a CircBox.
+#[fixture]
+fn circ_unsupported_extras_in_circ_box() -> Circuit {
+    let input_t = vec![option_type(bool_t()).into(), option_type(qb_t()).into()];
+    let output_t = vec![bool_t(), option_type(qb_t()).into()];
+    let mut h = FunctionBuilder::new(
+        "unsupported_extras_in_circ_box",
+        Signature::new(input_t.clone(), output_t.clone()),
+    )
+    .unwrap();
+
+    let [maybe_b, maybe_q] = h.input_wires_arr();
+
+    let [maybe_b, maybe_q] = {
+        let mut nested = h
+            .dfg_builder(Signature::new(input_t, output_t), [maybe_b, maybe_q])
+            .unwrap();
+        let [maybe_b, maybe_q] = nested.input_wires_arr();
+
+        let [maybe_b] = nested
+            .build_unwrap_sum(1, option_type(bool_t()), maybe_b)
+            .unwrap();
+
+        nested
+            .finish_with_outputs([maybe_b, maybe_q])
+            .unwrap()
+            .outputs_arr()
+    };
+
+    let hugr = h.finish_hugr_with_outputs([maybe_b, maybe_q]).unwrap();
+    hugr.into()
+}
+
+// A circuit with an output parameter wire.
+#[fixture]
+fn circ_output_parameter_wire() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![float64_type(), rotation_type()];
+    let mut h =
+        FunctionBuilder::new("output_parameter_wire", Signature::new(input_t, output_t)).unwrap();
+
+    let pi = h.add_load_value(ConstF64::new(std::f64::consts::PI));
+    let two = h.add_load_value(ConstF64::new(2.0));
+    let two_pi = h
+        .add_dataflow_op(FloatOps::fmul, [pi, two])
+        .unwrap()
+        .out_wire(0);
+    let two_pi_rotation = h
+        .add_dataflow_op(RotationOp::from_halfturns_unchecked, [two_pi])
+        .unwrap()
+        .out_wire(0);
+
+    let hugr = h
+        .finish_hugr_with_outputs([two_pi, two_pi_rotation])
+        .unwrap();
+    hugr.into()
+}
+
+// A circuit with a [float64] wire, which should be treated as unsupported.
+#[fixture]
+fn circ_complex_param_type() -> Circuit {
+    let input_t = vec![];
+    let output_t = vec![SumType::new_tuple(vec![float64_type()]).into()];
+    let mut h =
+        FunctionBuilder::new("complex_param_type", Signature::new(input_t, output_t)).unwrap();
+
+    let float64 = h.add_load_value(ConstF64::new(1.0));
+    let float_tuple = h.make_tuple([float64]).unwrap();
+
+    let hugr = h.finish_hugr_with_outputs([float_tuple]).unwrap();
+    hugr.into()
+}
+
 /// Check that all circuit ops have been translated to a native gate.
 ///
 /// Panics if there are tk1 ops in the circuit.
@@ -675,7 +804,7 @@ fn json_roundtrip(
 
 #[rstest]
 #[cfg_attr(miri, ignore)] // Opening files is not supported in (isolated) miri
-#[case::barenco_tof_10("../test_files/barenco_tof_10.json")]
+#[case::barenco_tof_10("../test_files/pytket/barenco_tof_10.json")]
 fn json_file_roundtrip(#[case] circ: impl AsRef<std::path::Path>) {
     let reader = BufReader::new(std::fs::File::open(circ).unwrap());
     let ser: circuit_json::SerialCircuit = serde_json::from_reader(reader).unwrap();
@@ -757,6 +886,8 @@ fn encoded_circuit_attributes(circ_measure_ancilla: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), CircuitRoundtripTestConfig::Default)]
+// TODO: Should pass once CircBox encoding of DFGs is re-enabled.
+#[should_panic(expected = "Cannot encode subgraphs with nested structure")]
 #[case::nested_dfgs(circ_nested_dfgs(), CircuitRoundtripTestConfig::Default)]
 #[case::tk1_ops(circ_tk1_ops(), CircuitRoundtripTestConfig::Default)]
 #[case::missing_decoders(circ_measure_ancilla(), CircuitRoundtripTestConfig::NoStd)]
@@ -854,22 +985,26 @@ fn fail_on_modified_hugr(circ_tk1_ops: Circuit) {
 #[case::meas_ancilla(circ_measure_ancilla(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_qubits(circ_preset_qubits(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::preset_parameterized(circ_parameterized(), 1, CircuitRoundtripTestConfig::Default)]
-#[case::nested_dfgs(circ_nested_dfgs(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::nested_dfgs(circ_nested_dfgs(), 2, CircuitRoundtripTestConfig::Default)]
 #[case::flat_opaque(circ_tk1_ops(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: Fail due to eagerly emitting QAllocs that never get consumed. We should do that lazily.
-#[should_panic(expected = "has an unconnected port")]
 #[case::unsupported_subtree(circ_unsupported_subtree(), 3, CircuitRoundtripTestConfig::Default)]
 #[case::global_defs(circ_global_defs(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::recursive(circ_recursive(), 1, CircuitRoundtripTestConfig::Default)]
 #[case::independent_subgraph(circ_independent_subgraph(), 3, CircuitRoundtripTestConfig::Default)]
-// TODO: An unsupported wire from the input to the output causes an error.
-//#[should_panic]
-#[should_panic(expected = "assertion failed")]
 #[case::unsupported_io_wire(circ_unsupported_io_wire(), 1, CircuitRoundtripTestConfig::Default)]
-// TODO: fix edge case: non-local edge from an unsupported node inside a nested CircBox
-// to/from the input of the head region being encoded...
-#[should_panic(expected = "Could not find a parameter of the required input type")]
-#[case::non_local(circ_non_local(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::order_edge(circ_order_edge(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::bool_conversion(circ_bool_conversion(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::complex_param_type(circ_complex_param_type(), 1, CircuitRoundtripTestConfig::Default)]
+// TODO: We need to track [`EncodedCircuitInfo`] for nested CircBoxes too. We
+// have temporarily disabled encoding of DFG and function calls as CircBoxes to
+// avoid an error here.
+#[case::unsupported_extras_in_circ_box(
+    circ_unsupported_extras_in_circ_box(),
+    4,
+    CircuitRoundtripTestConfig::Default
+)]
+#[case::output_parameter_wire(circ_output_parameter_wire(), 1, CircuitRoundtripTestConfig::Default)]
+#[case::non_local(circ_non_local(), 2, CircuitRoundtripTestConfig::Default)]
 
 fn encoded_circuit_roundtrip(
     #[case] circ: Circuit,
@@ -981,4 +1116,24 @@ fn test_inplace_decoding() {
 
     assert!(hugr.get_optype(func1).is_func_defn());
     assert!(hugr.get_optype(dfg).is_dfg());
+}
+
+/// Test the lazy qubit/bit decoding behaviour when the registers are not
+/// present in the decoded region signature.
+///
+/// If the registers are never consumed, they won't be initialized at all.
+#[rstest]
+fn test_qubit_elision() {
+    let ser: circuit_json::SerialCircuit = serde_json::from_str(EMPTY_CIRCUIT).unwrap();
+    assert_eq!(ser.commands.len(), 0);
+
+    let circ: Circuit = ser
+        .decode(DecodeOptions::new().with_signature(Signature::new_endo(vec![])))
+        .unwrap();
+    assert_eq!(circ.qubit_count(), 0);
+
+    check_no_tk1_ops(&circ);
+
+    // The circuit should have no alloc/frees or const definitions
+    assert_eq!(circ.num_operations(), 0);
 }

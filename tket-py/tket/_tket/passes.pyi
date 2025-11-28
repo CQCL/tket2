@@ -20,6 +20,27 @@ class CircuitChunks:
 class PullForwardError(Exception):
     """Error from a `PullForward` operation."""
 
+def normalize_guppy(
+    circ: CircuitClass,
+    *,
+    simplify_cfgs: bool = True,
+    remove_tuple_untuple: bool = True,
+    constant_folding: bool = False,
+    remove_dead_funcs: bool = True,
+    inline_dfgs: bool = True,
+) -> CircuitClass:
+    """Flatten the structure of a Guppy-generated program to enable additional optimisations.
+
+    This should normally be called first before other optimisations.
+
+    Parameters:
+    - simplify_cfgs: Whether to simplify CFG control flow.
+    - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+    - constant_folding: Whether to constant fold the program.
+    - remove_dead_funcs: Whether to remove dead functions.
+    - inline_dfgs: Whether to inline DFG operations.
+    """
+
 def greedy_depth_reduce(circ: CircuitClass) -> tuple[CircuitClass, int]:
     """Greedy depth reduction of a circuit.
 
@@ -64,3 +85,21 @@ def badger_optimise(
 
 def chunks(c: Circuit | Tk2Circuit, max_chunk_size: int) -> CircuitChunks:
     """Split a circuit into chunks of at most `max_chunk_size` gates."""
+
+def tket1_pass(
+    circ: CircuitClass,
+    pass_json: str,
+    *,
+    traverse_subcircuits: bool = True,
+) -> CircuitClass:
+    """Runs a pytket pass on all circuit-like regions under the entrypoint of the
+    HUGR.
+
+    Parameters:
+    - pass_json: The JSON string of the pytket pass to run. See [pytket
+      documentation](https://docs.quantinuum.com/tket/api-docs/passes.html#pytket.passes.BasePass.to_dict)
+      for more details.
+    - traverse_subcircuits: Whether to recurse into the children of the
+      circuit-like regions, and optimise them too.
+      nested inside other subregions of the circuit.
+    """

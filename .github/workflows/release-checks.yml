@@ -16,13 +16,17 @@ env:
   RUSTC_WRAPPER: "sccache"
   # Pinned version for the uv package manager
   UV_VERSION: "0.9.7"
-  # The highest and lowest supported Python versions, used for testing
-  PYTHON_HIGHEST: "3.14"
-  PYTHON_LOWEST: "3.10"
+
+  # Path to the cached tket-c-api library
+  # When this envvar is set, the `./.github/actions/tket-c-api` action **must** be run to fetch the artifacts
+  # This config is not required, but speeds up the build by caching the tket-c-api library
+  # The alternative is to install conan and remove the env var
+  TKET_C_API_PATH: "${{ github.workspace }}/tket-c-api"
+  LD_LIBRARY_PATH: ${{ github.workspace }}/tket-c-api/lib
 
 jobs:
   py-release:
-    name: Check `tket-py`compatibility with ${{ matrix.resolution }} dependencies
+    name: Check `tket-py`compatibility with ${{ matrix.target.resolution }} dependencies
     runs-on: ubuntu-latest
     # Check if we are running on a release PR.
     #
@@ -31,24 +35,30 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        resolution:
-          - "highest"
-          - "lowest-direct"
+        target:
+          - resolution: "highest"
+            python: "3.14"
+          - resolution: "lowest-direct"
+            python: "3.10"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
           version: ${{ env.UV_VERSION }}
           enable-cache: true
-      - name: Install Python ${{ env.PYTHON_HIGHEST }}
+      - name: Install Python ${{ matrix.target.python }}
         run: |
-          uv python install ${{ env.PYTHON_HIGHEST }}
-          uv python pin ${{ env.PYTHON_HIGHEST }}
+          uv python install ${{ matrix.target.python }}
+          uv python pin ${{ matrix.target.python }}
       - name: Setup `tket-py` with only pypi deps
         env:
-          UV_RESOLUTION: ${{ matrix.resolution }}
+          UV_RESOLUTION: ${{ matrix.target.resolution }}
         run: |
           uv lock --no-sources -U
           uv sync --no-sources --no-install-workspace

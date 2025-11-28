@@ -1,18 +1,35 @@
 from pathlib import Path
 from typing import Optional, Literal
+import json
+from dataclasses import dataclass
 
 from pytket import Circuit
-from pytket.passes import CustomPass, BasePass
+from pytket.passes import (
+    CustomPass,
+    BasePass,
+)
 
 from tket import optimiser
+from tket.circuit import Tk2Circuit
 
-# Re-export native bindings
+from hugr.passes._composable_pass import (
+    ComposablePass,
+    implement_pass_run,
+    PassResult,
+)
+
+
+from hugr.hugr.base import Hugr
+
+# Re-export native bindings.
 from ._tket.passes import (
     CircuitChunks,
     greedy_depth_reduce,
     lower_to_pytket,
     badger_optimise,
     chunks,
+    tket1_pass,
+    normalize_guppy,
     PullForwardError,
 )
 
@@ -25,6 +42,7 @@ __all__ = [
     "lower_to_pytket",
     "badger_optimise",
     "chunks",
+    "normalize_guppy",
     "PullForwardError",
 ]
 
@@ -76,3 +94,79 @@ def badger_pass(
         )
 
     return CustomPass(apply, label="tket.badger_pass")
+
+
+@dataclass
+class PytketPass(ComposablePass):
+    pytket_pass: BasePass
+
+    """
+    A class which provides an interface to apply pytket passes to Hugr programs.
+
+    The user can create a :py:class:`PytketPass` object from any serializable member of `pytket.passes`.
+    """
+
+    def __init__(self, pytket_pass: BasePass) -> None:
+        """Initialize a PytketPass from a :py:class:`~pytket.passes.BasePass` instance."""
+        self.pytket_pass = pytket_pass
+
+    def run(self, hugr: Hugr, *, inplace: bool = True) -> PassResult:
+        """Run the pytket pass as a HUGR transform returning a PassResult."""
+        return implement_pass_run(
+            self,
+            hugr=hugr,
+            inplace=inplace,
+            copy_call=lambda h: self._run_pytket_pass_on_hugr(h, inplace),
+        )
+
+    def _run_pytket_pass_on_hugr(self, hugr: Hugr, inplace: bool) -> PassResult:
+        pass_json = json.dumps(self.pytket_pass.to_dict())
+        compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
+        opt_program = tket1_pass(compiler_state, pass_json, traverse_subcircuits=True)
+        new_hugr = Hugr.from_str(opt_program.to_str())
+        # `for_pass` assumes Modified is true by default
+        # TODO: if we can extract better info from tket1 as to what happened, use it.
+        # Are there better results  we can use too?
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)
+
+
+@dataclass
+class NormalizeGuppy(ComposablePass):
+    simplify_cfgs: bool = True
+    remove_tuple_untuple: bool = True
+    constant_folding: bool = False
+    remove_dead_funcs: bool = True
+    inline_dfgs: bool = True
+
+    """Flatten the structure of a Guppy-generated program to enable additional optimisations.
+
+    This should normally be called first before other optimisations.
+
+    Parameters:
+    - simplify_cfgs: Whether to simplify CFG control flow.
+    - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+    - constant_folding: Whether to constant fold the program.
+    - remove_dead_funcs: Whether to remove dead functions.
+    - inline_dfgs: Whether to inline DFG operations.
+    """
+
+    def run(self, hugr: Hugr, *, inplace: bool = True) -> PassResult:
+        return implement_pass_run(
+            self,
+            hugr=hugr,
+            inplace=inplace,
+            copy_call=lambda h: self._normalize(h, inplace),
+        )
+
+    def _normalize(self, hugr: Hugr, inplace: bool) -> PassResult:
+        compiler_state: Tk2Circuit = Tk2Circuit.from_bytes(hugr.to_bytes())
+        opt_program = normalize_guppy(
+            compiler_state,
+            simplify_cfgs=self.simplify_cfgs,
+            remove_tuple_untuple=self.remove_tuple_untuple,
+            constant_folding=self.constant_folding,
+            remove_dead_funcs=self.remove_dead_funcs,
+            inline_dfgs=self.inline_dfgs,
+        )
+        new_hugr = Hugr.from_str(opt_program.to_str())
+        return PassResult.for_pass(self, hugr=new_hugr, inplace=inplace, result=None)

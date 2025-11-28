@@ -20,6 +20,7 @@ use tket_json_rs::circuit_json;
 use tket_json_rs::register::ElementId as RegisterUnit;
 
 use crate::circuit::Circuit;
+use crate::serialize::pytket::circuit::StraightThroughWire;
 use crate::serialize::pytket::extension::RegisterCount;
 use crate::serialize::pytket::{
     PytketEncodeError, PytketEncodeOpError, RegisterHash, METADATA_B_REGISTERS,
@@ -66,6 +67,12 @@ pub struct ValueTracker<N> {
     qubit_reg_generator: RegisterUnitGenerator,
     /// A generator of new registers units to use for bit wires.
     bit_reg_generator: RegisterUnitGenerator,
+
+    /// The parameter names in the region's input.
+    ///
+    /// This list contains entries from the circuit's [`METADATA_INPUT_PARAMETERS`] metadata,
+    /// plus fresh variable names generated as needed.
+    input_params: Vec<String>,
 }
 
 /// A lightweight identifier for a qubit value.
@@ -182,6 +189,11 @@ pub struct ValueTrackerResult {
     pub params: Vec<String>,
     /// The implicit permutation of the qubit registers.
     pub qubit_permutation: Vec<circuit_json::ImplicitPermutation>,
+    /// A list of parameter variables seen at the input node of the region.
+    pub input_params: Vec<String>,
+    /// A list of wires that were not tracked but originated directly
+    /// from the input node (so they don't appear in an unsupported graph).
+    pub straight_through_wires: Vec<StraightThroughWire>,
 }
 
 impl<N: HugrNode> ValueTracker<N> {
@@ -212,6 +224,7 @@ impl<N: HugrNode> ValueTracker<N> {
             unused_bits: BTreeSet::new(),
             qubit_reg_generator: RegisterUnitGenerator::default(),
             bit_reg_generator: RegisterUnitGenerator::default(),
+            input_params: Vec::with_capacity(param_variable_names.len()),
         };
 
         tracker.unused_qubits = (0..tracker.qubits.len()).map(TrackedQubit).collect();
@@ -243,9 +256,9 @@ impl<N: HugrNode> ValueTracker<N> {
             let Some(count) = config.type_to_pytket(typ) else {
                 // If the input has a non-serializable type, it gets skipped.
                 //
-                // TODO: We should store the original signature somewhere in the circuit,
-                // so it can be reconstructed later.
-                tracker.register_wire::<TrackedValue>(wire, [], circ)?;
+                // We will store the connection outside the serialized circuit,
+                // either as an unsupported subgraph or as a
+                // [StraightThroughWire].
                 continue;
             };
 
@@ -259,7 +272,9 @@ impl<N: HugrNode> ValueTracker<N> {
                 wire_values.push(TrackedValue::Bit(bit));
             }
             for _ in 0..count.params {
-                let param = tracker.new_param(param_gen.next().unwrap());
+                let param_name = param_gen.next().unwrap();
+                tracker.input_params.push(param_name.clone());
+                let param = tracker.new_param(param_name);
                 wire_values.push(TrackedValue::Param(param));
             }
 
@@ -424,29 +439,43 @@ impl<N: HugrNode> ValueTracker<N> {
 
     /// Finish the tracker and return the final list of qubit and bit registers.
     ///
-    /// Looks at the circuit's output node to determine the final order of output.
+    /// Looks at the circuit's output node to determine the final order of
+    /// output.
     pub(super) fn finish(
         self,
         circ: &Circuit<impl HugrView<Node = N>>,
         region: N,
     ) -> Result<ValueTrackerResult, PytketEncodeOpError<N>> {
-        let output_node = circ.hugr().get_io(region).unwrap()[1];
+        let [input_node, output_node] = circ.hugr().get_io(region).unwrap();
 
         // Ordered list of qubits and bits at the output of the circuit.
+        let mut straight_through_wires = Vec::new();
         let mut qubit_outputs = Vec::with_capacity(self.qubits.len() - self.unused_qubits.len());
         let mut bit_outputs = Vec::with_capacity(self.bits.len() - self.unused_bits.len());
         let mut param_outputs = Vec::new();
-        for (node, port) in circ.hugr().all_linked_outputs(output_node) {
-            let wire = Wire::new(node, port);
-            let values = self
-                .peek_wire_values(wire)
-                .ok_or_else(|| PytketEncodeOpError::WireHasNoValues { wire })?;
-            for value in values {
-                match value {
-                    TrackedValue::Qubit(qb) => qubit_outputs.push(self.qubit_register(*qb).clone()),
-                    TrackedValue::Bit(bit) => bit_outputs.push(self.bit_register(*bit).clone()),
-                    TrackedValue::Param(param) => {
-                        param_outputs.push(self.param_expression(*param).to_string())
+        for tgt_port in circ.hugr().node_inputs(output_node) {
+            for (src_node, src_port) in circ.hugr().linked_outputs(output_node, tgt_port) {
+                let wire = Wire::new(src_node, src_port);
+                let Some(values) = self.peek_wire_values(wire) else {
+                    // If the wire originates from the input node, track it as a straight through wire.
+                    // Otherwise, ignore it (it originates in an unsupported subgraph)
+                    if src_node == input_node {
+                        straight_through_wires.push(StraightThroughWire {
+                            input_source: src_port,
+                            output_target: tgt_port,
+                        });
+                    }
+                    continue;
+                };
+                for value in values {
+                    match value {
+                        TrackedValue::Qubit(qb) => {
+                            qubit_outputs.push(self.qubit_register(*qb).clone())
+                        }
+                        TrackedValue::Bit(bit) => bit_outputs.push(self.bit_register(*bit).clone()),
+                        TrackedValue::Param(param) => {
+                            param_outputs.push(self.param_expression(*param).to_string())
+                        }
                     }
                 }
             }
@@ -457,9 +486,11 @@ impl<N: HugrNode> ValueTracker<N> {
 
         Ok(ValueTrackerResult {
             qubits: self.qubits,
-            bits: bit_outputs,
+            bits: self.bits,
             params: param_outputs,
             qubit_permutation,
+            input_params: self.input_params,
+            straight_through_wires,
         })
     }
 }

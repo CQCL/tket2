@@ -50,7 +50,7 @@ jobs:
       extensions: ${{ steps.filter.outputs.extensions }}
       qis: ${{ steps.filter.outputs.qis }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/check-changes
         id: filter
 
@@ -63,7 +63,7 @@ jobs:
       # Fail on rust compiler warnings.
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -92,7 +92,7 @@ jobs:
     if: ${{ needs.changes.outputs.python == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
@@ -122,10 +122,14 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - uses: cargo-bins/cargo-binstall@main
       - name: Install cargo-codspeed
         run: cargo binstall cargo-codspeed --force
@@ -147,7 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     name: tests (Rust stable, no features)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
@@ -155,6 +159,10 @@ jobs:
           toolchain: "stable"
       - name: Configure default rust toolchain
         run: rustup override set ${{steps.toolchain.outputs.name}}
+      - name: Install tket-c-api library
+        uses: ./.github/actions/tket-c-api
+        with:
+          install-path: ${{ env.TKET_C_API_PATH }}
       - uses: taiki-e/install-action@nextest
       - name: Build with no features
         run: cargo nextest r --verbose -p tket -p tket-py -p tket-qsystem --no-default-features --no-run
@@ -168,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     name: tests (Rust stable, all features)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
@@ -204,7 +212,7 @@ jobs:
         rust: [beta]
     name: tests (Rust ${{ matrix.rust }})
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - id: toolchain
         uses: dtolnay/rust-toolchain@master
@@ -237,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     name: tests (Rust nightly, coverage)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -277,7 +285,7 @@ jobs:
     runs-on: ubuntu-latest
     name: tests (Rust MSRV, min dependencies)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install MSRV toolchain
         id: toolchain
@@ -327,7 +335,7 @@ jobs:
     env:
       PKGS: tket-py tket-eccs tket-exts
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -365,7 +373,7 @@ jobs:
     runs-on: ubuntu-latest
     name: qis-compiler test
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -401,7 +409,7 @@ jobs:
     name: Check standard extensions
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -424,7 +432,7 @@ jobs:
     if: ${{ needs.changes.outputs.extensions == 'true' }}
     name: Check extension versions
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # Need full history to compare with main
 
@@ -472,17 +480,7 @@ jobs:
           echo "Rust: ${{ needs.changes.outputs.rust }}"
           echo "Python: ${{ needs.changes.outputs.python }}"
       - name: Fail if required checks failed
-        # This condition should simply be `if: failure() || cancelled()`,
-        # but there seems to be a bug in the github workflow runner.
-        #
-        # See https://github.com/orgs/community/discussions/80788
-        if: |
-          needs.changes.result == 'failure' || needs.changes.result == 'cancelled' ||
-          needs.check-rs.result == 'failure' || needs.check-rs.result == 'cancelled' ||
-          needs.check-py.result == 'failure' || needs.check-py.result == 'cancelled' ||
-          needs.tests-rs-stable-no-features.result == 'failure' || needs.tests-rs-stable-no-features.result == 'cancelled' ||
-          needs.tests-rs-stable-all-features.result == 'failure' || needs.tests-rs-stable-all-features.result == 'cancelled' ||
-          needs.tests-py.result == 'failure' || needs.tests-py.result == 'cancelled'
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: |
           echo "Required checks failed"
           echo "Please check the logs for more information"

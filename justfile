@@ -9,9 +9,9 @@ _check_nextest_installed:
 # Create the default conan profile if it doesn't exist.
 _check_default_conan_profile:
     #!/usr/bin/env bash
-    uv run conan profile list | grep "default" >/dev/null 2>&1
+    uvx conan profile list | grep "default" >/dev/null 2>&1
     if [ $? -ne 0 ]; then
-        uv run conan profile detect
+        uvx conan profile detect
     fi
 
 # Prepare the environment for development, installing all the dependencies and
@@ -75,13 +75,25 @@ miri *TEST_ARGS:
 recompile-eccs:
     scripts/compile-test-eccs.sh
 
+# Regenerates all hugr definitions inside `test_files/`
+recompile-test-hugrs:
+    @echo "---- Recompiling example guppy programs ----"
+    just test_files/guppy_examples/recompile
+    @echo "---- Recompiling optimization-target guppy programs ----"
+    just test_files/guppy_optimization/recompile
+
 # Generate serialized declarations for the tket extensions
 gen-extensions:
     cargo run -p tket-qsystem gen-extensions -o tket-exts/src/tket_exts/data
 
+# Update snapshot tests for both rust and python (requires `cargo-insta`)
+update-snapshots: update-snapshots-rs update-snapshots-py
 # Interactively update snapshot tests (requires `cargo-insta`)
-update-snapshots:
+update-snapshots-rs:
     cargo insta review
+# Update python snapshot tests.
+update-snapshots-py *TEST_ARGS:
+    uv run pytest --snapshot-update {{TEST_ARGS}}
 
 # Build the sphinx API documentation
 build-pydocs:

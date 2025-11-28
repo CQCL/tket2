@@ -96,11 +96,17 @@ impl Tk2Circuit {
     }
 
     /// Encode the circuit as a HUGR envelope.
-    pub fn to_bytes(&self, config: Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    ///
+    /// If no config is given, it defaults to the default binary envelope.
+    #[pyo3(signature = (config = None))]
+    pub fn to_bytes(&self, config: Option<Bound<'_, PyAny>>) -> PyResult<Vec<u8>> {
         fn err(e: impl Display) -> PyErr {
             PyErr::new::<PyAttributeError, _>(format!("Could not encode circuit: {e}"))
         };
-        let config = envelope_config_from_py(config)?;
+        let config = match config {
+            Some(cfg) => envelope_config_from_py(cfg)?,
+            None => EnvelopeConfig::binary(),
+        };
         let mut buf = Vec::new();
         self.circ.store(&mut buf, config).map_err(err)?;
         Ok(buf)
@@ -221,6 +227,7 @@ impl Tk2Circuit {
     pub fn circuit_cost<'py>(&self, cost_fn: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
         let py = cost_fn.py();
         let cost_fn = |op: &OpType| -> PyResult<PyCircuitCost> {
+            // TODO: We should ignore non-tket operations instead.
             let Some(tk2_op) = op.cast::<TketOp>() else {
                 let op_name = op.to_string();
                 return Err(PyErr::new::<PyValueError, _>(format!(
@@ -302,6 +309,10 @@ impl Tk2Circuit {
 
     fn output_node(&self) -> PyNode {
         self.circ.output_node().into()
+    }
+
+    fn render_mermaid(&self) -> String {
+        self.circ.mermaid_string()
     }
 }
 impl Tk2Circuit {

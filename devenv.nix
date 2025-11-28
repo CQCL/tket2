@@ -19,8 +19,19 @@ in
     pkgs.zlib
     pkgs.ncurses
     pkgs.stdenv.cc.cc.lib
+    pkgs.conan
+
+  ] ++ lib.optionals pkgs.stdenv.isDarwin [
+    pkgs.xz
   ];
 
+  # Required for uv sync to work
+  tasks."tket2:conan_profile_detect" = {
+    exec = ''
+      conan profile detect --exist-ok
+    '';
+    before = [ "devenv:python:uv" ];
+  };
 
   enterShell = ''
     cargo --version

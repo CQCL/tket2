@@ -7,6 +7,7 @@ mod wires;
 
 use hugr::extension::ExtensionRegistry;
 use hugr::hugr::hugrmut::HugrMut;
+use hugr::std_extensions::arithmetic::float_types::float64_type;
 pub use param::{LoadedParameter, ParameterType};
 pub use tracked_elem::{TrackedBit, TrackedQubit};
 pub use wires::TrackedWires;
@@ -18,7 +19,7 @@ use std::sync::Arc;
 use hugr::builder::{BuildHandle, Container, DFGBuilder, Dataflow, FunctionBuilder, SubContainer};
 use hugr::extension::prelude::{bool_t, qb_t};
 use hugr::ops::handle::{DataflowOpID, NodeHandle};
-use hugr::ops::{OpParent, OpTrait, OpType, Value, DFG};
+use hugr::ops::{OpParent, OpTrait, OpType, DFG};
 use hugr::types::{Signature, Type, TypeRow};
 use hugr::{Hugr, HugrView, Node, OutgoingPort, Wire};
 use tracked_elem::{TrackedBitId, TrackedQubitId};
@@ -33,10 +34,11 @@ use super::{
     METADATA_Q_REGISTERS,
 };
 use crate::extension::rotation::rotation_type;
+use crate::serialize::pytket::circuit::{AdditionalNodesAndWires, StraightThroughWire};
 use crate::serialize::pytket::config::PytketDecoderConfig;
 use crate::serialize::pytket::decoder::wires::WireTracker;
 use crate::serialize::pytket::extension::{build_opaque_tket_op, RegisterCount};
-use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphs, SubgraphId};
+use crate::serialize::pytket::opaque::{EncodedEdgeID, OpaqueSubgraphs};
 use crate::serialize::pytket::{
     default_decoder_config, DecodeInsertionTarget, DecodeOptions, PytketDecodeErrorInner,
 };
@@ -271,14 +273,16 @@ impl<'h> PytketDecoderContext<'h> {
             wire_tracker.register_input_parameter(LoadedParameter::rotation(wire), param)?;
         }
 
-        // Any additional qubits or bits required by the circuit get initialized to |0> / false.
+        // Any additional qubits or bits required by the circuit are registered
+        // in the tracker without a wire being created.
+        //
+        // We'll lazily initialize them with a QAlloc or a LoadConstant
+        // operation if necessary.
         for q in qubits {
-            let q_wire = dfg.add_dataflow_op(TketOp::QAlloc, []).unwrap().out_wire(0);
-            wire_tracker.track_wire(q_wire, q.ty(), [q], [])?;
+            wire_tracker.track_qubit(q.pytket_register_arc(), Some(q.reg_hash()))?;
         }
         for b in bits {
-            let b_wire = dfg.add_load_value(Value::false_val());
-            wire_tracker.track_wire(b_wire, b.ty(), [], [b])?;
+            wire_tracker.track_bit(b.pytket_register_arc(), Some(b.reg_hash()))?;
         }
 
         wire_tracker.compute_output_permutation(&serialcirc.implicit_permutation);
@@ -293,7 +297,12 @@ impl<'h> PytketDecoderContext<'h> {
     ///
     /// The original Hugr entrypoint is _not_ modified, it must be set by the
     /// caller if required.
-    pub(super) fn finish(mut self) -> Result<Node, PytketDecodeError> {
+    ///
+    /// # Arguments
+    ///
+    /// - `output_params`: A list of output parameter expressions to associate
+    ///   with the region's outputs.
+    pub(super) fn finish(mut self, output_params: &[String]) -> Result<Node, PytketDecodeError> {
         // Order the final wires according to the serial circuit register order.
         let known_qubits = self
             .wire_tracker
@@ -304,6 +313,13 @@ impl<'h> PytketDecoderContext<'h> {
         let mut qubits = known_qubits.as_slice();
         let mut bits = known_bits.as_slice();
 
+        // Load the output parameter expressions.
+        let output_params = output_params
+            .iter()
+            .map(|p| self.load_half_turns(p))
+            .collect_vec();
+        let mut params: &[LoadedParameter] = &output_params;
+
         let function_type = self
             .builder
             .hugr()
@@ -311,24 +327,25 @@ impl<'h> PytketDecoderContext<'h> {
             .inner_function_type()
             .unwrap();
         let expected_output_types = function_type.output_types().iter().cloned().collect_vec();
-        let output_node = self.builder.output().node();
+        let [_, output_node] = self.builder.io();
 
         for (ty, port) in expected_output_types
             .iter()
             .zip(self.builder.hugr().node_inputs(output_node).collect_vec())
         {
             // If the region's output is already connected, leave it alone.
-            // (It's a wire from an unsupported operation)
+            // (It's a wire from an unsupported operation, or was a connected
+            // straight through wire)
             if self.builder.hugr().is_linked(output_node, port) {
                 continue;
             }
 
             // Otherwise, get the tracked wire.
-            let mut params: &[LoadedParameter] = &[];
             let found_wire = self
                 .wire_tracker
                 .find_typed_wire(
-                    self.config(),
+                    &self.config,
+                    &mut self.builder,
                     ty,
                     &mut qubits,
                     &mut bits,
@@ -356,7 +373,14 @@ impl<'h> PytketDecoderContext<'h> {
             let wire = match found_wire {
                 FoundWire::Register(wire) => wire.wire(),
 
-                FoundWire::Parameter(param) => param.wire(),
+                FoundWire::Parameter(param) => {
+                    let param_ty = if ty == &float64_type() {
+                        ParameterType::FloatHalfTurns
+                    } else {
+                        ParameterType::Rotation
+                    };
+                    param.with_type(param_ty, &mut self.builder).wire()
+                }
                 FoundWire::Unsupported { .. } => {
                     // Disconnected port with an unsupported type. We just skip
                     // it, since it must have been disconnected in the original
@@ -402,9 +426,15 @@ impl<'h> PytketDecoderContext<'h> {
         let mut bit_args: &[TrackedBit] = &[];
         let mut params: &[LoadedParameter] = &[];
         for q in qubits.iter() {
+            // Ignore qubits that didn't get initialized
+            if !self.wire_tracker.qubit_is_initialized(q) {
+                continue;
+            }
+
             let mut qubit_args: &[TrackedQubit] = std::slice::from_ref(q);
             let Ok(FoundWire::Register(wire)) = self.wire_tracker.find_typed_wire(
-                self.config(),
+                &self.config,
+                &mut self.builder,
                 &qb_type,
                 &mut qubit_args,
                 &mut bit_args,
@@ -428,10 +458,14 @@ impl<'h> PytketDecoderContext<'h> {
     /// - `commands`: The list of pytket commands to decode.
     /// - `extra_subgraph`: An additional subgraph of the original Hugr that was
     ///   not encoded as a pytket command, and must be decoded independently.
+    /// - `straight_through_wires`: A list of wires that directly connected the
+    ///   input node to the output node in the original region, and were not
+    ///   encoded in the pytket circuit or unsupported graphs.
+    ///   (They cannot be encoded in `extra_subgraph`).
     pub(super) fn run_decoder(
         &mut self,
         commands: &[circuit_json::Command],
-        extra_subgraph: Option<SubgraphId>,
+        extra_nodes_and_wires: Option<&AdditionalNodesAndWires>,
     ) -> Result<(), PytketDecodeError> {
         let config = self.config().clone();
         for com in commands {
@@ -439,9 +473,34 @@ impl<'h> PytketDecoderContext<'h> {
             self.process_command(com, config.as_ref())
                 .map_err(|e| e.pytket_op(&op_type))?;
         }
-        if let Some(subgraph_id) = extra_subgraph {
-            self.insert_external_subgraph(subgraph_id, &[], &[], &[])
-                .map_err(|e| e.hugr_op("External subgraph"))?;
+
+        // Add additional subgraphs and wires not encoded in commands.
+        let [input_node, output_node] = self.builder.io();
+        if let Some(extras) = extra_nodes_and_wires {
+            if let Some(subgraph_id) = extras.extra_subgraph {
+                let params = extras
+                    .extra_subgraph_params
+                    .iter()
+                    .map(|p| self.load_half_turns(p))
+                    .collect_vec();
+
+                self.insert_external_subgraph(subgraph_id, &[], &[], &params)
+                    .map_err(|e| e.hugr_op("External subgraph"))?;
+            }
+
+            // Add wires from the input node to the output node that didn't get encoded in commands.
+            for StraightThroughWire {
+                input_source,
+                output_target,
+            } in &extras.straight_through_wires
+            {
+                self.builder.hugr_mut().connect(
+                    input_node,
+                    *input_source,
+                    output_node,
+                    *output_target,
+                );
+            }
         }
         Ok(())
     }
@@ -508,14 +567,20 @@ impl<'h> PytketDecoderContext<'h> {
     /// - [`PytketDecodeErrorInner::UnexpectedInputType`] if a type in `types` cannot be mapped to a [`RegisterCount`]
     /// - [`PytketDecodeErrorInner::NoMatchingWire`] if there is no wire with the requested type for the given qubit/bit arguments.
     pub fn find_typed_wires(
-        &self,
+        &mut self,
         types: &[Type],
         qubit_args: &[TrackedQubit],
         bit_args: &[TrackedBit],
         params: &[LoadedParameter],
     ) -> Result<TrackedWires, PytketDecodeError> {
-        self.wire_tracker
-            .find_typed_wires(self.config(), types, qubit_args, bit_args, params)
+        self.wire_tracker.find_typed_wires(
+            &self.config,
+            &mut self.builder,
+            types,
+            qubit_args,
+            bit_args,
+            params,
+        )
     }
 
     /// Connects the input ports of a node using a list of input qubits, bits,
@@ -631,8 +696,8 @@ impl<'h> PytketDecoderContext<'h> {
         }
 
         // Gather the input wires, with the types needed by the operation.
-        let input_wires =
-            self.find_typed_wires(sig.input_types(), input_qubits, input_bits, params)?;
+        let input_types = sig.input_types().to_vec();
+        let input_wires = self.find_typed_wires(&input_types, input_qubits, input_bits, params)?;
         debug_assert_eq!(op_input_count, input_wires.register_count());
 
         for (input_idx, wire) in input_wires.wires().enumerate() {

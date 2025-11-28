@@ -101,8 +101,13 @@ pub enum PytketEncodeError<N: HugrNode = hugr::Node> {
         head_op: String,
     },
     /// No qubits or bits to attach the barrier command to for unsupported nodes.
-    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to.")]
-    UnsupportedSubgraphHasNoRegisters {},
+    #[display("An unsupported subgraph has no qubits or bits to attach the barrier command to{}",
+        if params.is_empty() {"".to_string()} else {format!(" alongside its parameters [{}]", params.iter().join(", "))}
+    )]
+    UnsupportedSubgraphHasNoRegisters {
+        /// Parameter inputs to the unsupported subgraph.
+        params: Vec<String>,
+    },
 }
 
 impl<N: HugrNode> PytketEncodeError<N> {
@@ -431,6 +436,20 @@ pub enum PytketDecodeErrorInner {
     UnsupportedSubgraphInlinePayload {
         /// The envelope decoding error.
         source: EnvelopeError,
+    },
+    /// Cannot translate a wire from one type to another.
+    #[display("Cannot translate {wire} from type {initial_type} to type {target_type}{}",
+        context.as_ref().map(|s| format!(". {s}")).unwrap_or_default()
+    )]
+    CannotTranslateWire {
+        /// The wire that couldn't be translated.
+        wire: Wire,
+        /// The initial type of the wire.
+        initial_type: String,
+        /// The target type of the wire.
+        target_type: String,
+        /// The error that occurred while translating the wire.
+        context: Option<String>,
     },
 }
 

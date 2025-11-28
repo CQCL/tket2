@@ -47,6 +47,7 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
         py.get_type::<PyHUGRSerializationError>(),
     )?;
     m.add("TK1EncodeError", py.get_type::<PyTk1EncodeError>())?;
+    m.add("TK1DecodeError", py.get_type::<PyTK1DecodeError>())?;
 
     Ok(m)
 }
@@ -78,13 +79,13 @@ create_py_exception!(
 create_py_exception!(
     tket::serialize::pytket::PytketEncodeError,
     PyTk1EncodeError,
-    "Error type for the conversion between tket and tket1 operations."
+    "Error encoding a HUGR region into a pytket circuit."
 );
 
 create_py_exception!(
     tket::serialize::pytket::PytketDecodeError,
     PyTK1DecodeError,
-    "Error type for the conversion between tket1 and tket operations."
+    "Error decoding a HUGR region from a pytket circuit."
 );
 
 /// Run the validation checks on a circuit.

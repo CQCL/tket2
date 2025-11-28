@@ -4,11 +4,10 @@ build-backend = "maturin"
 
 [dependency-groups]
 dev = [
-    "guppylang~=0.21.0",
     "pytest>=8.4.2",
     "pytest-snapshot~=0.9.0",
     "cibuildwheel>=2.23.2",
-    "tket-exts",              # remove after next guppy-internals release
+    "hugr>=0.14.0",
 ]
 
 [project]
@@ -39,7 +38,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-version = "0.2.9" # updated by release-please
+version = "0.2.10" # updated by release-please
 
 [project.urls]
 repository = "https://github.com/CQCL/tket2/tree/main/qis-compiler"
@@ -80,10 +79,6 @@ cache-keys = [
     { file = "Cargo.toml" },
     { file = "rust/**/*.rs" },
 ]
-
-[tool.uv.sources]
-guppylang = { git = "https://github.com/cqcl/guppylang.git", rev = "d5b4ca6", subdirectory = "guppylang" }
-tket-exts = { workspace = true }
 
 [tool.cibuildwheel]
 build = "cp310-*"
@@ -157,7 +152,7 @@ repair-wheel-command = [
 [tool.cibuildwheel.macos.environment]
 PATH = '/tmp/llvm:$PATH'
 LLVM_SYS_140_PREFIX = '/tmp/llvm'
-MACOSX_DEPLOYMENT_TARGET = "13.2"
+MACOSX_DEPLOYMENT_TARGET = "15.0"
 [tool.cibuildwheel.macos]
 before-all = [
     'curl -sSf https://sh.rustup.rs | sh -s -- -y',
@@ -167,7 +162,7 @@ before-all = [
     'tar xf clang+llvm-14.0.6-$ARCH_PREFIX.tar.xz -C /tmp/llvm --strip-components=1',
 ]
 repair-wheel-command = [
-    'DYLD_LIBRARY_PATH=/tmp/llvm/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}',
+    'DYLD_FALLBACK_LIBRARY_PATH=/tmp/llvm/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}',
     'uvx abi3audit --strict --report {wheel}',
 ]
 

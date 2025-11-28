@@ -4,11 +4,12 @@ use hugr::core::HugrNode;
 use hugr::envelope::{EnvelopeConfig, EnvelopeError};
 use hugr::extension::resolution::{resolve_type_extensions, WeakExtensionRegistry};
 use hugr::extension::{ExtensionRegistry, ExtensionRegistryLoadError};
-use hugr::hugr::views::SiblingSubgraph;
 use hugr::package::Package;
 use hugr::types::Type;
 use hugr::{HugrView, Wire};
+use itertools::Itertools;
 
+use crate::serialize::pytket::opaque::OpaqueSubgraph;
 use crate::serialize::pytket::{
     PytketDecodeError, PytketDecodeErrorInner, PytketEncodeError, PytketEncodeOpError,
 };
@@ -18,6 +19,10 @@ use super::SubgraphId;
 /// Pytket opgroup used to identify opaque barrier operations that encode opaque HUGR subgraphs.
 ///
 /// See [`OpaqueSubgraphPayload`].
+#[deprecated(
+    note = "Opaque barriers do not set an opgroup anymore",
+    since = "0.16.1"
+)]
 pub const OPGROUP_OPAQUE_HUGR: &str = "OPAQUE_HUGR";
 
 /// Identifier for a wire in the Hugr, encoded as a 64-bit hash that is
@@ -76,11 +81,13 @@ pub enum OpaqueSubgraphPayload {
     /// A reference to a subgraph tracked by an `OpaqueSubgraphs` registry
     /// in an [`EncodedCircuit`][super::super::circuit::EncodedCircuit]
     /// structure.
+    #[serde(rename = "HugrExternal")]
     External {
         /// The ID of the subgraph in the `OpaqueSubgraphs` registry.
         id: SubgraphId,
     },
     /// An inline payload, carrying the encoded envelope for the HUGR subgraph.
+    #[serde(rename = "HugrInline")]
     Inline {
         /// A string envelope containing the encoded HUGR subgraph.
         hugr_envelope: String,
@@ -124,31 +131,27 @@ impl OpaqueSubgraphPayload {
     /// Returns an error if a node in the subgraph has children or calls a
     /// global function.
     pub fn new_inline<N: HugrNode>(
-        subgraph: &SiblingSubgraph<N>,
+        subgraph: &OpaqueSubgraph<N>,
         hugr: &impl HugrView<Node = N>,
     ) -> Result<Self, PytketEncodeError<N>> {
-        let signature = subgraph.signature(hugr);
+        let signature = subgraph.signature();
 
-        if !subgraph.function_calls().is_empty()
-            || subgraph
-                .nodes()
-                .iter()
-                .any(|n| hugr.first_child(*n).is_some())
-        {
+        let Some(opaque_hugr) = subgraph
+            .is_sibling_subgraph_compatible()
+            .then(|| subgraph.extract_subgraph(hugr).ok())
+            .flatten()
+        else {
             return Err(PytketEncodeOpError::UnsupportedStandaloneSubgraph {
-                nodes: subgraph.nodes().to_vec(),
+                nodes: subgraph.nodes().iter().cloned().collect_vec(),
             }
             .into());
-        }
+        };
 
-        let mut inputs = Vec::with_capacity(subgraph.incoming_ports().iter().map(Vec::len).sum());
-        for subgraph_inputs in subgraph.incoming_ports() {
-            let Some((inp_node, inp_port0)) = subgraph_inputs.first() else {
-                continue;
-            };
-            let input_wire = Wire::from_connected_port(*inp_node, *inp_port0, hugr);
+        let mut inputs = Vec::with_capacity(subgraph.incoming_ports().len());
+        for (inp_node, inp_port) in subgraph.incoming_ports() {
+            let input_wire = Wire::from_connected_port(*inp_node, *inp_port, hugr);
             let edge_id = EncodedEdgeID::new(input_wire);
-            inputs.extend(itertools::repeat_n(edge_id, subgraph_inputs.len()));
+            inputs.push(edge_id);
         }
 
         let outputs = subgraph
@@ -156,7 +159,6 @@ impl OpaqueSubgraphPayload {
             .iter()
             .map(|(n, p)| EncodedEdgeID::new(Wire::new(*n, *p)));
 
-        let opaque_hugr = subgraph.extract_subgraph(hugr, "");
         let hugr_envelope = Package::from_hugr(opaque_hugr)
             .store_str(EnvelopeConfig::text())
             .unwrap();
@@ -211,5 +213,44 @@ impl OpaqueSubgraphPayload {
     /// Returns `true` if the payload is an external payload.
     pub fn is_external(&self) -> bool {
         matches!(self, Self::External { .. })
+    }
+
+    /// Parse the contents of an [`OpaqueSubgraphPayload::External`] from a string payload.
+    ///
+    /// Returns `None` if the payload is [`OpaqueSubgraphPayload::Inline`] or not an
+    /// [`OpaqueSubgraphPayload`].
+    ///
+    /// This method is more efficient than calling [Self::load_str], as it
+    /// requires no allocations.
+    pub fn parse_external_id(payload: &str) -> Option<SubgraphId> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename = "HugrExternal")]
+        #[serde(tag = "typ")]
+        struct PartialPayload {
+            pub id: SubgraphId,
+        }
+
+        // Deserialize the payload if it is External, avoiding a full copy to memory
+        // for the other variant.
+        serde_json::from_str::<PartialPayload>(payload)
+            .ok()
+            .map(|payload| payload.id)
+    }
+
+    /// Returns `true` if a string encodes an [`OpaqueSubgraphPayload`].
+    ///
+    /// This method is more efficient than calling [Self::load_str], as it
+    /// requires no allocations.
+    pub fn is_valid_payload(payload: &str) -> bool {
+        #[derive(serde::Deserialize)]
+        #[serde(tag = "typ")]
+        enum PartialPayload {
+            HugrExternal {},
+            HugrInline {},
+        }
+
+        // Deserialize the payload if it is External, avoiding a full copy to memory
+        // for the other variant.
+        serde_json::from_str::<PartialPayload>(payload).is_ok()
     }
 }

@@ -7,6 +7,7 @@ use crate::serialize::pytket::decoder::{
 };
 use crate::serialize::pytket::encoder::{EmitCommandOptions, EncodeStatus, PytketEncoderContext};
 use crate::serialize::pytket::extension::{PytketDecoder, PytketTypeTranslator, RegisterCount};
+use crate::serialize::pytket::opaque::OpaqueSubgraphPayload;
 use crate::serialize::pytket::{PytketDecodeError, PytketEncodeError};
 use crate::Circuit;
 use hugr::extension::prelude::{bool_t, qb_t, BarrierDef, Noop, TupleOpDef, PRELUDE_ID};
@@ -60,8 +61,9 @@ impl PytketTypeTranslator for PreludeEmitter {
         _set: &TypeTranslatorSet,
     ) -> Option<RegisterCount> {
         match typ.name().as_str() {
-            "usize" => Some(RegisterCount::only_bits(64)),
             "qubit" => Some(RegisterCount::only_qubits(1)),
+            // We don't translate `usize`s currently, as none of the operations
+            // that use them are translated to pytket.
             _ => None,
         }
     }
@@ -93,12 +95,16 @@ impl PreludeEmitter {
         let args = op.args().first();
         match args {
             Some(TypeArg::Tuple(elems)) | Some(TypeArg::List(elems)) => {
+                if elems.is_empty() {
+                    return Ok(EncodeStatus::Unsupported);
+                }
+
                 for arg in elems {
                     let TypeArg::Runtime(ty) = arg else {
                         return Ok(EncodeStatus::Unsupported);
                     };
                     let count = encoder.config().type_to_pytket(ty);
-                    if count.is_none() {
+                    if count.is_none_or(|c| c.params > 0) {
                         return Ok(EncodeStatus::Unsupported);
                     }
                 }
@@ -124,21 +130,26 @@ impl PytketDecoder for PreludeEmitter {
         qubits: &[TrackedQubit],
         bits: &[TrackedBit],
         params: &[LoadedParameter],
-        opgroup: Option<&str>,
+        _opgroup: Option<&str>,
         decoder: &mut PytketDecoderContext<'h>,
     ) -> Result<DecodeStatus, PytketDecodeError> {
         let op: OpType = match op.op_type {
             PytketOptype::noop => Noop::new(qb_t()).into(),
             PytketOptype::Barrier => {
-                // We use pytket barriers in the pytket encoder framework to store
-                // HUGRs that cannot be represented in pytket.
+                // We use tket1 barriers as part of the encoder/decoder to
+                // represent regions of the hugr that could not be encoded.
                 //
-                // We take care here and detect when that happens.
-                // TODO: For now, we just say the conversion is unsupported instead of extracting the Hugr.
-                if opgroup == Some("UNSUPPORTED_HUGR") {
+                // Those are handled in in the `core.rs` decoder, so we should
+                // ignore them here.
+                if op
+                    .data
+                    .as_ref()
+                    .is_some_and(|payload| OpaqueSubgraphPayload::is_valid_payload(payload))
+                {
                     return Ok(DecodeStatus::Unsupported);
                 }
 
+                // For all other barrier commands, we emit a hugr Barrier.
                 let types = [vec![qb_t(); qubits.len()], vec![bool_t(); bits.len()]].concat();
                 hugr::extension::prelude::Barrier::new(types).into()
             }

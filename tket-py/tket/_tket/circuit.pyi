@@ -71,7 +71,7 @@ class Tk2Circuit:
     def from_hugr_json(json: str) -> Tk2Circuit:
         """Decode a HUGR json string to a Tk2Circuit."""
 
-    def to_bytes(self, config: EnvelopeConfig) -> bytes:
+    def to_bytes(self, config: EnvelopeConfig | None = None) -> bytes:
         """Encode the circuit as a HUGR envelope, according to the given config.
 
         Some envelope formats can be encoded into a string. See :meth:`to_str`.
@@ -149,6 +149,9 @@ class Tk2Circuit:
     @staticmethod
     def from_tket1_json(json: str) -> Tk2Circuit:
         """Decode a pytket json string to a Tk2Circuit."""
+
+    def render_mermaid(self) -> str:
+        """Render the circuit as a Mermaid graph."""
 
 class Node:
     """Handle to node in HUGR."""

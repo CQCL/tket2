@@ -1,9 +1,11 @@
 //! Passes for optimising circuits.
 
 pub mod chunks;
+pub mod tket1;
 
 use std::{cmp::min, convert::TryInto, fs, num::NonZeroUsize, path::PathBuf};
 
+use hugr::algorithms::ComposablePass;
 use pyo3::{prelude::*, types::IntoPyDict};
 use tket::optimiser::badger::BadgerOptions;
 use tket::passes;
@@ -24,9 +26,12 @@ pub fn module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add_function(wrap_pyfunction!(greedy_depth_reduce, &m)?)?;
     m.add_function(wrap_pyfunction!(lower_to_pytket, &m)?)?;
     m.add_function(wrap_pyfunction!(badger_optimise, &m)?)?;
+    m.add_function(wrap_pyfunction!(normalize_guppy, &m)?)?;
     m.add_class::<self::chunks::PyCircuitChunks>()?;
     m.add_function(wrap_pyfunction!(self::chunks::chunks, &m)?)?;
+    m.add_function(wrap_pyfunction!(self::tket1::tket1_pass, &m)?)?;
     m.add("PullForwardError", py.get_type::<PyPullForwardError>())?;
+    m.add("TK1PassError", py.get_type::<tket1::PytketPassError>())?;
     Ok(m)
 }
 
@@ -42,6 +47,50 @@ create_py_exception!(
     "Errors that can occur while removing high-level operations from HUGR intended to be encoded as a pytket circuit."
 );
 
+create_py_exception!(
+    tket::passes::guppy::NormalizeGuppyErrors,
+    PyNormalizeGuppyError,
+    "Errors from the Guppy normalization pass."
+);
+
+/// Flatten the structure of a Guppy-generated program to enable additional optimisations.
+///
+/// This should normally be called first before other optimisations.
+///
+/// Parameters:
+/// - simplify_cfgs: Whether to simplify CFG control flow.
+/// - remove_tuple_untuple: Whether to remove tuple/untuple operations.
+/// - constant_folding: Whether to constant fold the program.
+/// - remove_dead_funcs: Whether to remove dead functions.
+/// - inline_dfgs: Whether to inline DFG operations.
+#[pyfunction]
+#[pyo3(signature = (circ, *, simplify_cfgs = true, remove_tuple_untuple = true, constant_folding = false, remove_dead_funcs = true, inline_dfgs = true))]
+fn normalize_guppy<'py>(
+    circ: &Bound<'py, PyAny>,
+    simplify_cfgs: bool,
+    remove_tuple_untuple: bool,
+    constant_folding: bool,
+    remove_dead_funcs: bool,
+    inline_dfgs: bool,
+) -> PyResult<Bound<'py, PyAny>> {
+    let py = circ.py();
+    try_with_circ(circ, |mut circ, typ| {
+        let mut pass = tket::passes::NormalizeGuppy::default();
+
+        pass.simplify_cfgs(simplify_cfgs)
+            .remove_tuple_untuple(remove_tuple_untuple)
+            .constant_folding(constant_folding)
+            .remove_dead_funcs(remove_dead_funcs)
+            .inline_dfgs(inline_dfgs);
+
+        pass.run(circ.hugr_mut()).convert_pyerrs()?;
+
+        let circ = typ.convert(py, circ)?;
+        PyResult::Ok(circ)
+    })
+}
+
+/// Pass which greedily commutes operations forwards in order to reduce depth.
 #[pyfunction]
 fn greedy_depth_reduce<'py>(circ: &Bound<'py, PyAny>) -> PyResult<(Bound<'py, PyAny>, u32)> {
     let py = circ.py();
