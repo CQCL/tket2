@@ -210,7 +210,7 @@ impl<N: HugrNode> CopyableExpr<N> {
 }
 
 /// Whether a node only contains copyable inputs and output values.
-fn pure_copyable<N: HugrNode>(node: N, hugr: impl HugrView<Node = N>) -> bool {
+pub(super) fn is_pure_copyable<N: HugrNode>(node: N, hugr: impl HugrView<Node = N>) -> bool {
     let mut all_port_types = Direction::BOTH
         .iter()
         .flat_map(|&dir| hugr.value_types(node, dir));
@@ -225,7 +225,7 @@ fn admissible_node<N: HugrNode>(
     circuit_nodes: &BTreeSet<N>,
 ) -> bool {
     !allowed_input_nodes.contains(&node)
-        && pure_copyable(node, hugr)
+        && is_pure_copyable(node, hugr)
         && circuit_nodes.contains(&node)
 }
 
@@ -292,7 +292,7 @@ fn sort_inputs<N: HugrNode>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::iter;
 
     use crate::{extension::rotation::RotationOp, Circuit, TketOp};
@@ -309,7 +309,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     #[fixture]
-    fn hugr_with_midcircuit_meas() -> Hugr {
+    pub(crate) fn hugr_with_midcircuit_meas() -> Hugr {
         let qb_row = vec![qb_t()];
         let signature = Signature::new_endo(qb_row);
         let mut h = FunctionBuilder::new("main", signature).unwrap();

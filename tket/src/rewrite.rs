@@ -21,6 +21,7 @@ use hugr::{
 use hugr::{Hugr, HugrView, Node};
 
 use crate::circuit::Circuit;
+pub use crate::Subcircuit;
 
 /// A rewrite rule for circuits.
 #[derive(Debug, Clone, From, Into)]
