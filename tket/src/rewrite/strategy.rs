@@ -472,7 +472,6 @@ impl GammaStrategyCost<fn(&OpType) -> usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hugr::hugr::patch::simple_replace::InvalidReplacement;
     use hugr::hugr::views::SiblingSubgraph;
     use hugr::Node;
     use itertools::Itertools;
@@ -490,15 +489,12 @@ mod tests {
         ssg: &SiblingSubgraph<Node>,
         circuit: &Circuit<impl HugrView<Node = Node>>,
         replacement: Circuit<impl HugrView<Node = Node>>,
-    ) -> Result<CircuitRewrite, InvalidReplacement> {
+    ) -> CircuitRewrite {
         // The replacement must be a Dfg rooted hugr.
-        let replacement = replacement
-            .extract_dfg()
-            .unwrap_or_else(|e| panic!("{}", e))
-            .into_hugr();
-        Ok(CircuitRewrite(
-            ssg.create_simple_replacement(circuit.hugr(), replacement)?,
-        ))
+        let replacement = replacement.extract_dfg().unwrap().into_hugr();
+        ssg.create_simple_replacement(circuit.hugr(), replacement)
+            .unwrap()
+            .into()
     }
 
     fn n_cx(n_gates: usize) -> Circuit {
@@ -515,13 +511,13 @@ mod tests {
     /// Rewrite cx_nodes -> empty
     fn rw_to_empty(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
         let subcirc = SiblingSubgraph::try_from_nodes(cx_nodes, circ.hugr()).unwrap();
-        create_rewrite(&subcirc, circ, n_cx(0)).unwrap_or_else(|e| panic!("{}", e))
+        create_rewrite(&subcirc, circ, n_cx(0))
     }
 
     /// Rewrite cx_nodes -> 10x CX
     fn rw_to_full(circ: &Circuit, cx_nodes: impl Into<Vec<Node>>) -> CircuitRewrite {
         let subcirc = SiblingSubgraph::try_from_nodes(cx_nodes, circ.hugr()).unwrap();
-        create_rewrite(&subcirc, circ, n_cx(10)).unwrap_or_else(|e| panic!("{}", e))
+        create_rewrite(&subcirc, circ, n_cx(10))
     }
 
     #[test]
