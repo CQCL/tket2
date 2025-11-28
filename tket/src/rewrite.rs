@@ -9,7 +9,6 @@ pub mod trace;
 pub use ecc_rewriter::ECCRewriter;
 
 use derive_more::{From, Into};
-use hugr::core::HugrNode;
 use hugr::hugr::hugrmut::HugrMut;
 use hugr::hugr::patch::simple_replace;
 use hugr::hugr::views::sibling_subgraph::InvalidReplacement;
@@ -26,12 +25,12 @@ use crate::circuit::Circuit;
 #[derive(Debug, Clone, From, Into)]
 pub struct CircuitRewrite<N = Node>(SimpleReplacement<N>);
 
-impl<N: HugrNode> CircuitRewrite<N> {
+impl CircuitRewrite {
     /// Create a new rewrite rule.
     pub fn try_new(
-        subgraph: &SiblingSubgraph<N>,
-        hugr: &impl HugrView<Node = N>,
-        replacement: Circuit<impl HugrView<Node = hugr::Node>>,
+        subgraph: &SiblingSubgraph,
+        hugr: &impl HugrView<Node = Node>,
+        replacement: Circuit<impl HugrView<Node = Node>>,
     ) -> Result<Self, InvalidReplacement> {
         let replacement = replacement
             .extract_dfg()
@@ -51,7 +50,7 @@ impl<N: HugrNode> CircuitRewrite<N> {
     }
 
     /// The subgraph that is replaced.
-    pub fn subgraph(&self) -> &SiblingSubgraph<N> {
+    pub fn subgraph(&self) -> &SiblingSubgraph {
         self.0.subgraph()
     }
 
@@ -66,7 +65,7 @@ impl<N: HugrNode> CircuitRewrite<N> {
     /// Two `CircuitRewrite`s can be composed if their invalidation sets are
     /// disjoint.
     #[inline]
-    pub fn invalidation_set(&self) -> impl Iterator<Item = N> + '_ {
+    pub fn invalidation_set(&self) -> impl Iterator<Item = Node> + '_ {
         self.0.invalidation_set()
     }
 
@@ -74,8 +73,8 @@ impl<N: HugrNode> CircuitRewrite<N> {
     #[inline]
     pub fn apply(
         self,
-        circ: &mut Circuit<impl HugrMut<Node = N>>,
-    ) -> Result<simple_replace::Outcome<N>, SimpleReplacementError> {
+        circ: &mut Circuit<impl HugrMut<Node = Node>>,
+    ) -> Result<simple_replace::Outcome<Node>, SimpleReplacementError> {
         circ.add_rewrite_trace(&self);
         self.0.apply(circ.hugr_mut())
     }
@@ -84,8 +83,8 @@ impl<N: HugrNode> CircuitRewrite<N> {
     #[inline]
     pub fn apply_notrace(
         self,
-        circ: &mut Circuit<impl HugrMut<Node = N>>,
-    ) -> Result<simple_replace::Outcome<N>, SimpleReplacementError> {
+        circ: &mut Circuit<impl HugrMut<Node = Node>>,
+    ) -> Result<simple_replace::Outcome<Node>, SimpleReplacementError> {
         self.0.apply(circ.hugr_mut())
     }
 }
