@@ -18,13 +18,13 @@ use hugr::{
     hugr::{views::SiblingSubgraph, SimpleReplacementError},
     SimpleReplacement,
 };
-use hugr::{Hugr, HugrView};
+use hugr::{Hugr, HugrView, Node};
 
 use crate::circuit::Circuit;
 
 /// A rewrite rule for circuits.
 #[derive(Debug, Clone, From, Into)]
-pub struct CircuitRewrite<N = hugr::Node>(SimpleReplacement<N>);
+pub struct CircuitRewrite<N = Node>(SimpleReplacement<N>);
 
 impl<N: HugrNode> CircuitRewrite<N> {
     /// Create a new rewrite rule.
