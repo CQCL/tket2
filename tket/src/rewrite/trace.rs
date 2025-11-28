@@ -33,9 +33,9 @@ pub struct RewriteTrace {
     individual_matches: u16,
 }
 
-impl<N> From<&CircuitRewrite<N>> for RewriteTrace {
+impl From<&CircuitRewrite> for RewriteTrace {
     #[inline]
-    fn from(_rewrite: &CircuitRewrite<N>) -> Self {
+    fn from(_rewrite: &CircuitRewrite) -> Self {
         // NOTE: We don't currently track any actual information about the rewrite.
         Self {
             individual_matches: 1,
