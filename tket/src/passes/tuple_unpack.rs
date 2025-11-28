@@ -147,10 +147,10 @@ fn remove_pack_unpack<T: HugrView<Node = Node>>(
 
     subgraph
         .create_simple_replacement(circ.hugr(), replacement)
-        .map(CircuitRewrite::from)
         .unwrap_or_else(|e| {
             panic!("Failed to create rewrite for removing tuple pack/unpack operations. {e}")
         })
+        .into()
 }
 
 #[cfg(test)]
