@@ -22,7 +22,7 @@ const GUPPY_EXAMPLES_DIR: &str = "../test_files/guppy_optimization";
 
 /// JSON encoding of the clifford simp pytket pass.
 // const CLIFFORD_SIMP_STR: &str = r#"{"StandardPass": {"allow_swaps": true, "name": "CliffordSimp", "target_2qb_gate": "CX"}, "pass_class": "StandardPass"}"#;
-const SQUASH_STR: &str = r#"{"StandardPass": {'name': "SquashRzPhasedX"}, "pass_class": "StandardPass"}"#;
+const SQUASH_STR: &str = r#"{"StandardPass": {"name": "SquashRzPhasedX"}, "pass_class": "StandardPass"}"#;
 
 enum HugrFileType {
     Original,
