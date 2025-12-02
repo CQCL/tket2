@@ -1,28 +1,35 @@
 #![allow(missing_docs)]
 
+use hugr_core::hugr::linking::{
+    self, HugrLinking as _, NodeLinkingDirective, NodeLinkingDirectives, NodeLinkingError,
+};
 use itertools::Itertools as _;
-use petgraph::visit::Walker;
-use std::collections::{BTreeMap, BTreeSet};
+use petgraph::visit::{IntoEdgeReferences, Walker};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use hugr::{
     algorithms::{
-        call_graph::{CallGraph, CallGraphNode}, replace_types::{NodeTemplate, ReplaceTypesError}, ComposablePass, ReplaceTypes
+        call_graph::{CallGraph, CallGraphEdge, CallGraphNode},
+        composable::ValidatePassError,
+        remove_dead_funcs,
+        replace_types::{NodeTemplate, ReplaceTypesError},
+        ComposablePass, RemoveDeadFuncsError, ReplaceTypes,
     },
     builder::{BuildError, Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
     extension::{
         prelude::{bool_t, qb_t},
         SignatureError,
     },
-    hugr::{hugrmut::HugrMut, ValidationError},
+    hugr::{hugrmut::HugrMut, views::ExtractionResult, ValidationError},
     ops::{handle::NodeHandle as _, Call, DataflowOpTrait, OpType},
     std_extensions::arithmetic::int_types::INT_TYPES,
-    types::{PolyFuncType, Type, TypeRV},
-    HugrView, Node,
+    types::{CustomType, PolyFuncType, Signature, Transformable, Type, TypeRV, TypeTransformer},
+    Hugr, HugrView, Node,
 };
 use strum::IntoEnumIterator as _;
 
 use crate::{
-    extension::bool::{bool_type, BoolOpBuilder},
+    extension::bool::{bool_custom_type, bool_type, BoolOpBuilder},
     TketOp,
 };
 
@@ -43,8 +50,12 @@ pub enum RewriteQuantumPassError {
         expected: PolyFuncType,
         found: PolyFuncType,
     },
+    #[from]
+    ValidatePassError(ValidatePassError<Node, RemoveDeadFuncsError>),
     #[display("Missing function '{name}'")]
     MissingFunction { name: String },
+    #[from]
+    NodeLinkingError(NodeLinkingError<Node, Node>),
 }
 
 #[derive(Debug, Clone)]
@@ -72,30 +83,50 @@ impl Default for RewriteQuantumPass {
 
 impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
     type Error = RewriteQuantumPassError;
-    type Result = bool;
+    type Result = ();
 
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
-        let mut lowerer = self.lowerer(self.find_or_create_funcs(hugr)?)?;
-        if let Some(entrypoint) = self.entrypoint.as_ref() {
-            let n = all_funcs_by_name(hugr)
+        let hugr_all_funcs_by_name = all_funcs_by_name(hugr);
+
+        let mut state = if let Some(entrypoint) = self.entrypoint.as_ref() {
+            let node = hugr_all_funcs_by_name
                 .get(entrypoint)
                 .ok_or(RewriteQuantumPassError::MissingFunction {
                     name: entrypoint.clone(),
                 })?
                 .0;
-
-            let cg = CallGraph::new(hugr);
-            let dfs = petgraph::visit::Dfs::new(cg.graph(), cg.node_index(n).unwrap());
-            lowerer.set_regions(dfs.iter(cg.graph()).filter_map(|n| if let CallGraphNode::FuncDefn(n) = cg.graph()[n] {
-                Some(n)
-            } else {
-                None
-            }))
+            RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr.with_entrypoint(node))?
+        } else {
+            RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr)?
         };
-        let r = lowerer.run(hugr)?;
-        hugr.validate()?;
+        // let new_entrypoint_node = hugr_map.extracted_node(old_entrypoint_node);
+        // hugr2.set_entrypoint(new_entrypoint_node);
+
+        // remove_dead_funcs(&mut hugr2, [])?;
+        for op in TketOp::iter() {
+            state.op(op)?;
+        }
+
+        let (rw_hugr, nlds, e) = state.finish()?;
+
+        // for (op, new_node) in op_funcs {
+        //     let name = &self.funcs[&op];
+        //     if let Some((n, _)) = hugr_all_funcs_by_name.get(name) {
+        //         nlds.insert(new_node, NodeLinkingDirective::UseExisting(*n));
+        //     } else {
+        //         nlds.insert(new_node, NodeLinkingDirective::add());
+        //     }
+        let orig_entrypoint = hugr.entrypoint();
+        hugr.set_entrypoint(hugr.module_root());
+        eprintln!("rw_hugr: {}", rw_hugr.mermaid_string());
+        eprintln!("nlds: {nlds:?}");
+        eprintln!("hugr: {}", hugr.mermaid_string());
+
+        let link_r = hugr.insert_link_hugr_by_node(None, rw_hugr, nlds).unwrap();
+        hugr.set_entrypoint(link_r.node_map[&e]);
         eprintln!("{}", hugr.mermaid_string());
-        Ok(r)
+        hugr.validate()?;
+        Ok(())
     }
 }
 
@@ -115,133 +146,136 @@ fn all_funcs_by_name<N: Clone>(
         .collect()
 }
 
-impl RewriteQuantumPass {
-    fn find_or_create_funcs(
-        &self,
-        hugr: &mut impl HugrMut<Node = Node>,
-    ) -> Result<BTreeMap<TketOp, Node>, RewriteQuantumPassError> {
-        let mod_node = hugr.module_root();
-        let mut func_nodes = BTreeMap::default();
-        let funcs_by_name = all_funcs_by_name(hugr);
-        for (&op, name) in &self.funcs {
-            let ext_op = op.into_extension_op();
-            let expected_sig = {
-                // this is kind of gross, ReplaceTypes already does this we
-                // should be able to call into it here.
-                let mut sig = ext_op.signature().into_owned();
-                sig.input
-                    .iter_mut()
-                    .chain(sig.output.iter_mut())
-                    .for_each(|ty| {
-                        if ty == &qb_t() {
-                            *ty = self.qubit_to_ty.clone();
-                        } else if ty == &bool_t() {
-                            *ty = bool_type()
-                        }
-                    });
-                sig
-            };
-            let node = {
-                let func_node = {
-                    let expected_sig = expected_sig.clone().into();
-                    if let Some((n, sig)) = funcs_by_name.get(name) {
-                        let node = *n;
-                        if sig != &expected_sig {
-                            Err(RewriteQuantumPassError::ExistingFunctionSignatureMismatch {
-                                op,
-                                node,
-                                name: name.clone(),
-                                expected: expected_sig,
-                                found: sig.clone(),
-                            })?
-                        }
-                        *n
-                    } else {
-                        let decl_hugr = {
-                            let mut builder = ModuleBuilder::new();
-                            let id = builder.declare(name, expected_sig)?;
-                            let mut hugr = builder.finish_hugr()?;
-                            hugr.set_entrypoint(id.node());
-                            hugr
-                        };
-                        let ir = hugr.insert_hugr(mod_node, decl_hugr);
-                        ir.inserted_entrypoint
-                    }
-                };
-                match op {
-                    // TketOps return hugr bools, but guppy functions return
-                    // opaque tket2 bools. Gross.  We insert wrapper functions
-                    // for these two ops that read the result.
-                    TketOp::Measure => {
-                        let wrapper_sig = {
-                            let mut sig = expected_sig.clone();
-                            sig.output.iter_mut().for_each(|ty| {
-                                if ty == &bool_type() {
-                                    *ty = bool_t()
-                                }
-                            });
-                            sig
-                        };
-                        let (decl_hugr, (call_node, call_port)) = {
-                            let mut builder = ModuleBuilder::new();
-                            let dummy = builder.declare(name, expected_sig.clone().into())?;
-                            let (wrapper, call) = {
-                                let mut wrapper = builder.define_function(
-                                    format!("_Wrapped_{name}"),
-                                    wrapper_sig.clone(),
-                                )?;
-                                let call = Call::try_new(expected_sig.clone().into(), [])?;
-                                let port = call.called_function_port();
-                                let call = wrapper.add_dataflow_op(call, wrapper.input_wires())?;
-                                wrapper
-                                    .hugr_mut()
-                                    .connect(dummy.node(), 0, call.node(), port);
-                                let call_outs: Vec<_> =
-                                    itertools::zip_eq(wrapper_sig.output().iter(), call.outputs())
-                                        .map(|(ty, wire)| {
-                                            if ty == &bool_t() {
-                                                Ok::<_, BuildError>(wrapper.add_bool_read(wire)?[0])
-                                            } else {
-                                                Ok(wire)
-                                            }
-                                        })
-                                        .try_collect()?;
-                                (
-                                    wrapper.finish_with_outputs(call_outs)?.node(),
-                                    (call.node(), port),
-                                )
-                            };
+#[derive(Debug)]
+struct RewriteQuantumState<'a> {
+    orig_funcs_by_name: &'a BTreeMap<String, (Node, PolyFuncType)>,
+    pass: &'a RewriteQuantumPass,
+    op_funcs: BTreeMap<TketOp, Node>,
+    nlds: NodeLinkingDirectives<Node, Node>,
+    hugr: Hugr,
+}
 
-                            let mut hugr = builder.finish_hugr()?;
-                            hugr.set_entrypoint(wrapper);
-                            (hugr, call)
-                        };
-                        let ir = hugr.insert_hugr(mod_node, decl_hugr);
-                        hugr.disconnect(ir.node_map[&call_node], call_port);
-                        hugr.connect(func_node, 0, ir.node_map[&call_node], call_port);
-                        ir.inserted_entrypoint
-                    }
-                    _ => func_node,
-                }
-            };
-            let _ = func_nodes.insert(op, node);
+impl<'a> RewriteQuantumState<'a> {
+    pub fn new(
+        orig_funcs_by_name: &'a BTreeMap<String, (Node, PolyFuncType)>,
+        pass: &'a RewriteQuantumPass,
+        hugr: &impl HugrView<Node = Node>,
+    ) -> Result<Self, RewriteQuantumPassError> {
+        let (mut new_hugr, hugr_map) = hugr.extract_hugr(hugr.module_root());
+        let new_entrypoint_node = hugr_map.extracted_node(hugr.entrypoint());
+        let mut nlds = HashMap::default();
+        if new_entrypoint_node != new_hugr.module_root() {
+            new_hugr.set_entrypoint(new_entrypoint_node);
+            nlds.insert(
+                new_entrypoint_node,
+                NodeLinkingDirective::replace([hugr.entrypoint()]),
+            );
+            remove_dead_funcs(&mut new_hugr, [])?;
         }
-        Ok(func_nodes)
+        Ok(Self {
+            orig_funcs_by_name,
+            pass,
+            hugr: new_hugr,
+            nlds,
+            op_funcs: Default::default(),
+        })
     }
 
-    pub fn lowerer(
-        &self,
-        funcs: BTreeMap<TketOp, Node>,
-    ) -> Result<ReplaceTypes, RewriteQuantumPassError> {
+    pub fn op(&mut self, op: TketOp) -> Result<(), RewriteQuantumPassError> {
+        let new_qb_ty = &self.pass.qubit_to_ty;
+        let func_name = &self.pass.funcs[&op];
+        let ext_op = op.into_extension_op();
+        let func_sig: PolyFuncType = {
+            // this is kind of gross, ReplaceTypes already does this we
+            // should be able to call into it here.
+            let mut sig = ext_op.signature().into_owned();
+            sig.input
+                .iter_mut()
+                .chain(sig.output.iter_mut())
+                .for_each(|ty| {
+                    if ty == &qb_t() {
+                        *ty = new_qb_ty.clone();
+                    } else if ty == &bool_t() {
+                        *ty = bool_type();
+                    }
+                });
+            sig.into()
+        };
+        let existing_node = if let Some((n, sig)) = self.orig_funcs_by_name.get(func_name) {
+            if sig != &func_sig {
+                return Err(RewriteQuantumPassError::ExistingFunctionSignatureMismatch {
+                    op,
+                    node: *n,
+                    name: func_name.clone(),
+                    expected: func_sig,
+                    found: sig.clone(),
+                });
+            }
+            Some(n)
+        } else {
+            None
+        };
+        // let op_sig = ext_op.signature().into_owned();
+
+        let mut mod_builder = ModuleBuilder::new();
+        let func_id = mod_builder.declare(func_name, func_sig.clone())?;
+        let mut funcs_to_link = vec![(func_id.node(), existing_node)];
+
+        let func_node = if matches!(op, TketOp::Measure) {
+            let mut wrapper_func = mod_builder.define_function(
+                format!("func_name.Wrapped"),
+                Signature::new(
+                    self.pass.qubit_to_ty.clone(),
+                    vec![new_qb_ty.clone(), bool_t()],
+                ),
+            )?;
+            let [q] = wrapper_func.input_wires_arr();
+            let [q, r] = wrapper_func.call(&func_id, &[], [q])?.outputs_arr();
+            let [r] = wrapper_func.add_bool_read(r)?;
+            let n = wrapper_func.finish_with_outputs([q, r])?.node();
+            funcs_to_link.push((n.node(), None));
+            n
+        } else {
+            func_id.node()
+        };
+        let func_hugr = mod_builder.finish_hugr()?;
+
+        let link_r = self
+            .hugr
+            .insert_link_hugr_by_node(
+                None,
+                func_hugr,
+                funcs_to_link
+                    .iter()
+                    .map(|(n, _)| (*n, NodeLinkingDirective::add()))
+                    .collect(),
+            )
+            .unwrap();
+        self.op_funcs.insert(op, link_r.node_map[&func_node]);
+        for (n, mb_existing) in funcs_to_link {
+            let nld = mb_existing.map_or(NodeLinkingDirective::add(), |existing| {
+                NodeLinkingDirective::UseExisting(*existing)
+            });
+            self.nlds.insert(link_r.node_map[&n], nld);
+        }
+        Ok(())
+    }
+
+    pub fn finish(
+        mut self,
+    ) -> Result<(Hugr, NodeLinkingDirectives<Node, Node>, Node), RewriteQuantumPassError> {
         let mut lw = ReplaceTypes::default();
         lw.replace_type(
             qb_t().as_extension().cloned().unwrap(),
-            self.qubit_to_ty.clone(),
+            self.pass.qubit_to_ty.clone(),
         );
-        for (op, node) in funcs {
+        for (op, node) in self.op_funcs {
             lw.replace_op(&op.into_extension_op(), NodeTemplate::Call(node, vec![]));
         }
-        Ok(lw)
+        lw.run(&mut self.hugr)?;
+        let e = self.hugr.entrypoint();
+        self.hugr.set_entrypoint(self.hugr.module_root());
+        Ok((self.hugr, self.nlds, e))
     }
 }
 
@@ -259,19 +293,26 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn example() {
-        let pass = RewriteQuantumPass::default();
+    struct Case {
+        hugr: Hugr,
+        h_node: Node,
+        measure_node: Node,
+        main_node: Node,
+    }
+
+    #[rstest::fixture]
+    fn example() -> Case {
+        let qubit_to_ty = RewriteQuantumPass::default().qubit_to_ty;
         let mut module = ModuleBuilder::new();
         let h_node = {
-            let t = &pass.qubit_to_ty;
+            let t = &qubit_to_ty;
             module
                 .declare("_H", Signature::new_endo(t.clone()).into())
                 .unwrap()
                 .node()
         };
         let measure_node = {
-            let t = &pass.qubit_to_ty;
+            let t = &qubit_to_ty;
             let mut measure = module
                 .define_function(
                     "_Measure",
@@ -283,7 +324,7 @@ mod test {
             measure.finish_with_outputs([q, r]).unwrap().node()
         };
 
-        let main = {
+        let main_node = {
             let mut main = module
                 .define_function("main", Signature::new(type_row![], bool_t()))
                 .unwrap();
@@ -320,13 +361,25 @@ mod test {
 
             main.finish_with_outputs([r]).unwrap().node()
         };
+        let hugr = module.finish_hugr().unwrap();
+        Case {
+            hugr,
+            h_node,
+            measure_node,
+            main_node,
+        }
+    }
 
-        let mut hugr = {
-            let mut hugr = module.finish_hugr().unwrap();
-            hugr.set_entrypoint(main);
-            hugr
-        };
-
+    #[rstest::rstest]
+    fn main_entrypoint(example: Case) {
+        let Case {
+            mut hugr,
+            h_node,
+            measure_node,
+            main_node,
+        } = example;
+        let pass = RewriteQuantumPass::default();
+        hugr.set_entrypoint(main_node);
         pass.run(&mut hugr).unwrap();
 
         for n in hugr.nodes() {
@@ -357,5 +410,20 @@ mod test {
             .count()
                 > 0
         );
+    }
+
+    #[rstest::rstest]
+    fn module_entrypoint(example: Case) {
+        let Case {
+            mut hugr,
+            h_node,
+            measure_node,
+            main_node,
+        } = example;
+        let pass = RewriteQuantumPass::default();
+        hugr.set_entrypoint(hugr.module_root());
+        let pass = RewriteQuantumPass::default();
+        hugr.set_entrypoint(main_node);
+        pass.run(&mut hugr).unwrap();
     }
 }
