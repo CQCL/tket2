@@ -11,7 +11,7 @@ use hugr::{
     ops::ExtensionOp,
     HugrView, Node,
 };
-use tket::extension::globals::{self, GlobalsOp, GlobalsOpDef};
+use tket::extension::globals::{GlobalsOp, GlobalsOpDef};
 
 pub struct GlobalsCodegenExtension;
 
@@ -58,7 +58,7 @@ fn emit_globals_op<'c, H: HugrView<Node = Node>>(
             });
 
             let result = builder.build_load(global.as_pointer_value(), "current_value")?;
-            let _ = builder.build_store(global.as_pointer_value(), new_value.clone())?;
+            let _ = builder.build_store(global.as_pointer_value(), *new_value)?;
             args.outputs.finish(builder, [result])?
         }
     }
@@ -70,12 +70,12 @@ fn emit_globals_op<'c, H: HugrView<Node = Node>>(
 mod test {
     use super::*;
     use hugr::extension::prelude::usize_t;
-    use hugr::extension::simple_op::MakeRegisteredOp as _;
+    
     use hugr::llvm::check_emission;
     use hugr::llvm::test::llvm_ctx;
     use hugr::llvm::test::single_op_hugr;
     use hugr::llvm::test::TestContext;
-    use hugr::std_extensions::arithmetic::int_types::INT_TYPES;
+    
 
     #[rstest::rstest]
     fn emit_debug_codegen(mut llvm_ctx: TestContext) {

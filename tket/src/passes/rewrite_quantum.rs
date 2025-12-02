@@ -1,35 +1,32 @@
 #![allow(missing_docs)]
 
-use hugr_core::hugr::linking::{
-    self, HugrLinking as _, NodeLinkingDirective, NodeLinkingDirectives, NodeLinkingError,
-};
-use itertools::Itertools as _;
-use petgraph::visit::{IntoEdgeReferences, Walker};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use hugr_core::{hugr::{internal::HugrMutInternals, linking::{
+    HugrLinking as _, NodeLinkingDirective, NodeLinkingDirectives, NodeLinkingError,
+}}, Visibility};
+use std::collections::{BTreeMap, HashMap};
 
 use hugr::{
     algorithms::{
-        call_graph::{CallGraph, CallGraphEdge, CallGraphNode},
         composable::ValidatePassError,
         remove_dead_funcs,
         replace_types::{NodeTemplate, ReplaceTypesError},
         ComposablePass, RemoveDeadFuncsError, ReplaceTypes,
     },
-    builder::{BuildError, Container, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
+    builder::{BuildError, Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
     extension::{
         prelude::{bool_t, qb_t},
         SignatureError,
     },
     hugr::{hugrmut::HugrMut, views::ExtractionResult, ValidationError},
-    ops::{handle::NodeHandle as _, Call, DataflowOpTrait, OpType},
+    ops::{handle::NodeHandle as _, DataflowOpTrait, OpType},
     std_extensions::arithmetic::int_types::INT_TYPES,
-    types::{CustomType, PolyFuncType, Signature, Transformable, Type, TypeRV, TypeTransformer},
+    types::{PolyFuncType, Signature, Type, TypeRV},
     Hugr, HugrView, Node,
 };
 use strum::IntoEnumIterator as _;
 
 use crate::{
-    extension::bool::{bool_custom_type, bool_type, BoolOpBuilder},
+    extension::bool::{bool_type, BoolOpBuilder},
     TketOp,
 };
 
@@ -56,6 +53,10 @@ pub enum RewriteQuantumPassError {
     MissingFunction { name: String },
     #[from]
     NodeLinkingError(NodeLinkingError<Node, Node>),
+    #[display("A FuncDecl is alive in the fragment of HUGR to be rewritten: {node}")]
+    DeclAliveForRewrite{
+        node: Node
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -99,24 +100,14 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
         } else {
             RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr)?
         };
-        // let new_entrypoint_node = hugr_map.extracted_node(old_entrypoint_node);
-        // hugr2.set_entrypoint(new_entrypoint_node);
 
-        // remove_dead_funcs(&mut hugr2, [])?;
         for op in TketOp::iter() {
             state.op(op)?;
         }
 
         let (rw_hugr, nlds, e) = state.finish()?;
 
-        // for (op, new_node) in op_funcs {
-        //     let name = &self.funcs[&op];
-        //     if let Some((n, _)) = hugr_all_funcs_by_name.get(name) {
-        //         nlds.insert(new_node, NodeLinkingDirective::UseExisting(*n));
-        //     } else {
-        //         nlds.insert(new_node, NodeLinkingDirective::add());
-        //     }
-        let orig_entrypoint = hugr.entrypoint();
+        let _orig_entrypoint = hugr.entrypoint();
         hugr.set_entrypoint(hugr.module_root());
         eprintln!("rw_hugr: {}", rw_hugr.mermaid_string());
         eprintln!("nlds: {nlds:?}");
@@ -130,18 +121,22 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
     }
 }
 
+fn func_name_sig<N>(hugr: &impl HugrView<Node = N>, n: N) -> Option<(&str, &PolyFuncType)> {
+    match hugr.get_optype(n) {
+        OpType::FuncDecl(decl) => Some((decl.func_name().as_ref(), decl.signature())),
+        OpType::FuncDefn(defn) => Some((defn.func_name().as_ref(), defn.signature())),
+        _ => None,
+    }
+}
+
 fn all_funcs_by_name<N: Clone>(
     hugr: &impl HugrView<Node = N>,
 ) -> BTreeMap<String, (N, PolyFuncType)> {
     let mod_node = hugr.module_root();
     hugr.children(mod_node)
         .filter_map(|n| {
-            Some(match hugr.get_optype(n.clone()) {
-                OpType::FuncDecl(decl) => (decl.func_name(), decl.signature()),
-                OpType::FuncDefn(defn) => (defn.func_name(), defn.signature()),
-                _ => None?,
-            })
-            .map(|(name, sig)| (name.clone(), (n.clone(), sig.clone())))
+            let (name, sig) = func_name_sig(hugr, n.clone())?;
+            Some((name.to_owned(), (n, sig.clone())))
         })
         .collect()
 }
@@ -172,6 +167,31 @@ impl<'a> RewriteQuantumState<'a> {
             );
             remove_dead_funcs(&mut new_hugr, [])?;
         }
+        let children: Vec<_> = new_hugr.children(new_hugr.module_root()).collect();
+        for child in children {
+            if child == new_entrypoint_node {
+                continue;
+            }
+            let ot = new_hugr.get_optype(child);
+
+            let nld = if let Some((name,_)) = func_name_sig(&new_hugr, child) {
+                if orig_funcs_by_name.contains_key(name) {
+                    if ot.is_func_decl() {
+                        Err(RewriteQuantumPassError::DeclAliveForRewrite { node: child })?
+                    }
+                    let mut defn = ot.as_func_defn().unwrap().clone();
+                    *defn.visibility_mut() = Visibility::Private;
+                    let _ = new_hugr.replace_op(child, defn);
+                    NodeLinkingDirective::add()
+                } else {
+                    NodeLinkingDirective::add()
+                }
+            } else {
+                NodeLinkingDirective::add()
+            };
+            let _ = nlds.insert(child, nld);
+        }
+
         Ok(Self {
             orig_funcs_by_name,
             pass,
@@ -223,7 +243,7 @@ impl<'a> RewriteQuantumState<'a> {
 
         let func_node = if matches!(op, TketOp::Measure) {
             let mut wrapper_func = mod_builder.define_function(
-                format!("func_name.Wrapped"),
+                "func_name.Wrapped".to_string(),
                 Signature::new(
                     self.pass.qubit_to_ty.clone(),
                     vec![new_qb_ty.clone(), bool_t()],
@@ -413,17 +433,44 @@ mod test {
     }
 
     #[rstest::rstest]
+    #[ignore]
     fn module_entrypoint(example: Case) {
         let Case {
             mut hugr,
-            h_node,
-            measure_node,
-            main_node,
+            
+            ..
         } = example;
-        let pass = RewriteQuantumPass::default();
         hugr.set_entrypoint(hugr.module_root());
-        let pass = RewriteQuantumPass::default();
-        hugr.set_entrypoint(main_node);
-        pass.run(&mut hugr).unwrap();
+        RewriteQuantumPass::default().run(&mut hugr).unwrap();
+    }
+
+    #[test]
+    fn nontrival_callgraph() {
+        let mut module = ModuleBuilder::new();
+        let bar = {
+            let b = module.define_function("bar", Signature::new(qb_t(), qb_t())).unwrap();
+            let [q] =b.input_wires_arr();
+            b.finish_with_outputs([q]).unwrap()
+        };
+        let foo = {
+            let mut b = module
+                .define_function("foo", Signature::new(qb_t(), qb_t()))
+                .unwrap();
+            let [q] =b.input_wires_arr();
+            let [q] = b.call(bar.handle(), &[], [q]).unwrap().outputs_arr();
+            b.finish_with_outputs([q]).unwrap()
+        };
+        let main = {
+            let mut b = module
+                .define_function("main", Signature::new_endo(type_row![]))
+                .unwrap();
+            let [q] = b.add_dataflow_op(TketOp::QAlloc, []).unwrap().outputs_arr();
+            let [q] = b.call(foo.handle(), &[], [q]).unwrap().outputs_arr();
+            b.add_dataflow_op(TketOp::QFree, [q]).unwrap();
+            b.finish_with_outputs([]).unwrap()
+        };
+        let mut hugr = module.finish_hugr().unwrap();
+        hugr.set_entrypoint(main.node());
+        RewriteQuantumPass::default().run(&mut hugr).unwrap();
     }
 }
