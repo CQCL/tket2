@@ -477,14 +477,14 @@ impl<'h> PytketDecoderContext<'h> {
         // Add additional subgraphs and wires not encoded in commands.
         let [input_node, output_node] = self.builder.io();
         if let Some(extras) = extra_nodes_and_wires {
-            if let Some(subgraph_id) = extras.extra_subgraph {
-                let params = extras
-                    .extra_subgraph_params
+            for extra_subgraph in &extras.additional_subgraphs {
+                let params = extra_subgraph
+                    .params
                     .iter()
                     .map(|p| self.load_half_turns(p))
                     .collect_vec();
 
-                self.insert_external_subgraph(subgraph_id, &[], &[], &params)
+                self.insert_external_subgraph(extra_subgraph.id, &[], &[], &params)
                     .map_err(|e| e.hugr_op("External subgraph"))?;
             }
 
