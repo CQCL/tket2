@@ -89,16 +89,16 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
     fn run(&self, hugr: &mut H) -> Result<Self::Result, Self::Error> {
         let hugr_all_funcs_by_name = all_funcs_by_name(hugr);
 
-        let mut state = if let Some(entrypoint) = self.entrypoint.as_ref() {
+        let (mut state, rewriting_entrypoint) = if let Some(entrypoint) = self.entrypoint.as_ref() {
             let node = hugr_all_funcs_by_name
                 .get(entrypoint)
                 .ok_or(RewriteQuantumPassError::MissingFunction {
                     name: entrypoint.clone(),
                 })?
                 .0;
-            RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr.with_entrypoint(node))?
+            (RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr.with_entrypoint(node))?, false)
         } else {
-            RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr)?
+            (RewriteQuantumState::new(&hugr_all_funcs_by_name, self, &hugr)?, true)
         };
 
         for op in TketOp::iter() {
@@ -107,15 +107,14 @@ impl<H: HugrMut<Node = Node>> ComposablePass<H> for RewriteQuantumPass {
 
         let (rw_hugr, nlds, e) = state.finish()?;
 
-        let _orig_entrypoint = hugr.entrypoint();
+        let orig_entrypoint = hugr.entrypoint();
         hugr.set_entrypoint(hugr.module_root());
-        eprintln!("rw_hugr: {}", rw_hugr.mermaid_string());
-        eprintln!("nlds: {nlds:?}");
-        eprintln!("hugr: {}", hugr.mermaid_string());
-
         let link_r = hugr.insert_link_hugr_by_node(None, rw_hugr, nlds).unwrap();
-        hugr.set_entrypoint(link_r.node_map[&e]);
-        eprintln!("{}", hugr.mermaid_string());
+        hugr.set_entrypoint(if rewriting_entrypoint {
+            link_r.node_map[&e]
+        } else {
+            orig_entrypoint
+        });
         hugr.validate()?;
         Ok(())
     }
