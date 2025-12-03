@@ -60,8 +60,8 @@ impl<N: HugrNode> Interval<N> {
         node: N,
         scope: &ResourceScope<impl HugrView<Node = N>>,
     ) -> Option<Self> {
-        let in_port = scope.get_port(node, resource_id, Direction::Incoming);
-        let out_port = scope.get_port(node, resource_id, Direction::Outgoing);
+        let in_port = scope.get_resource_port(node, resource_id, Direction::Incoming);
+        let out_port = scope.get_resource_port(node, resource_id, Direction::Outgoing);
         let port = in_port.or(out_port)?;
 
         Some(Self::Singleton {
@@ -149,10 +149,10 @@ impl<N: HugrNode> Interval<N> {
                 .ok_or(InvalidInterval::NotOnResourcePath(start_node))
         } else {
             let start_port = scope
-                .get_port(start_node, resource_id, Direction::Outgoing)
+                .get_resource_port(start_node, resource_id, Direction::Outgoing)
                 .ok_or(InvalidInterval::NotOnResourcePath(start_node))?;
             let end_port = scope
-                .get_port(end_node, resource_id, Direction::Incoming)
+                .get_resource_port(end_node, resource_id, Direction::Incoming)
                 .ok_or(InvalidInterval::NotOnResourcePath(end_node))?;
             Ok(Self::new_span([
                 (start_node, start_port),
@@ -214,7 +214,7 @@ impl<N: HugrNode> Interval<N> {
             .get_resource_id(node, port)
             .expect("interval port is a resource port in scope");
         scope
-            .get_port(node, resource_id, direction)
+            .get_resource_port(node, resource_id, direction)
             .map(|port| (node, port))
     }
 
@@ -325,7 +325,7 @@ impl<N: HugrNode> Interval<N> {
 
         let new_extrema_node = node;
         let new_extrema_port = scope
-            .get_port(new_extrema_node, resource_id, extension_dir.reverse())
+            .get_resource_port(new_extrema_node, resource_id, extension_dir.reverse())
             .expect("node is on interval resource path");
         let existing_extrema = match (*self, extension_dir) {
             (Interval::Span { end: (n, p), .. }, Direction::Incoming) => (n, p.into()),
@@ -380,7 +380,7 @@ impl<N: HugrNode> Interval<N> {
     }
 
     #[inline]
-    fn start_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
+    pub(super) fn start_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
         let start_node = self.start_node();
         scope
             .get_position(start_node)
@@ -388,7 +388,7 @@ impl<N: HugrNode> Interval<N> {
     }
 
     #[inline]
-    fn end_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
+    pub(super) fn end_pos(&self, scope: &ResourceScope<impl HugrView<Node = N>>) -> Position {
         let end_node = self.end_node();
         scope
             .get_position(end_node)
@@ -410,7 +410,7 @@ fn ensure_direction_resource_port<N: HugrNode>(
         let resource_id = scope
             .get_resource_id(node, port)
             .expect("interval port is a resource port in scope");
-        let port = scope.get_port(node, resource_id, dir)?;
+        let port = scope.get_resource_port(node, resource_id, dir)?;
         Some((node, port))
     }
 }
@@ -448,7 +448,7 @@ mod tests {
     use super::{ResourceScope, *};
     use std::ops::RangeInclusive;
 
-    use crate::{resource::tests::cx_circuit, Circuit};
+    use crate::{resource::tests::cx_circuit, resource::ResourceId, Circuit};
 
     use itertools::Itertools;
     use rstest::{fixture, rstest};
