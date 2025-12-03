@@ -1,6 +1,19 @@
 # Changelog
 
 
+## [0.22.1](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.22.0...tket-qsystem-v0.22.1) - 2025-12-03
+
+### New Features
+
+- `NormalizeGuppy` pass to simplify generated structure ([#1220](https://github.com/CQCL/tket2/pull/1220))
+- Allow running arbitrary serializable pytket passes on hugrs ([#1266](https://github.com/CQCL/tket2/pull/1266))
+- BorrowSquashPass to elide redundant borrow/return ops ([#1159](https://github.com/CQCL/tket2/pull/1159))
+
+### Testing
+
+- regenerate guppy_opt examples, and count gates ([#1249](https://github.com/CQCL/tket2/pull/1249))
+- run pytket on guppy_opt tests, measure (very limited) success ([#1250](https://github.com/CQCL/tket2/pull/1250))
+
 ## [0.22.0](https://github.com/CQCL/tket2/compare/tket-qsystem-v0.21.0...tket-qsystem-v0.22.0) - 2025-10-20
 
 ### New Features
