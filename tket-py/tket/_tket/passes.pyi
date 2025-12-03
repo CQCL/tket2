@@ -118,6 +118,6 @@ def squash_phasedx_rz(
 def replace_qubits(
     circ: CircuitClass,
     entrypoint: str | None = None,
-) -> tuple[CircuitClass, bool]:
+) -> CircuitClass:
     """TODO
     """
