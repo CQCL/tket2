@@ -25,7 +25,6 @@ use derive_more::From;
 use hugr::{Hugr, HugrView, Wire};
 use serde::Serialize;
 use tket::circuit::CircuitHash;
-use tket::modifier::qubit_types_utils::contain_qubit_term;
 use tket::passes::pytket::lower_to_pytket;
 use tket::passes::CircuitChunks;
 use tket::serialize::pytket::{DecodeOptions, EncodeOptions};
