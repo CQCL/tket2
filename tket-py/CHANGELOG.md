@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.13.0](https://github.com/CQCL/tket2/compare/tket-py-v0.12.12...tket-py-v0.13.0) (2025-12-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* Subcircuit is gone, use SiblingSubgraph instead; `.subcircuit()` -> `.subgraph()`
+
+### Features
+
+* Allow running arbitrary serializable pytket passes on hugrs ([#1266](https://github.com/CQCL/tket2/issues/1266)) ([24875e0](https://github.com/CQCL/tket2/commit/24875e06121a6929e842cc3f5c78126fc8bffc6f))
+* implement `ComposablePass` for normalize Guppy pass ([#1286](https://github.com/CQCL/tket2/issues/1286)) ([d72d84d](https://github.com/CQCL/tket2/commit/d72d84d55b22ed574fe15f322304d54c5d445d1a))
+* implement `ComposeablePass` interface for any serializable pytket pass. ([#1269](https://github.com/CQCL/tket2/issues/1269)) ([71cb1f2](https://github.com/CQCL/tket2/commit/71cb1f2354b9e5058ff3c4ebe3e932e219105cbc))
+
+
+### Bug Fixes
+
+* Use qsystem extensions on Tk2Circuit.from_bytes/str ([#1296](https://github.com/CQCL/tket2/issues/1296)) ([df9f52a](https://github.com/CQCL/tket2/commit/df9f52a1d8cb0047fc4732beddfaeb2aa9b43d8b))
+
+
+### Code Refactoring
+
+* Replace Subcircuit with SiblingSubgraph ([#1288](https://github.com/CQCL/tket2/issues/1288)) ([c0d1236](https://github.com/CQCL/tket2/commit/c0d12360c5f9c1ed01c5c46513b8e1e4abbe5d89))
+
 ## [0.12.12](https://github.com/CQCL/tket2/compare/tket-py-v0.12.11...tket-py-v0.12.12) (2025-11-18)
 
 
