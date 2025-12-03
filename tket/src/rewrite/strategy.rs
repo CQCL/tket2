@@ -500,9 +500,7 @@ mod tests {
     fn rw_to_empty(circ: &Circuit, cx_nodes: impl IntoIterator<Item = Node>) -> CircuitRewrite {
         let circ: ResourceScope<_> = circ.into();
         let subcirc = Subcircuit::try_from_resource_nodes(cx_nodes, &circ).unwrap();
-        subcirc
-            .create_rewrite(n_cx(0), &circ)
-            .unwrap()
+        subcirc.create_rewrite(n_cx(0), &circ).unwrap()
     }
 
     /// Rewrite cx_nodes -> two_qb_repl (or 10x CX if None)
