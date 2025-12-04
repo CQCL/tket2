@@ -58,7 +58,7 @@ pub struct PytketEncoderContext<H: HugrView> {
     unsupported: UnsupportedTracker<H::Node>,
     /// A registry of already-encoded opaque subgraphs.
     opaque_subgraphs: OpaqueSubgraphs<H::Node>,
-    /// Subgraphs in `opaque_subgraph` that could not be emitted as an opaque
+    /// Subgraphs in `opaque_subgraphs` that could not be emitted as opaque barriers
     /// barrier, and must be stored in the [`EncodedCircuitInfo`] instead when
     /// finishing the encoding.
     /// Identified by their [`super::opaque::SubgraphId`] in `opaque_subgraphs`.
@@ -649,7 +649,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 params: input_param_exprs.clone(),
             });
         } else {
-            // If there's registers to attach the barrier command to, emit it as a regular command.
+            // If there are registers to which to attach, emit it as a barrier command.
 
             // Create pytket operation, and add the subcircuit as hugr
             let args = MakeOperationArgs {
