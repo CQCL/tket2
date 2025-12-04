@@ -634,7 +634,7 @@ impl<H: HugrView> PytketEncoderContext<H> {
                 |p| {
                     let range = out_param_count..out_param_count + p.expected_count;
                     out_param_count += p.expected_count;
-                    range.map(|i| format!("{subgraph_id}_out{i}")).collect_vec()
+                    range.map(|i| subgraph_id.output_parameter(i)).collect_vec()
                 },
             )?;
             op_values.append(new_outputs);
