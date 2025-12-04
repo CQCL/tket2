@@ -752,7 +752,7 @@ fn circ_complex_param_type() -> Circuit {
     hugr.into()
 }
 
-/// A program with an unsupported subgraph not associated to any qubit or bit.
+/// A program with a unsupported subgraphs not associated to any qubit or bit.
 /// <https://github.com/CQCL/tket2/issues/1294>
 #[fixture]
 fn circ_unsupported_subgraph_no_registers() -> Circuit {
@@ -764,17 +764,25 @@ fn circ_unsupported_subgraph_no_registers() -> Circuit {
     )
     .unwrap();
 
-    // Declare a function to call.
-    let func = {
+    // Declare two function to calls.
+    let func1 = {
         let call_input_t = vec![];
         let call_output_t = vec![float64_type()];
         h.module_root_builder()
-            .declare("func", Signature::new(call_input_t, call_output_t).into())
+            .declare("func1", Signature::new(call_input_t, call_output_t).into())
+            .unwrap()
+    };
+
+    let func2 = {
+        let call_input_t = vec![rotation_type()];
+        let call_output_t = vec![rotation_type()];
+        h.module_root_builder()
+            .declare("func2", Signature::new(call_input_t, call_output_t).into())
             .unwrap()
     };
 
     // An unsupported call that'll require an opaque subgraph to encode.
-    let call = h.call(&func, &[], []).unwrap();
+    let call = h.call(&func1, &[], []).unwrap();
     let [f] = call.outputs_arr();
 
     // An operation that must be marked as unsupported, since it's input cannot be encoded.
@@ -782,6 +790,8 @@ fn circ_unsupported_subgraph_no_registers() -> Circuit {
         .add_dataflow_op(RotationOp::from_halfturns_unchecked, [f])
         .unwrap()
         .outputs_arr();
+
+    let [rot] = h.call(&func2, &[], [rot]).unwrap().outputs_arr();
 
     let hugr = h.finish_hugr_with_outputs([rot]).unwrap();
     hugr.into()
