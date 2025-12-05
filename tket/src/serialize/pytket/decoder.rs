@@ -467,13 +467,6 @@ impl<'h> PytketDecoderContext<'h> {
         commands: &[circuit_json::Command],
         extra_nodes_and_wires: Option<&AdditionalNodesAndWires>,
     ) -> Result<(), PytketDecodeError> {
-        let config = self.config().clone();
-        for com in commands {
-            let op_type = com.op.op_type;
-            self.process_command(com, config.as_ref())
-                .map_err(|e| e.pytket_op(&op_type))?;
-        }
-
         // Add additional subgraphs and wires not encoded in commands.
         let [input_node, output_node] = self.builder.io();
         if let Some(extras) = extra_nodes_and_wires {
@@ -502,6 +495,15 @@ impl<'h> PytketDecoderContext<'h> {
                 );
             }
         }
+
+        // Decode the pytket commands.
+        let config = self.config().clone();
+        for com in commands {
+            let op_type = com.op.op_type;
+            self.process_command(com, config.as_ref())
+                .map_err(|e| e.pytket_op(&op_type))?;
+        }
+
         Ok(())
     }
 

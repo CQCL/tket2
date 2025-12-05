@@ -756,13 +756,14 @@ fn circ_complex_param_type() -> Circuit {
 /// <https://github.com/CQCL/tket2/issues/1294>
 #[fixture]
 fn circ_unsupported_subgraph_no_registers() -> Circuit {
-    let input_t = vec![];
-    let output_t = vec![rotation_type()];
+    let input_t = vec![qb_t()];
+    let output_t = vec![qb_t(), rotation_type()];
     let mut h = FunctionBuilder::new(
         "unsupported_subgraph_no_registers",
         Signature::new(input_t, output_t),
     )
     .unwrap();
+    let [q] = h.input_wires_arr();
 
     // Declare two function to calls.
     let func1 = {
@@ -790,10 +791,15 @@ fn circ_unsupported_subgraph_no_registers() -> Circuit {
         .add_dataflow_op(RotationOp::from_halfturns_unchecked, [f])
         .unwrap()
         .outputs_arr();
+    let [q] = h
+        .add_dataflow_op(TketOp::Rz, [q, rot])
+        .unwrap()
+        .outputs_arr();
 
-    let [rot] = h.call(&func2, &[], [rot]).unwrap().outputs_arr();
+    // A separate call that will generate a second opaque subgraph.
+    let [rot2] = h.call(&func2, &[], [rot]).unwrap().outputs_arr();
 
-    let hugr = h.finish_hugr_with_outputs([rot]).unwrap();
+    let hugr = h.finish_hugr_with_outputs([q, rot2]).unwrap();
     hugr.into()
 }
 
