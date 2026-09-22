@@ -51,8 +51,19 @@ where
         }
 
         if !clifford_actions.is_empty() {
-            let action = select_clifford_action(&frontier, clifford_actions)
-                .expect("configured Clifford actions cannot reduce the trailing tableau");
+            // Completed generator pairs must remain fixed while reducing the rest.
+            let completed_qubits = reduced_pairs
+                .iter()
+                .map(|pair| pair.qubit)
+                .collect::<Vec<_>>();
+            let action = select_clifford_action(
+                &frontier,
+                clifford_actions,
+                parallel_mode,
+                n_qubits * 2,
+                &completed_qubits,
+            )
+            .expect("configured Clifford actions cannot reduce the trailing tableau");
             let depth = action
                 .qubits()
                 .iter()
@@ -63,12 +74,12 @@ where
             for &qubit in action.qubits() {
                 qubit_depth[qubit] = depth;
             }
+            let embedded = action.embedded(n_qubits);
+            packed_backend.compose_tableau(&mut tableau, &embedded);
             output.add_op(Op::Tableau {
-                data: action.embedded(n_qubits).into(),
+                data: embedded.into(),
             });
-            action.apply_to_tableau(&mut tableau);
             frontier.apply_action(action);
-            pool.clear();
             continue;
         }
 

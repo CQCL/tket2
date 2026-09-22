@@ -130,8 +130,12 @@ reduction, then lower target cost and duration.
 An action may span any number of qubits. Its placement is explicit, so the
 generic reducer does not need to know about a target's blocks or connectivity.
 Only placements intersecting the current minimum-cost support are evaluated.
-After selection, the action is applied directly to the packed window and the
-incremental frontier. The same mechanism reduces the trailing tableau.
+After selection, scalar conjugation updates the columns of the packed window
+and the active frontier; frontier support sets and cost buckets are rebuilt.
+The same mechanism reduces the trailing tableau, excluding actions that touch
+completed generator pairs. Candidate scoring honours `ParallelMode`, but does
+not yet use lookahead, bounded sampling, lazy candidate invalidation, or SIMD
+action kernels.
 
 ## Reduction flow
 

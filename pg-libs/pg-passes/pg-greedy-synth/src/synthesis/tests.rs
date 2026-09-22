@@ -381,6 +381,49 @@ fn test_configured_non_self_inverse_action() {
     assert!(compare_unitaries_via_tk(&input, &output));
 }
 
+#[test]
+fn configured_action_preserves_completed_tableau_pairs() {
+    let expected = tableau_from_ops(3, &[gate(GateType::ZX, vec![1, 2])]);
+    let changes_completed_pair = tableau_from_ops(
+        3,
+        &[gate(GateType::X, vec![0]), gate(GateType::ZX, vec![1, 2])],
+    );
+    let local = tableau_from_ops(2, &[gate(GateType::ZX, vec![0, 1])]);
+    let input = graph(
+        3,
+        vec![Op::Tableau {
+            data: expected.clone().into(),
+        }],
+    );
+    for mode in [ParallelMode::Off, ParallelMode::On] {
+        let output = GreedySynthPass::new()
+            .with_parallel_mode(mode)
+            .with_clifford_actions(vec![
+                CliffordAction::new(changes_completed_pair.clone().into(), vec![0, 1, 2], 0.0, 1),
+                CliffordAction::new(local.clone().into(), vec![1, 2], 1.0, 1),
+            ])
+            .transform(&prepare_for_synthesis(&input));
+        assert_eq!(tableau_from_ops(3, output.get_ops()), expected);
+    }
+}
+
+#[test]
+#[should_panic(expected = "preserve generator commutation")]
+fn configured_action_rejects_non_clifford_images() {
+    let invalid = TableauData::new(vec![(vec![Pauli::Z], false)], vec![(vec![Pauli::Z], false)]);
+    CliffordAction::new(invalid, vec![0], 1.0, 1);
+}
+
+#[test]
+#[should_panic(expected = "image width")]
+fn configured_action_rejects_wrong_image_width() {
+    let invalid = TableauData::new(
+        vec![(vec![Pauli::Z, Pauli::I], false)],
+        vec![(vec![Pauli::X], false)],
+    );
+    CliffordAction::new(invalid, vec![0], 1.0, 1);
+}
+
 #[rstest]
 #[case::off(ParallelMode::Off)]
 #[case::on(ParallelMode::On)]

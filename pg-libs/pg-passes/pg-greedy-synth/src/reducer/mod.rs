@@ -20,26 +20,43 @@ use rayon::prelude::*;
 pub(crate) fn select_clifford_action<'a>(
     frontier: &Frontier,
     actions: &'a [CliffordAction],
+    parallel_mode: ParallelMode,
+    work_items: usize,
+    excluded_qubits: &[usize],
 ) -> Option<&'a CliffordAction> {
     let support = frontier.minimum_support();
-    actions
-        .par_iter()
-        .enumerate()
-        .filter(|(_, action)| action.qubits().iter().any(|qubit| support.contains(qubit)))
-        .filter_map(|(index, action)| {
-            frontier
-                .action_score(action)
-                .map(|(minimum, total)| (minimum, total, index, action))
-        })
-        .max_by(|left, right| {
-            left.0
-                .cmp(&right.0)
-                .then_with(|| left.1.cmp(&right.1))
-                .then_with(|| right.3.cost().total_cmp(&left.3.cost()))
-                .then_with(|| right.3.duration().cmp(&left.3.duration()))
-                .then_with(|| right.2.cmp(&left.2))
-        })
-        .map(|(_, _, _, action)| action)
+    let score = |(index, action): (usize, &'a CliffordAction)| {
+        if action
+            .qubits()
+            .iter()
+            .any(|qubit| excluded_qubits.contains(qubit))
+            || !action.qubits().iter().any(|qubit| support.contains(qubit))
+        {
+            return None;
+        }
+        frontier
+            .action_score(action)
+            .map(|(minimum, total)| (minimum, total, index, action))
+    };
+    let compare = |left: &(usize, usize, usize, &CliffordAction),
+                   right: &(usize, usize, usize, &CliffordAction)| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| right.3.cost().total_cmp(&left.3.cost()))
+            .then_with(|| right.3.duration().cmp(&left.3.duration()))
+            .then_with(|| right.2.cmp(&left.2))
+    };
+    let selected = if parallel_mode.should_use_parallel(work_items, actions.len()) {
+        actions
+            .par_iter()
+            .enumerate()
+            .filter_map(score)
+            .max_by(compare)
+    } else {
+        actions.iter().enumerate().filter_map(score).max_by(compare)
+    };
+    selected.map(|(_, _, _, action)| action)
 }
 
 pub(crate) struct Reducer<'a, P, C> {
@@ -310,8 +327,14 @@ where
                 break;
             }
             if !self.clifford_actions.is_empty() {
-                let selected = select_clifford_action(frontier, self.clifford_actions)
-                    .expect("configured Clifford actions cannot reduce the frontier");
+                let selected = select_clifford_action(
+                    frontier,
+                    self.clifford_actions,
+                    self.parallel_mode,
+                    slice.len(),
+                    &[],
+                )
+                .expect("configured Clifford actions cannot reduce the frontier");
                 let stop = slice.action_stop_point(selected);
                 let depth = selected
                     .qubits()
@@ -328,7 +351,6 @@ where
                 });
                 slice.apply_action(selected, stop, &self.packed_backend);
                 frontier.apply_action(selected);
-                pool.clear();
                 continue;
             }
             let sample_count = if emitted_any {

@@ -24,8 +24,15 @@ See [TUNING.md](TUNING.md) for internal tuning constants.
 with target-specific Clifford actions. Each `CliffordAction` contains an
 arbitrary-width local tableau, one concrete ordered qubit placement, and its
 target cost and duration. Selected actions are emitted as tableau operations;
-single-qubit basis and sign corrections retain their existing gate forms.
+single-qubit basis/sign corrections and final SWAPs retain their existing gate forms.
 
 The supplied actions must contain a strictly reducing choice for every
 non-local Pauli operation and trailing tableau state reached by synthesis. The
-pass reports an incomplete action set rather than silently emitting a TQE.
+pass panics if it cannot find such a choice. During tableau reduction, candidates
+must also avoid qubits belonging to completed generator pairs. Universality of
+the action set alone does not guarantee that this greedy rule can finish.
+
+This initial configured path scores the current frontier using scalar tableau
+conjugation. It does not yet use the TQE path's lookahead scoring, candidate
+pool limits, or SIMD action kernels. Cost and duration break reduction-score
+ties; emitted tableaux do not retain native action identifiers.

@@ -22,7 +22,7 @@ impl CliffordAction {
     ///
     /// Panics if the placement is empty or contains duplicate qubits, if its
     /// width differs from the tableau width, or if `cost` is not finite and
-    /// nonnegative.
+    /// nonnegative, or if the images do not define a Clifford tableau.
     pub fn new(tableau: TableauData, qubits: Vec<usize>, cost: f64, duration: u64) -> Self {
         assert!(!qubits.is_empty(), "a Clifford action must act on a qubit");
         assert!(
@@ -40,7 +40,31 @@ impl CliffordAction {
             qubits.len(),
             "action qubits must be distinct"
         );
-        // Conversion validates the tableau representation in one place.
+        let images = tableau
+            .get_z_images()
+            .iter()
+            .chain(tableau.get_x_images())
+            .collect::<Vec<_>>();
+        assert!(
+            images.iter().all(|(image, _)| image.len() == width),
+            "Clifford image width differs from the placement"
+        );
+        for (i, (left, _)) in images.iter().enumerate() {
+            for (j, (right, _)) in images.iter().enumerate().take(i) {
+                let anticommutes = left
+                    .iter()
+                    .zip(right.iter())
+                    .filter(|(a, b)| **a != Pauli::I && **b != Pauli::I && a != b)
+                    .count()
+                    % 2
+                    == 1;
+                assert_eq!(
+                    anticommutes,
+                    i == j + width,
+                    "Clifford images must preserve generator commutation"
+                );
+            }
+        }
         let compiled = Tableau::from(tableau.clone());
         Self {
             tableau,
@@ -98,10 +122,6 @@ impl CliffordAction {
     }
 
     pub(crate) fn embedded(&self, width: usize) -> Tableau {
-        self.embed(&self.tableau, width)
-    }
-
-    fn embed(&self, tableau: &TableauData, width: usize) -> Tableau {
         assert!(self.qubits.iter().all(|&qubit| qubit < width));
         let identity_image = |qubit: usize, pauli: Pauli| {
             let mut image = vec![Pauli::I; width];
@@ -122,46 +142,9 @@ impl CliffordAction {
             (image, *sign)
         };
         for (local, &qubit) in self.qubits.iter().enumerate() {
-            z_images[qubit] = embed(&tableau.get_z_images()[local]);
-            x_images[qubit] = embed(&tableau.get_x_images()[local]);
+            z_images[qubit] = embed(&self.tableau.get_z_images()[local]);
+            x_images[qubit] = embed(&self.tableau.get_x_images()[local]);
         }
         Tableau::from(TableauData::new(z_images, x_images))
-    }
-
-    pub(crate) fn apply_to_tableau(&self, tableau: &mut Tableau) {
-        let data: TableauData = tableau.clone().into();
-        let transform_images = |images: &[(Vec<Pauli>, bool)]| {
-            images
-                .iter()
-                .map(|(image, sign)| {
-                    let local = self
-                        .qubits
-                        .iter()
-                        .map(|&qubit| match image[qubit] {
-                            Pauli::X => X_U8,
-                            Pauli::Y => Y_U8,
-                            Pauli::Z => Z_U8,
-                            Pauli::I => I_U8,
-                        })
-                        .collect::<Vec<_>>();
-                    let (transformed, sign_flip) = self.transform(&local);
-                    let mut image = image.clone();
-                    for (&qubit, pauli) in self.qubits.iter().zip(transformed) {
-                        image[qubit] = match pauli {
-                            X_U8 => Pauli::X,
-                            Y_U8 => Pauli::Y,
-                            Z_U8 => Pauli::Z,
-                            I_U8 => Pauli::I,
-                            _ => unreachable!(),
-                        };
-                    }
-                    (image, *sign ^ sign_flip)
-                })
-                .collect::<Vec<_>>()
-        };
-        *tableau = Tableau::from(TableauData::new(
-            transform_images(data.get_z_images()),
-            transform_images(data.get_x_images()),
-        ));
     }
 }
