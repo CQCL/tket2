@@ -4,6 +4,7 @@ mod gate_pool;
 
 pub(crate) use gate_pool::{GatePool, select_candidate};
 
+use crate::CliffordAction;
 use crate::backend::TQECostBackend;
 use crate::frontier::Frontier;
 use crate::packed_pg_slice::{PackedBackend, PackedOpMeta, PackedPGSlice};
@@ -16,7 +17,32 @@ use pg_qm_tableau::Tableau;
 use rand::{SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
-pub(crate) struct Reducer<P, C> {
+pub(crate) fn select_clifford_action<'a>(
+    frontier: &Frontier,
+    actions: &'a [CliffordAction],
+) -> Option<&'a CliffordAction> {
+    let support = frontier.minimum_support();
+    actions
+        .par_iter()
+        .enumerate()
+        .filter(|(_, action)| action.qubits().iter().any(|qubit| support.contains(qubit)))
+        .filter_map(|(index, action)| {
+            frontier
+                .action_score(action)
+                .map(|(minimum, total)| (minimum, total, index, action))
+        })
+        .max_by(|left, right| {
+            left.0
+                .cmp(&right.0)
+                .then_with(|| left.1.cmp(&right.1))
+                .then_with(|| right.3.cost().total_cmp(&left.3.cost()))
+                .then_with(|| right.3.duration().cmp(&left.3.duration()))
+                .then_with(|| right.2.cmp(&left.2))
+        })
+        .map(|(_, _, _, action)| action)
+}
+
+pub(crate) struct Reducer<'a, P, C> {
     packed_backend: P,
     cost_backend: C,
     window_size: usize,
@@ -25,9 +51,10 @@ pub(crate) struct Reducer<P, C> {
     seed: u64,
     parallel_mode: ParallelMode,
     enable_progress: bool,
+    clifford_actions: &'a [CliffordAction],
 }
 
-impl<P, C> Reducer<P, C>
+impl<'a, P, C> Reducer<'a, P, C>
 where
     P: PackedBackend,
     C: TQECostBackend + Sync,
@@ -41,6 +68,7 @@ where
         seed: u64,
         parallel_mode: ParallelMode,
         enable_progress: bool,
+        clifford_actions: &'a [CliffordAction],
     ) -> Self {
         assert!(window_size > 0, "window size must be positive");
         Self {
@@ -52,6 +80,7 @@ where
             seed,
             parallel_mode,
             enable_progress,
+            clifford_actions,
         }
     }
 
@@ -130,6 +159,7 @@ where
             self.seed,
             self.parallel_mode,
             self.enable_progress,
+            self.clifford_actions,
         );
         output.extend(trailing_output);
         output
@@ -217,6 +247,7 @@ where
                     self.seed,
                     self.parallel_mode,
                     self.enable_progress,
+                    self.clifford_actions,
                 ));
                 output.add_op(Op::Gate {
                     data: GateData::new(GateType::BlackBox, data.get_qubits().clone())
@@ -277,6 +308,28 @@ where
             }
             if frontier.is_empty() {
                 break;
+            }
+            if !self.clifford_actions.is_empty() {
+                let selected = select_clifford_action(frontier, self.clifford_actions)
+                    .expect("configured Clifford actions cannot reduce the frontier");
+                let stop = slice.action_stop_point(selected);
+                let depth = selected
+                    .qubits()
+                    .iter()
+                    .map(|&qubit| qubit_depth[qubit])
+                    .max()
+                    .unwrap()
+                    + selected.duration();
+                for &qubit in selected.qubits() {
+                    qubit_depth[qubit] = depth;
+                }
+                output.add_op(Op::Tableau {
+                    data: selected.embedded(qubit_depth.len()).into(),
+                });
+                slice.apply_action(selected, stop, &self.packed_backend);
+                frontier.apply_action(selected);
+                pool.clear();
+                continue;
             }
             let sample_count = if emitted_any {
                 self.pool_size

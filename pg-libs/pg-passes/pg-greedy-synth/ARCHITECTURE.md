@@ -119,6 +119,20 @@ The expanded strategies store one weight for each packed position.
 groups contiguous positions that have the same weight, then counts the set bits
 in each group.
 
+### Configured Clifford actions
+
+The default path retains the specialised TQE tables and packed cost kernels.
+When configured actions are present, the reducer instead evaluates their
+tableau action on the lowest-cost frontier operations. Candidates must reduce
+both that bucket and the total frontier cost. Ties favour the greatest
+reduction, then lower target cost and duration.
+
+An action may span any number of qubits. Its placement is explicit, so the
+generic reducer does not need to know about a target's blocks or connectivity.
+Only placements intersecting the current minimum-cost support are evaluated.
+After selection, the action is applied directly to the packed window and the
+incremental frontier. The same mechanism reduces the trailing tableau.
+
 ## Reduction flow
 
 1. The pass chooses a backend and weight strategy, then creates a `Reducer`.

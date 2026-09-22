@@ -2,7 +2,7 @@
 
 #[cfg(feature = "simd")]
 use crate::GreedySynthSimdPass;
-use crate::{GreedySynthPass, ParallelMode};
+use crate::{CliffordAction, GreedySynthPass, ParallelMode};
 use pg_canonical_form::CanonicalFormPass;
 use pg_core::{
     BlackBoxData, ConditionalBoxData, GateData, GateType, MeasureData, Op, PGPass, Pauli,
@@ -314,6 +314,69 @@ fn test_configuration(#[case] pass: GreedySynthPass) {
     let input = medium_graph();
     let prepared = prepare_for_synthesis(&input);
     let output = pass.transform(&prepared);
+
+    assert!(compare_unitaries_via_tk(&input, &output));
+}
+
+#[test]
+fn test_configured_multiqubit_clifford_action() {
+    let native = tableau_from_ops(
+        3,
+        &[
+            gate(GateType::ZX, vec![0, 1]),
+            gate(GateType::ZX, vec![0, 2]),
+        ],
+    );
+    let action = CliffordAction::new(native.into(), vec![0, 1, 2], 1.0, 1);
+    let input = graph(
+        3,
+        vec![pauli_rotation(vec![Pauli::X, Pauli::X, Pauli::X], 0.37)],
+    );
+    let output = GreedySynthPass::new()
+        .with_clifford_actions(vec![action])
+        .with_parallel_mode(ParallelMode::Off)
+        .transform(&prepare_for_synthesis(&input));
+
+    assert!(compare_unitaries_via_tk(&input, &output));
+    assert!(
+        output
+            .get_ops()
+            .iter()
+            .any(|op| matches!(op, Op::Tableau { .. }))
+    );
+    assert!(output.get_ops().iter().all(|op| {
+        !matches!(
+            op,
+            Op::Gate { data }
+                if matches!(
+                    data.get_gate_type(),
+                    GateType::XX
+                        | GateType::XY
+                        | GateType::XZ
+                        | GateType::YX
+                        | GateType::YY
+                        | GateType::YZ
+                        | GateType::ZX
+                        | GateType::ZY
+                        | GateType::ZZ
+                )
+        )
+    }));
+}
+
+#[test]
+fn test_configured_non_self_inverse_action() {
+    let native = tableau_from_ops(
+        2,
+        &[gate(GateType::S, vec![0]), gate(GateType::ZX, vec![0, 1])],
+    );
+    let reduced = pauli_rotation(vec![Pauli::X, Pauli::I], 0.23);
+    let input = graph(2, native.get_dagger().conjugate(&reduced));
+    let action = CliffordAction::new(native.into(), vec![0, 1], 2.0, 3);
+    let output = GreedySynthPass::new()
+        .with_clifford_actions(vec![action])
+        .with_parallel_mode(ParallelMode::Off)
+        .transform(&prepare_for_synthesis(&input));
 
     assert!(compare_unitaries_via_tk(&input, &output));
 }

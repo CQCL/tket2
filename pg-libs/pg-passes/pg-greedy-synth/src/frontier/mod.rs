@@ -1,5 +1,6 @@
 //! Mutable reduction frontier for packed operations and tableau generators.
 
+use crate::CliffordAction;
 use crate::packed_pg_slice::{PackedOpMeta, PackedPGSlice, SliceIndex};
 use crate::tqe::{PauliU8, TQE, TQEType};
 use crate::utils::get_two_mut;
@@ -698,6 +699,96 @@ impl Frontier {
             .is_some_and(|cost| self.cost_buckets[cost].contains(&index))
     }
 
+    /// Scores an action that strictly reduces the total support cost and at
+    /// least one operation in the lowest nonzero bucket.
+    pub(crate) fn action_score(&self, action: &CliffordAction) -> Option<(usize, usize)> {
+        let minimum = self.minimum_cost?;
+        let bucket = &self.cost_buckets[minimum];
+        let mut minimum_reduction = 0;
+        let mut total_reduction = 0isize;
+        for frontier_index in self
+            .remaining_single_ops
+            .iter()
+            .chain(&self.remaining_pair_ops)
+        {
+            let op = &self.ops[frontier_index.0];
+            let old_cost = op.cost();
+            let new_cost = match op {
+                FrontierOp::Single(op) => {
+                    let local = action
+                        .qubits()
+                        .iter()
+                        .map(|&qubit| self.single_paulis[qubit][op.array_index])
+                        .collect::<Vec<_>>();
+                    let old_support = local.iter().filter(|&&pauli| pauli != I_U8).count();
+                    let (transformed, _) = action.transform(&local);
+                    let new_support = transformed.iter().filter(|&&pauli| pauli != I_U8).count();
+                    old_cost + new_support - old_support
+                }
+                FrontierOp::Pair(op) => self.transformed_pair_cost(op.state.array_index, action),
+                FrontierOp::TableauPair(op) => {
+                    self.transformed_pair_cost(op.state.array_index, action)
+                }
+            };
+            let reduction = old_cost as isize - new_cost as isize;
+            total_reduction += reduction;
+            if bucket.contains(frontier_index) && reduction > 0 {
+                minimum_reduction = minimum_reduction.max(reduction as usize);
+            }
+        }
+        (minimum_reduction > 0 && total_reduction > 0)
+            .then_some((minimum_reduction, total_reduction as usize))
+    }
+
+    pub(crate) fn minimum_support(&self) -> IndexSet<usize> {
+        let minimum = self
+            .minimum_cost
+            .expect("frontier has no positive cost operation");
+        let mut support = IndexSet::new();
+        for index in &self.cost_buckets[minimum] {
+            match &self.ops[index.0] {
+                FrontierOp::Single(op) => support.extend(&op.supports),
+                FrontierOp::Pair(op) => extend_pair_support(&mut support, &op.state),
+                FrontierOp::TableauPair(op) => extend_pair_support(&mut support, &op.state),
+            }
+        }
+        support
+    }
+
+    fn transformed_pair_cost(&self, index: usize, action: &CliffordAction) -> usize {
+        let mut left = self
+            .pair_paulis
+            .iter()
+            .map(|paulis| paulis[2 * index])
+            .collect::<Vec<_>>();
+        let mut right = self
+            .pair_paulis
+            .iter()
+            .map(|paulis| paulis[2 * index + 1])
+            .collect::<Vec<_>>();
+        for paulis in [&mut left, &mut right] {
+            let local = action
+                .qubits()
+                .iter()
+                .map(|&qubit| paulis[qubit])
+                .collect::<Vec<_>>();
+            let (transformed, _) = action.transform(&local);
+            for (&qubit, pauli) in action.qubits().iter().zip(transformed) {
+                paulis[qubit] = pauli;
+            }
+        }
+        let (mut anticommuting, mut commuting) = (0, 0);
+        for (left, right) in left.into_iter().zip(right) {
+            match pair_type(left, right) {
+                TYPE_A => anticommuting += 1,
+                TYPE_L | TYPE_R | TYPE_E => commuting += 1,
+                TYPE_I => {}
+                _ => unreachable!(),
+            }
+        }
+        (anticommuting - 1) / 2 + anticommuting + commuting - 1
+    }
+
     /// Applies a TQE to every active frontier operation.
     ///
     /// Precomputed transition tables update local Paulis, sign bits and pair
@@ -750,6 +841,72 @@ impl Frontier {
                 old_cost,
                 state.tqe_cost,
             );
+        }
+        self.minimum_cost = self.next_minimum_cost();
+    }
+
+    /// Applies an arbitrary Clifford action to every active frontier operation.
+    pub(crate) fn apply_action(&mut self, action: &CliffordAction) {
+        for frontier_index in &self.remaining_single_ops {
+            let FrontierOp::Single(op) = &self.ops[frontier_index.0] else {
+                unreachable!()
+            };
+            let local = action
+                .qubits()
+                .iter()
+                .map(|&qubit| self.single_paulis[qubit][op.array_index])
+                .collect::<Vec<_>>();
+            let (transformed, sign_flip) = action.transform(&local);
+            for (&qubit, pauli) in action.qubits().iter().zip(transformed) {
+                self.single_paulis[qubit][op.array_index] = pauli;
+            }
+            self.single_sign_bits[op.array_index] ^= sign_flip;
+        }
+        for frontier_index in &self.remaining_pair_ops {
+            let index = self.ops[frontier_index.0].array_index();
+            for offset in 0..2 {
+                let local = action
+                    .qubits()
+                    .iter()
+                    .map(|&qubit| self.pair_paulis[qubit][2 * index + offset])
+                    .collect::<Vec<_>>();
+                let (transformed, sign_flip) = action.transform(&local);
+                for (&qubit, pauli) in action.qubits().iter().zip(transformed) {
+                    self.pair_paulis[qubit][2 * index + offset] = pauli;
+                }
+                self.pair_sign_bits[2 * index + offset] ^= sign_flip;
+            }
+        }
+
+        for bucket in &mut self.cost_buckets {
+            bucket.clear();
+        }
+        let remaining = self
+            .remaining_single_ops
+            .iter()
+            .chain(&self.remaining_pair_ops)
+            .copied()
+            .collect::<Vec<_>>();
+        for frontier_index in remaining {
+            match &mut self.ops[frontier_index.0] {
+                FrontierOp::Single(op) => {
+                    op.supports.clear();
+                    for (qubit, paulis) in self.single_paulis.iter().enumerate() {
+                        if paulis[op.array_index] != I_U8 {
+                            op.supports.insert(qubit);
+                        }
+                    }
+                    op.recompute();
+                }
+                FrontierOp::Pair(op) => {
+                    op.state = rebuilt_pair_state(&self.pair_paulis, op.state.array_index);
+                }
+                FrontierOp::TableauPair(op) => {
+                    op.state = rebuilt_pair_state(&self.pair_paulis, op.state.array_index);
+                }
+            }
+            let cost = self.ops[frontier_index.0].cost();
+            self.cost_buckets[cost].insert(frontier_index);
         }
         self.minimum_cost = self.next_minimum_cost();
     }
@@ -879,6 +1036,22 @@ impl Frontier {
             .skip(1)
             .find_map(|(cost, bucket)| (!bucket.is_empty()).then_some(cost))
     }
+}
+
+fn rebuilt_pair_state(paulis: &[Vec<PauliU8>], index: usize) -> PairState {
+    let mut state = PairState::new(index, paulis.len());
+    for (qubit, row) in paulis.iter().enumerate() {
+        state.add_support(pair_type(row[2 * index], row[2 * index + 1]), qubit);
+    }
+    state.recompute();
+    state
+}
+
+fn extend_pair_support(support: &mut IndexSet<usize>, state: &PairState) {
+    support.extend(&state.anticommuting_supports);
+    support.extend(&state.left_supports);
+    support.extend(&state.right_supports);
+    support.extend(&state.equal_supports);
 }
 
 fn sample_indices<R: Rng>(rng: &mut R, total: usize, k: usize) -> Vec<usize> {

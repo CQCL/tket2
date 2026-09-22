@@ -1,9 +1,10 @@
 use super::ParallelMode;
 use super::common::{progress_bar, tqe_op, update_depth};
+use crate::CliffordAction;
 use crate::backend::TQECostBackend;
 use crate::frontier::{Frontier, FrontierReductionGate, ReducedTableauPair};
 use crate::packed_pg_slice::PackedBackend;
-use crate::reducer::{GatePool, select_candidate};
+use crate::reducer::{GatePool, select_candidate, select_clifford_action};
 use pg_bitpacked::{X_U8, Y_U8, Z_U8};
 use pg_core::{GateData, GateType, Op, PauliGraph};
 use pg_qm_tableau::Tableau;
@@ -20,6 +21,7 @@ pub(crate) fn synthesise_tableau<P, C>(
     seed: u64,
     parallel_mode: ParallelMode,
     enable_progress: bool,
+    clifford_actions: &[CliffordAction],
 ) -> PauliGraph
 where
     P: PackedBackend,
@@ -46,6 +48,28 @@ where
         }
         if frontier.is_empty() {
             break;
+        }
+
+        if !clifford_actions.is_empty() {
+            let action = select_clifford_action(&frontier, clifford_actions)
+                .expect("configured Clifford actions cannot reduce the trailing tableau");
+            let depth = action
+                .qubits()
+                .iter()
+                .map(|&qubit| qubit_depth[qubit])
+                .max()
+                .unwrap()
+                + action.duration();
+            for &qubit in action.qubits() {
+                qubit_depth[qubit] = depth;
+            }
+            output.add_op(Op::Tableau {
+                data: action.embedded(n_qubits).into(),
+            });
+            action.apply_to_tableau(&mut tableau);
+            frontier.apply_action(action);
+            pool.clear();
+            continue;
         }
 
         let sample_count = if completed_any {

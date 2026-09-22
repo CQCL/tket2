@@ -1,4 +1,5 @@
 use super::ParallelMode;
+use crate::CliffordAction;
 use crate::backend::{
     CostKernel, ExpandedSparseWeightedSum, GreedyCostBackend, GroupedWeightedSum, ScalarBackend,
     WeightedSumStrategy,
@@ -16,7 +17,6 @@ const TQE_SAMPLE_FRACTION: f64 = 0.1;
 const MINIMUM_TOP_UP_SIZE: usize = 200;
 const GROUPED_WEIGHTED_SUM_MIN_OPS_PER_SET: usize = 64;
 
-#[derive(Clone, Copy)]
 struct GreedySynthConfig {
     window_size: Option<usize>,
     pool_size: Option<usize>,
@@ -24,6 +24,7 @@ struct GreedySynthConfig {
     enable_progress: bool,
     seed: u64,
     parallel_mode: ParallelMode,
+    clifford_actions: Vec<CliffordAction>,
 }
 
 impl Default for GreedySynthConfig {
@@ -35,6 +36,7 @@ impl Default for GreedySynthConfig {
             enable_progress: false,
             seed: 0,
             parallel_mode: ParallelMode::Auto,
+            clifford_actions: Vec::new(),
         }
     }
 }
@@ -87,7 +89,7 @@ fn resolve_sizes(
 /// comparison.
 fn transform_with_backend<P, W>(
     pg: &PauliGraph,
-    config: GreedySynthConfig,
+    config: &GreedySynthConfig,
     packed_backend: P,
     expanded_weighted_sum: W,
 ) -> PauliGraph
@@ -116,6 +118,14 @@ where
     if pg.get_ops().is_empty() {
         return PauliGraph::new(pg.get_n_qubits());
     }
+    assert!(
+        config
+            .clifford_actions
+            .iter()
+            .flat_map(CliffordAction::qubits)
+            .all(|&qubit| qubit < pg.get_n_qubits()),
+        "Clifford action placement is outside the input graph"
+    );
 
     let (window_size, pool_size, top_up_size) = resolve_sizes(
         pg.get_n_qubits(),
@@ -133,6 +143,7 @@ where
             config.seed,
             config.parallel_mode,
             config.enable_progress,
+            &config.clifford_actions,
         )
         .reduce(pg)
     } else {
@@ -145,6 +156,7 @@ where
             config.seed,
             config.parallel_mode,
             config.enable_progress,
+            &config.clifford_actions,
         )
         .reduce(pg)
     }
@@ -210,6 +222,13 @@ macro_rules! impl_pass_configuration {
                 self.config.parallel_mode = mode;
                 self
             }
+
+            /// Uses the supplied placed Clifford actions to reduce Pauli
+            /// operations. An empty list retains the built-in TQE reducer.
+            pub fn with_clifford_actions(mut self, actions: Vec<CliffordAction>) -> Self {
+                self.config.clifford_actions = actions;
+                self
+            }
         }
 
         impl Default for $pass {
@@ -239,7 +258,7 @@ impl PGPass for GreedySynthPass {
     fn transform(&self, pg: &PauliGraph) -> PauliGraph {
         transform_with_backend(
             pg,
-            self.config,
+            &self.config,
             ScalarBackend,
             ExpandedSparseWeightedSum::default(),
         )
@@ -263,7 +282,7 @@ impl PGPass for GreedySynthSimdPass {
     fn transform(&self, pg: &PauliGraph) -> PauliGraph {
         transform_with_backend(
             pg,
-            self.config,
+            &self.config,
             SimdBackend,
             ExpandedSimdWeightedSum::default(),
         )

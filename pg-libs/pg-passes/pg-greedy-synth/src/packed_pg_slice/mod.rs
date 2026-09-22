@@ -1,8 +1,11 @@
 //! Storage for Pauli graph operations in packed bit form.
 
+use crate::CliffordAction;
 use crate::tqe::{PauliU8, TQE, TQEType};
 use crate::utils::get_two_mut;
-use pg_bitpacked::{apply_u8_tqe, bits_to_u8_pauli, paulis_to_u64s, u64s_to_paulis};
+use pg_bitpacked::{
+    X_U8, Y_U8, Z_U8, apply_u8_tqe, bits_to_u8_pauli, paulis_to_u64s, u64s_to_paulis,
+};
 use pg_core::{BlackBoxData, ConditionalBoxData, MeasureData, Op, Pauli, ResetData, RotationData};
 use pg_qm_tableau::Tableau;
 use std::collections::HashSet;
@@ -205,6 +208,13 @@ impl PackedBlackBox {
     fn commutes_with(&self, tqe: TQE) -> bool {
         !(self.support.contains(&tqe.q0) || self.support.contains(&tqe.q1))
     }
+
+    fn commutes_with_action(&self, action: &CliffordAction) -> bool {
+        action
+            .qubits()
+            .iter()
+            .all(|qubit| !self.support.contains(qubit))
+    }
 }
 
 /// Bit-packed Pauli graph window.
@@ -399,6 +409,20 @@ impl PackedPGSlice {
             .unwrap_or_else(SliceIndex::end)
     }
 
+    /// Finds the first black box overlapping a placed Clifford action.
+    pub(crate) fn action_stop_point(&self, action: &CliffordAction) -> SliceIndex {
+        self.barriers[self.front_barrier..]
+            .iter()
+            .copied()
+            .find(|index| {
+                let PackedOpMeta::BlackBox(black_box) = self.op(*index) else {
+                    unreachable!()
+                };
+                !black_box.commutes_with_action(action)
+            })
+            .unwrap_or_else(SliceIndex::end)
+    }
+
     /// Removes an operation from the masks used for candidate costing.
     pub(crate) fn clear_op_mask(&mut self, index: SliceIndex) {
         let (first, second) = match self.op(index) {
@@ -483,6 +507,34 @@ impl PackedPGSlice {
                 let end = self.last_visible_op().bit_range().1;
                 self.apply_tqe_range(tqe, start, end, backend);
                 backend.apply_tqe_to_tableau(&mut self.trailing_tableau, tqe);
+            }
+        }
+    }
+
+    /// Conjugates visible operations by an arbitrary placed Clifford action.
+    pub(crate) fn apply_action<P: PackedBackend>(
+        &mut self,
+        action: &CliffordAction,
+        stop: SliceIndex,
+        backend: &P,
+    ) {
+        assert_eq!(stop, self.action_stop_point(action));
+        let start = self.first_visible_op().bit_range().0;
+        let embedded = action.embedded(self.n_qubits());
+        match stop.0 {
+            SlicePosition::Operation { set, offset } => {
+                let end = self.sets[set][offset].bit_range().0;
+                self.apply_action_range(action, start, end);
+                let PackedOpMeta::BlackBox(black_box) = &mut self.sets[set][offset] else {
+                    unreachable!()
+                };
+                backend.compose_tableau(&mut black_box.tableau, &embedded);
+                black_box.support.extend(action.qubits());
+            }
+            SlicePosition::End => {
+                let end = self.last_visible_op().bit_range().1;
+                self.apply_action_range(action, start, end);
+                backend.compose_tableau(&mut self.trailing_tableau, &embedded);
             }
         }
     }
@@ -814,6 +866,43 @@ impl PackedPGSlice {
                 (1u64 << end.bit) - 1,
                 tqe.gate_type,
             );
+        }
+    }
+
+    fn apply_action_range(
+        &mut self,
+        action: &CliffordAction,
+        start: PackedStoragePosition,
+        end: PackedStoragePosition,
+    ) {
+        let mut position = start;
+        while position != end {
+            let mask = 1u64 << position.bit;
+            let local = action
+                .qubits()
+                .iter()
+                .map(|&qubit| {
+                    bits_to_u8_pauli(
+                        u8::from(self.zb_rows[qubit][position.chunk] & mask != 0),
+                        u8::from(self.xb_rows[qubit][position.chunk] & mask != 0),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let (transformed, sign_flip) = action.transform(&local);
+            for (&qubit, pauli) in action.qubits().iter().zip(transformed) {
+                self.zb_rows[qubit][position.chunk] &= !mask;
+                self.xb_rows[qubit][position.chunk] &= !mask;
+                if matches!(pauli, Y_U8 | Z_U8) {
+                    self.zb_rows[qubit][position.chunk] |= mask;
+                }
+                if matches!(pauli, X_U8 | Y_U8) {
+                    self.xb_rows[qubit][position.chunk] |= mask;
+                }
+            }
+            if sign_flip {
+                self.sign_bits[position.chunk] ^= mask;
+            }
+            position = position.after();
         }
     }
 }

@@ -17,3 +17,15 @@ The pass can output:
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for an overview of the internal design.
 See [TUNING.md](TUNING.md) for internal tuning constants.
+
+## Configured Clifford actions
+
+`GreedySynthPass::with_clifford_actions` replaces the built-in TQE candidates
+with target-specific Clifford actions. Each `CliffordAction` contains an
+arbitrary-width local tableau, one concrete ordered qubit placement, and its
+target cost and duration. Selected actions are emitted as tableau operations;
+single-qubit basis and sign corrections retain their existing gate forms.
+
+The supplied actions must contain a strictly reducing choice for every
+non-local Pauli operation and trailing tableau state reached by synthesis. The
+pass reports an incomplete action set rather than silently emitting a TQE.
