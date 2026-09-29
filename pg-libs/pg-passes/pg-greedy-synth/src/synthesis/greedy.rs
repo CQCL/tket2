@@ -25,6 +25,7 @@ struct GreedySynthConfig {
     seed: u64,
     parallel_mode: ParallelMode,
     clifford_actions: Vec<CliffordAction>,
+    synthesise_final_tableau: bool,
 }
 
 impl Default for GreedySynthConfig {
@@ -37,6 +38,7 @@ impl Default for GreedySynthConfig {
             seed: 0,
             parallel_mode: ParallelMode::Auto,
             clifford_actions: Vec::new(),
+            synthesise_final_tableau: true,
         }
     }
 }
@@ -145,7 +147,7 @@ where
             config.enable_progress,
             &config.clifford_actions,
         )
-        .reduce(pg)
+        .reduce(pg, config.synthesise_final_tableau)
     } else {
         Reducer::new(
             packed_backend,
@@ -158,7 +160,7 @@ where
             config.enable_progress,
             &config.clifford_actions,
         )
-        .reduce(pg)
+        .reduce(pg, config.synthesise_final_tableau)
     }
 }
 
@@ -227,6 +229,16 @@ macro_rules! impl_pass_configuration {
             /// operations. An empty list retains the built-in TQE reducer.
             pub fn with_clifford_actions(mut self, actions: Vec<CliffordAction>) -> Self {
                 self.config.clifford_actions = actions;
+                self
+            }
+
+            /// Selects whether to synthesise the final Clifford tableau.
+            ///
+            /// Defaults to true. When false, the final Clifford is returned as
+            /// an [`Op::Tableau`], preserving the quantum output without gate
+            /// synthesis. Tableaux before barriers are still synthesised.
+            pub fn with_synthesise_final_tableau(mut self, enabled: bool) -> Self {
+                self.config.synthesise_final_tableau = enabled;
                 self
             }
         }

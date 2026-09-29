@@ -108,12 +108,21 @@ where
     /// applies a sampled TQE from the cheapest positive cost bucket. Once all
     /// sets are retired, it synthesizes the remaining Clifford tableau with the
     /// same frontier and candidate pool machinery.
-    pub(crate) fn reduce(&mut self, input: &PauliGraph) -> PauliGraph {
+    pub(crate) fn reduce(
+        &mut self,
+        input: &PauliGraph,
+        synthesise_final_tableau: bool,
+    ) -> PauliGraph {
         let mut qubit_depth = vec![0; input.get_n_qubits()];
-        self.reduce_with_depth(input, &mut qubit_depth)
+        self.reduce_with_depth(input, &mut qubit_depth, synthesise_final_tableau)
     }
 
-    fn reduce_with_depth(&mut self, input: &PauliGraph, qubit_depth: &mut [u64]) -> PauliGraph {
+    fn reduce_with_depth(
+        &mut self,
+        input: &PauliGraph,
+        qubit_depth: &mut [u64],
+        synthesise_final_tableau: bool,
+    ) -> PauliGraph {
         let n_qubits = input.get_n_qubits();
         let input_ops = input.get_ops();
         if input_ops.is_empty() {
@@ -166,6 +175,12 @@ where
             progress.finish();
         }
         let trailing = slice.into_trailing_tableau();
+        if !synthesise_final_tableau {
+            output.add_op(Op::Tableau {
+                data: self.packed_backend.invert_tableau(&trailing).into(),
+            });
+            return output;
+        }
         let trailing_output = synthesise_tableau(
             trailing,
             &self.packed_backend,
@@ -275,7 +290,7 @@ where
                 let inner = PauliGraph::new(qubit_depth.len()).with_ops(data.get_ops().clone());
                 let canonical = CanonicalFormPass::new().transform(&inner);
                 let grouped = GroupCommutingOpsPass::new().transform(&canonical);
-                let reduced = self.reduce_with_depth(&grouped, qubit_depth);
+                let reduced = self.reduce_with_depth(&grouped, qubit_depth, true);
                 for op in reduced.get_ops() {
                     let Op::Gate { data: gate } = op else {
                         panic!("conditional synthesis emitted an operation that is not a gate")

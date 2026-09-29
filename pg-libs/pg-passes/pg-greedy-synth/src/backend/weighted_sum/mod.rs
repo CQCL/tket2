@@ -3,6 +3,8 @@
 mod expanded;
 mod grouped;
 
+pub(crate) use expanded::sparse_weight_sum;
+
 #[cfg(feature = "simd")]
 pub(crate) use expanded::ExpandedSimdWeightedSum;
 pub(crate) use expanded::ExpandedSparseWeightedSum;

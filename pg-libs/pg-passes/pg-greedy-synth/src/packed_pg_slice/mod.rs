@@ -1,5 +1,8 @@
 //! Storage for Pauli graph operations in packed bit form.
 
+mod observable_state;
+pub use observable_state::ObservableState;
+
 use crate::CliffordAction;
 use crate::tqe::{PauliU8, TQE, TQEType};
 use crate::utils::get_two_mut;

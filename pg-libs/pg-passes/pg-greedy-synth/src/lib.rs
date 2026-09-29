@@ -21,6 +21,7 @@ mod tqe;
 mod utils;
 
 pub use clifford_action::CliffordAction;
+pub use packed_pg_slice::ObservableState;
 #[cfg(feature = "simd")]
 pub use synthesis::GreedySynthSimdPass;
 pub use synthesis::{GreedySynthPass, ParallelMode};

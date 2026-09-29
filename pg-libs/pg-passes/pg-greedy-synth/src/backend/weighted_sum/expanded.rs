@@ -46,7 +46,7 @@ fn bit_index(position: SliceBitPosition) -> usize {
 }
 
 /// Sums the expanded weights by visiting only the set bits in each mask.
-fn sparse_weight_sum(masks: &[u64], weights: &[f64]) -> f64 {
+pub(crate) fn sparse_weight_sum(masks: &[u64], weights: &[f64]) -> f64 {
     let mut sum = 0.0;
 
     for (word_index, word) in masks.iter().copied().enumerate() {

@@ -100,6 +100,8 @@ mod simd;
 mod tqe_cost;
 mod weighted_sum;
 
+pub(crate) use weighted_sum::sparse_weight_sum;
+
 pub(crate) use greedy::GreedyCostBackend;
 pub(crate) use scalar::ScalarBackend;
 #[cfg(feature = "simd")]

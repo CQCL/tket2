@@ -241,6 +241,17 @@ fn test_output() {
 }
 
 #[rstest]
+#[case::rotations(medium_graph())]
+#[case::tableaux(two_tableaux_graph())]
+fn test_preserve_final_tableau(#[case] input: PauliGraph) {
+    let output = GreedySynthPass::new()
+        .with_synthesise_final_tableau(false)
+        .transform(&prepare_for_synthesis(&input));
+    assert!(matches!(output.get_ops().last(), Some(Op::Tableau { .. })));
+    assert!(compare_unitaries_via_tk(&input, &output));
+}
+
+#[rstest]
 #[case::xy(Pauli::X, Pauli::Y)]
 #[case::xz(Pauli::X, Pauli::Z)]
 #[case::yx(Pauli::Y, Pauli::X)]
