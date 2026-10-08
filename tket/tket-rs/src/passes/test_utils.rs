@@ -4,6 +4,44 @@ use hugr_core::builder::{
 };
 use hugr_core::ops::handle::FuncID;
 
+/// A test circuit with one of each supported classical operation
+pub(crate) fn classical_circuit() -> tket_json_rs::SerialCircuit {
+    serde_json::from_value(serde_json::json!({
+        "phase": "0", "implicit_permutation": [],
+        "qubits": [["q", [0]]], "bits": [["b", [0]], ["b", [1]], ["b", [2]]],
+        "commands": [
+            {
+                "op": {"type": "SetBits", "classical": {"values": [true, false]}},
+                "args": [["b", [1]], ["b", [0]]],
+            },
+            {
+                "op": {"type": "CopyBits", "classical": {"n_i": 1}},
+                "args": [["b", [1]], ["b", [2]]],
+            },
+            {
+                "op": {"type": "ClassicalTransform", "classical": {"n_io": 2, "name": "swap", "values": [0, 2, 1, 3]}},
+                "args": [["b", [1]], ["b", [0]]],
+            },
+            {
+                "op": {"type": "RangePredicate", "classical": {"n_i": 2, "lower": 1, "upper": 2}},
+                "args": [["b", [1]], ["b", [0]], ["b", [2]]],
+            },
+            {
+                "op": {"type": "ExplicitPredicate", "classical": {"n_i": 2, "name": "AND", "values": [false, false, false, true]}},
+                "args": [["b", [1]], ["b", [0]], ["b", [2]]],
+            },
+            {
+                "op": {"type": "ExplicitModifier", "classical": {"n_i": 1, "name": "XOR", "values": [false, true, true, false]}},
+                "args": [["b", [1]], ["b", [0]]],
+            },
+            {
+                "op": {"type": "MultiBit", "classical": {"n": 2, "op": {"type": "ExplicitModifier", "classical": {"n_i": 0, "name": "NOT", "values": [true, false]}}}},
+                "args": [["b", [1]], ["b", [0]]],
+            },
+        ]
+    })).unwrap()
+}
+
 #[expect(unused)]
 pub(crate) mod test_quantum_extension {
     use hugr_core::extension::Version;

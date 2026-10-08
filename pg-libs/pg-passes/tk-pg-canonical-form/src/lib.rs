@@ -145,14 +145,8 @@ fn absorb_clifford(tab: &mut QubitMajorTableau, op: &Op, forward: bool) {
     }
 }
 
-/// Flush the accumulated tableau and emit either black box representation as an Op::BlackBox.
-fn flush_black_box(
-    pg: &mut PauliGraph,
-    tab: &mut QubitMajorTableau,
-    qubits: &[usize],
-    content: &str,
-    forward: bool,
-) {
+/// Emit the pending tableau, then the black box or classical operation
+fn flush_op(pg: &mut PauliGraph, tab: &mut QubitMajorTableau, op: Op, forward: bool) {
     let tab_moved = std::mem::replace(tab, QubitMajorTableau::eye(pg.get_n_qubits()));
     pg.add_op(Op::Tableau {
         data: TableauData::from(if forward {
@@ -161,9 +155,7 @@ fn flush_black_box(
             tab_moved
         }),
     });
-    pg.add_op(Op::BlackBox {
-        data: BlackBoxData::new(qubits.to_vec(), content.to_owned()),
-    });
+    pg.add_op(op);
 }
 
 /// The main function for processing an Op in the input PauliGraph.
@@ -186,8 +178,8 @@ fn process_op(
             *tab = tableau_from_op;
             return;
         }
-        Op::BlackBox { data } => {
-            flush_black_box(pg, tab, data.get_qubits(), data.get_content(), forward);
+        Op::BlackBox { .. } | Op::Classical { .. } => {
+            flush_op(pg, tab, op.clone(), forward);
             return;
         }
         Op::Gate { data } => {
@@ -198,11 +190,18 @@ fn process_op(
                     !conditional,
                     "Conditional black box gates are not supported at the moment"
                 );
-                flush_black_box(
+                flush_op(
                     pg,
                     tab,
-                    data.get_args(),
-                    data.get_data().as_ref().expect("BlackBox data is missing"),
+                    Op::BlackBox {
+                        data: BlackBoxData::new(
+                            data.get_args().clone(),
+                            data.get_data()
+                                .as_ref()
+                                .expect("BlackBox data is missing")
+                                .clone(),
+                        ),
+                    },
                     forward,
                 );
                 return;
@@ -360,6 +359,8 @@ fn to_canonical_form(pg: &PauliGraph, forward: bool, cliff_eval: bool) -> PauliG
 /// Clifford corrections from unconditional rotations, leaving their angles strictly
 /// between -0.5 and 0.5 half turns.
 ///
+/// Classical operations stay in place; the tableau isn't moved across them
+///
 /// # Panics
 ///
 /// Panics if a conditional box contains an operation other than [`Op::Rotation`],
@@ -409,7 +410,8 @@ mod tests {
     use rstest::rstest;
     use tk_pg_converter::compare_unitaries_via_tk;
     use tk_pg_core::{
-        GateData, GateType, MeasureData, Op, Pauli, PauliGraph, ResetData, RotationData,
+        ClassicalData, GateData, GateType, MeasureData, Op, Pauli, PauliGraph, ResetData,
+        RotationData,
     };
 
     #[test]
@@ -811,15 +813,21 @@ mod tests {
     #[rstest]
     #[case(true)]
     #[case(false)]
-    fn test_black_box(#[case] forward: bool) {
+    fn test_opaque_ops(#[case] forward: bool, #[values(false, true)] classical: bool) {
         let mut pg = PauliGraph::new(2);
-        let black_box_data = BlackBoxData::new(vec![0, 1], "bb".into());
+        let opaque = if classical {
+            Op::Classical {
+                data: ClassicalData::new(vec![3, 1], "payload".into()),
+            }
+        } else {
+            Op::BlackBox {
+                data: BlackBoxData::new(vec![0, 1], "bb".into()),
+            }
+        };
         pg.add_op(Op::Gate {
             data: GateData::new(GateType::H, vec![0]),
         });
-        pg.add_op(Op::BlackBox {
-            data: black_box_data.clone(),
-        });
+        pg.add_op(opaque.clone());
         pg.add_op(Op::Gate {
             data: GateData::new(GateType::S, vec![0]),
         });
@@ -828,7 +836,7 @@ mod tests {
             .transform(&pg);
         assert_eq!(transformed.get_ops().len(), 3);
         // circuit is the same for forward and backward passes
-        // H tableau, black box, S tableau
+        // H tableau, opaque operation, S tableau
         if let Op::Tableau { .. } = &transformed.get_ops()[0] {
             assert!(
                 compare_unitaries_via_tk(
@@ -842,11 +850,7 @@ mod tests {
         } else {
             panic!("Expected a Tableau op in the transformed graph");
         }
-        if let Op::BlackBox { data } = &transformed.get_ops()[1] {
-            assert_eq!(data, &black_box_data);
-        } else {
-            panic!("Expected a BlackBox op in the transformed graph");
-        }
+        assert_eq!(transformed.get_ops()[1], opaque);
         if let Op::Tableau { .. } = &transformed.get_ops()[2] {
             assert!(
                 compare_unitaries_via_tk(

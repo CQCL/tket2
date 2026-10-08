@@ -9,8 +9,8 @@ use rstest::rstest;
 use tk_pg_canonical_form::CanonicalFormPass;
 use tk_pg_converter::compare_unitaries_via_tk;
 use tk_pg_core::{
-    BlackBoxData, ConditionalBoxData, GateData, GateType, MeasureData, Op, PGPass, Pauli,
-    PauliGraph, ResetData, RotationData, TableauData,
+    BlackBoxData, ClassicalData, ConditionalBoxData, GateData, GateType, MeasureData, Op, PGPass,
+    Pauli, PauliGraph, ResetData, RotationData, TableauData,
 };
 use tk_pg_ir_kernels::PGTableau;
 use tk_pg_optimize::GroupCommutingOpsPass;
@@ -441,8 +441,23 @@ fn test_nonlocal_reset() {
     assert!([0, 1].contains(&native.get_args()[0]));
 }
 
-#[test]
-fn test_black_box() {
+#[rstest]
+fn test_classical_only_graph(#[values(false, true)] with_barrier: bool) {
+    let classical = Op::Classical {
+        data: ClassicalData::new(vec![1, 0], "classical".into()),
+    };
+    let mut input = graph(0, vec![classical.clone()]);
+    if with_barrier {
+        input.add_op(Op::BlackBox {
+            data: BlackBoxData::new(vec![], "barrier".into()),
+        });
+    }
+    input.add_op(classical);
+    assert_eq!(synthesise(&input), input);
+}
+
+#[rstest]
+fn test_opaque_ops(#[values(false, true)] classical: bool) {
     let before = vec![
         gate(GateType::H, vec![0]),
         rotation_gate(GateType::RZ, 1, 0.19),
@@ -452,43 +467,50 @@ fn test_black_box() {
         rotation_gate(GateType::RY, 2, -0.23),
         gate(GateType::ZZ, vec![1, 2]),
     ];
-    let black_box = Op::BlackBox {
-        data: BlackBoxData::new(vec![2, 0, 1], "opaque payload".to_string()),
+    let opaque = if classical {
+        Op::Classical {
+            data: ClassicalData::new(vec![2, 0, 2], "opaque payload".into()),
+        }
+    } else {
+        Op::BlackBox {
+            data: BlackBoxData::new(vec![2, 0, 1], "opaque payload".into()),
+        }
+    };
+    let expected = if classical {
+        opaque.clone()
+    } else {
+        Op::Gate {
+            data: GateData::new(GateType::BlackBox, vec![2, 0, 1])
+                .with_data("opaque payload".into()),
+        }
     };
     let mut ops = before.clone();
-    ops.push(black_box);
+    ops.push(opaque);
     ops.extend(after.clone());
     let input = graph(3, ops);
     let output = synthesise(&input);
-    let black_box_index = output
+    let boundary = output
         .get_ops()
         .iter()
-        .position(
-            |op| matches!(op, Op::Gate { data } if data.get_gate_type() == &GateType::BlackBox),
-        )
-        .expect("synthesis did not emit the black box");
+        .position(|op| op == &expected)
+        .unwrap();
     assert_eq!(
         output
             .get_ops()
             .iter()
-            .filter(
-                |op| matches!(op, Op::Gate { data } if data.get_gate_type() == &GateType::BlackBox)
-            )
+            .filter(|op| matches!(op, Op::Classical { .. })
+                || matches!(op, Op::Gate { data } if data.get_gate_type() == &GateType::BlackBox))
             .count(),
         1
     );
-    let Op::Gate { data } = &output.get_ops()[black_box_index] else {
-        unreachable!()
-    };
-    assert_eq!(data.get_args(), &[2, 0, 1]);
-    assert_eq!(data.get_data().as_deref(), Some("opaque payload"));
-
-    let expected_before = graph(3, before);
-    let expected_after = graph(3, after);
-    let actual_before = graph(3, output.get_ops()[..black_box_index].to_vec());
-    let actual_after = graph(3, output.get_ops()[black_box_index + 1..].to_vec());
-    assert!(compare_unitaries_via_tk(&expected_before, &actual_before));
-    assert!(compare_unitaries_via_tk(&expected_after, &actual_after));
+    assert!(compare_unitaries_via_tk(
+        &graph(3, before),
+        &graph(3, output.get_ops()[..boundary].to_vec())
+    ));
+    assert!(compare_unitaries_via_tk(
+        &graph(3, after),
+        &graph(3, output.get_ops()[boundary + 1..].to_vec())
+    ));
 }
 
 #[test]

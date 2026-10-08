@@ -73,6 +73,26 @@ where
         if input_ops.is_empty() {
             return PauliGraph::new(n_qubits);
         }
+        if input_ops
+            .iter()
+            .any(|op| matches!(op, Op::Classical { .. }))
+        {
+            // Reduce each section separately so gates can't move past classical operations
+            let mut output = PauliGraph::new(n_qubits);
+            let mut start = 0;
+            for (end, op) in input_ops.iter().enumerate() {
+                if matches!(op, Op::Classical { .. }) {
+                    let section =
+                        PauliGraph::new(n_qubits).with_ops(input_ops[start..end].to_vec());
+                    output.extend(self.reduce_with_depth(&section, qubit_depth));
+                    output.add_op(op.clone());
+                    start = end + 1;
+                }
+            }
+            let section = PauliGraph::new(n_qubits).with_ops(input_ops[start..].to_vec());
+            output.extend(self.reduce_with_depth(&section, qubit_depth));
+            return output;
+        }
         assert!(
             input_ops.iter().any(|op| matches!(op, Op::SetBoundary)),
             "input PauliGraph must contain a SetBoundary"

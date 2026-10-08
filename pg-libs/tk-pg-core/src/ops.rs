@@ -99,6 +99,11 @@ pub enum Op {
         /// blackbox data
         data: BlackBoxData,
     },
+    /// A classical operation that passes leave unchanged and don't reorder across
+    Classical {
+        /// classical operation data
+        data: ClassicalData,
+    },
     /// A box of operations with classical conditions.
     ConditionalBox {
         /// conditional box data
@@ -259,6 +264,34 @@ impl BlackBoxData {
     }
 
     /// Returns the opaque payload content.
+    pub fn get_content(&self) -> &String {
+        &self.content
+    }
+}
+
+/// The bit arguments and payload of a classical operation
+///
+/// Keep bit arguments in their original order, including duplicates. Passes leave
+/// the payload alone and don't move other operations across this node.
+/// The converter checks bit indices because the graph doesn't track a bit count.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ClassicalData {
+    bits: Vec<usize>,
+    content: String,
+}
+
+impl ClassicalData {
+    /// Create the data for a classical operation
+    pub fn new(bits: Vec<usize>, content: String) -> Self {
+        Self { bits, content }
+    }
+
+    /// Returns the bit arguments in their original order
+    pub fn get_bits(&self) -> &Vec<usize> {
+        &self.bits
+    }
+
+    /// Returns the operation payload
     pub fn get_content(&self) -> &String {
         &self.content
     }

@@ -35,8 +35,8 @@
 
 #[doc(inline)]
 pub use tk_pg_core::{
-    BlackBoxData, ConditionalBoxData, GateData, GateType, MeasureData, Op, PGPass, Pauli,
-    PauliGraph, PauliGraphError, ResetData, RotationData, TableauData,
+    BlackBoxData, ClassicalData, ConditionalBoxData, GateData, GateType, MeasureData, Op, PGPass,
+    Pauli, PauliGraph, PauliGraphError, ResetData, RotationData, TableauData,
 };
 
 #[doc(inline)]

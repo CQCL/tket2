@@ -1,7 +1,7 @@
 use crate::packed_op::{PackedOp, XZPackedPaulis};
 use std::collections::HashMap;
 use tk_pg_core::{
-    BlackBoxData, ConditionalBoxData, MeasureData, Op, PGPass, PauliGraph, ResetData, RotationData,
+    ConditionalBoxData, MeasureData, Op, PGPass, PauliGraph, ResetData, RotationData,
 };
 use tk_pg_ir_kernels::PGTableau;
 use tk_pg_qm_tableau::Tableau;
@@ -146,16 +146,14 @@ fn rotation_merging(pg: &PauliGraph) -> PauliGraph {
                 }));
                 removed.push(false);
             }
-            Op::BlackBox { data } => {
+            Op::BlackBox { .. } | Op::Classical { .. } => {
                 if tab_touched {
                     output_ops.push(PackedOp::new(Op::Tableau {
                         data: tab.invert().into(),
                     }));
                     removed.push(false);
                 }
-                output_ops.push(PackedOp::new(Op::BlackBox {
-                    data: BlackBoxData::new(data.get_qubits().clone(), data.get_content().clone()),
-                }));
+                output_ops.push(PackedOp::new(op.clone()));
                 removed.push(false);
                 tab = Tableau::eye(n_qubits);
                 tab_touched = false;
@@ -199,7 +197,7 @@ fn rotation_merging(pg: &PauliGraph) -> PauliGraph {
 /// # Panics
 ///
 /// The supported operations are [`Op::Rotation`], [`Op::Measure`],
-/// [`Op::Reset`], [`Op::ConditionalBox`], [`Op::BlackBox`], [`Op::Tableau`],
+/// [`Op::Reset`], [`Op::ConditionalBox`], [`Op::BlackBox`], [`Op::Classical`], [`Op::Tableau`],
 /// and [`Op::SetBoundary`]. The pass panics if the graph contains any other
 /// operation, or if a conditional box contains an operation other than
 /// [`Op::Rotation`], [`Op::Reset`], or [`Op::Measure`].
@@ -229,7 +227,7 @@ mod tests {
     use super::*;
     use rand::{RngExt, SeedableRng, rngs::StdRng};
     use tk_pg_converter::compare_unitaries_via_tk;
-    use tk_pg_core::{GateData, GateType, Pauli, TableauData};
+    use tk_pg_core::{BlackBoxData, ClassicalData, GateData, GateType, Pauli, TableauData};
 
     fn s_tableau_op() -> Op {
         let mut tableau = Tableau::eye(1);
@@ -469,6 +467,24 @@ mod tests {
         });
         let transformed = RotationMergingPass::new().transform(&pg);
         assert_eq!(pg, transformed);
+    }
+
+    #[test]
+    fn test_classical_nodes_prevent_merging_across_sections() {
+        let rotation = Op::Rotation {
+            data: RotationData::new(vec![Pauli::Z], 0.25),
+        };
+        let classical = Op::Classical {
+            data: ClassicalData::new(vec![4, 2], "payload".into()),
+        };
+        let input = PauliGraph::new(1).with_ops(vec![
+            rotation.clone(),
+            classical.clone(),
+            rotation.clone(),
+            rotation.clone(),
+        ]);
+        let expected = PauliGraph::new(1).with_ops(vec![rotation, classical, s_tableau_op()]);
+        assert_eq!(RotationMergingPass::new().transform(&input), expected);
     }
 
     #[test]

@@ -4,7 +4,7 @@
 //! [`pauli_graph_to_cmds`] utilities required for passes that resynthesize
 //! a circuit using a [`PauliGraph`]
 
-use pg_core::{BlackBoxData, GateData, GateType, Op, PauliGraph};
+use pg_core::{BlackBoxData, ClassicalData, GateData, GateType, Op, PauliGraph};
 use tket_json_rs::circuit_json::{Command, Conditional, Operation};
 use tket_json_rs::register::{Bit, ElementId, Qubit};
 use tket_json_rs::{OpType, SerialCircuit};
@@ -70,6 +70,26 @@ struct BarrierContent {
     args: Vec<ElementId>,
 }
 
+/// Stores the operation and its group. Bit arguments are kept in [`ClassicalData`]
+#[derive(Serialize, Deserialize)]
+struct ClassicalContent {
+    op: Operation<String>,
+    opgroup: Option<String>,
+}
+
+fn is_classical_op(op_type: OpType) -> bool {
+    matches!(
+        op_type,
+        OpType::SetBits
+            | OpType::CopyBits
+            | OpType::ClassicalTransform
+            | OpType::RangePredicate
+            | OpType::ExplicitPredicate
+            | OpType::ExplicitModifier
+            | OpType::MultiBit
+    )
+}
+
 /// Converts a serial circuit to an equivalent pauli graph
 pub fn serial_circuit_to_pauli_graph(
     serial_circuit: &mut SerialCircuit,
@@ -108,6 +128,19 @@ fn cmd_to_op(
     let params = cmd.op.params.clone();
 
     match cmd.op.op_type {
+        op_type if is_classical_op(op_type) => {
+            if !qubits.is_empty() {
+                return Err(ConversionError::UnsupportedOpType(op_type));
+            }
+            let content = serde_json::to_string(&ClassicalContent {
+                op: cmd.op.clone(),
+                opgroup: cmd.opgroup.clone(),
+            })
+            .map_err(|_| ConversionError::UnsupportedOpType(op_type))?;
+            Ok(vec![Op::Classical {
+                data: ClassicalData::new(bits, content),
+            }])
+        }
         OpType::H => Ok(vec![Op::Gate {
             data: GateData::new(GateType::H, qubits),
         }]),
@@ -289,6 +322,23 @@ fn cmd_to_op(
 /// Converts a pauli graph op to an equivalent vector of hugr commands
 fn op_to_cmd(op: &Op, register_map: &RegisterMap) -> Result<Vec<Command<String>>, ConversionError> {
     match op {
+        Op::Classical { data } => {
+            let content: ClassicalContent = serde_json::from_str(data.get_content())
+                .map_err(|_| ConversionError::UnsupportedOp(op.clone()))?;
+            if !is_classical_op(content.op.op_type) {
+                return Err(ConversionError::UnsupportedOp(op.clone()));
+            }
+            let args = data
+                .get_bits()
+                .iter()
+                .map(|&b| register_map.get_bit_id(b))
+                .collect::<Result<_, _>>()?;
+            Ok(vec![Command {
+                op: content.op,
+                args,
+                opgroup: content.opgroup,
+            }])
+        }
         Op::Gate { data }
             if !data.get_conditional_bits().is_empty()
                 || !data.get_conditional_values().is_empty() =>
@@ -707,6 +757,69 @@ mod tests {
 
     fn element(register: &str, index: i64) -> ElementId {
         ElementId(register.to_owned(), vec![index])
+    }
+
+    #[rstest]
+    #[case::set_bits(0, false)]
+    #[case::copy_bits(1, false)]
+    #[case::transform(2, false)]
+    #[case::range(3, false)]
+    #[case::predicate(4, false)]
+    #[case::modifier(5, false)]
+    #[case::multibit(6, false)]
+    #[case::repeated_bits(1, true)]
+    fn classical_roundtrip_and_remapping(#[case] index: usize, #[case] repeated_bits: bool) {
+        let serial = crate::passes::test_utils::classical_circuit();
+        let registers = RegisterMap::new(&serial.qubits, &serial.bits);
+        let mut cmd = serial.commands[index].clone();
+        cmd.opgroup = Some("classical group".into());
+        if repeated_bits {
+            cmd.args[1] = cmd.args[0].clone();
+        }
+        let (_, bits) = registers.get_indices(&cmd.args).unwrap();
+        let ops = cmd_to_op(&cmd, &registers).unwrap();
+        let [Op::Classical { data }] = ops.as_slice() else {
+            panic!("expected classical node")
+        };
+        assert_eq!(data.get_bits(), &bits);
+        assert_eq!(op_to_cmd(&ops[0], &registers).unwrap(), vec![cmd.clone()]);
+        let serialized = serde_json::to_string(&ops[0]).unwrap();
+        let restored: Op = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(restored, ops[0]);
+
+        let renamed: Vec<_> = (0..3)
+            .map(|b| Bit::from(element("output", b + 7)))
+            .collect();
+        let registers = RegisterMap::new(&[], &renamed);
+        let expected = Command {
+            args: bits.iter().map(|&b| renamed[b].id.clone()).collect(),
+            ..cmd
+        };
+        assert_eq!(op_to_cmd(&restored, &registers).unwrap(), vec![expected]);
+    }
+
+    #[test]
+    fn rejects_classical_qubit_arguments_and_invalid_payloads() {
+        let registers = RegisterMap::new(&[Qubit::from(element("q", 0))], &[]);
+        let cmd = command(OpType::CopyBits, vec![element("q", 0)]);
+        assert!(matches!(
+            cmd_to_op(&cmd, &registers),
+            Err(ConversionError::UnsupportedOpType(OpType::CopyBits))
+        ));
+        for content in ["invalid JSON", r#"{"op":{"type":"H"},"opgroup":null}"#] {
+            let op = Op::Classical {
+                data: ClassicalData::new(vec![], content.into()),
+            };
+            assert!(matches!(
+                op_to_cmd(&op, &registers),
+                Err(ConversionError::UnsupportedOp(_))
+            ));
+        }
+        let cmd = command(OpType::CopyBits, vec![element("unknown", 0)]);
+        assert!(matches!(
+            cmd_to_op(&cmd, &registers),
+            Err(ConversionError::UnknownRegister(_))
+        ));
     }
 
     fn command(op_type: OpType, args: Vec<ElementId>) -> Command<String> {

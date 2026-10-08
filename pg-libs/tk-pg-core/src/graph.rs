@@ -401,15 +401,10 @@ fn try_validate_op(op: &Op, pg_nqubits: usize) -> Result<(), PauliGraphError> {
             }
             Ok(())
         }
-        Op::BlackBox { data } => validate_op_arg_range(
-            *data
-                .get_qubits()
-                .iter()
-                .max()
-                .expect("Gate missing qubit argument"),
-            pg_nqubits,
-            op,
-        ),
+        Op::BlackBox { data } => match data.get_qubits().iter().max() {
+            Some(&q) => validate_op_arg_range(q, pg_nqubits, op),
+            None => Ok(()),
+        },
         Op::ConditionalBox { data } => {
             let conditional_bits_len = data.get_conditional_bits().len();
             let conditional_values_len = data.get_conditional_values().len();
@@ -434,7 +429,7 @@ fn try_validate_op(op: &Op, pg_nqubits: usize) -> Result<(), PauliGraphError> {
             }
             Ok(())
         }
-        Op::SetBoundary => Ok(()),
+        Op::Classical { .. } | Op::SetBoundary => Ok(()),
     }
 }
 
@@ -515,6 +510,6 @@ fn add_qubit_to_op(op: &mut Op, old_n_qubits: usize) {
                 add_qubit_to_op(inner_op, old_n_qubits);
             }
         }
-        Op::Gate { .. } | Op::BlackBox { .. } | Op::SetBoundary => {}
+        Op::Gate { .. } | Op::BlackBox { .. } | Op::Classical { .. } | Op::SetBoundary => {}
     }
 }

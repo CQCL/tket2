@@ -559,8 +559,112 @@ mod tests {
     use rstest::rstest;
 
     use crate::extension::rotation::ConstRotation;
+    use crate::passes::test_utils::classical_circuit;
+    use crate::serialize::pytket::TKETDecode;
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, TketOp};
+    use tket_json_rs::circuit_json::Command;
+
+    #[rstest]
+    #[case::without_t_optimization(false)]
+    #[case::with_t_optimization(true)]
+    fn preserves_classical_operations_in_hugr(#[case] t_optimization: bool) {
+        let mut serial = classical_circuit();
+        for cmd in std::mem::take(&mut serial.commands) {
+            serial.commands.push(cmd);
+            for op_type in [SerialOpType::T, SerialOpType::Tdg] {
+                serial.commands.push(Command {
+                    op: Operation::from_optype(op_type),
+                    args: vec![serial.qubits[0].id.clone()],
+                    opgroup: None,
+                });
+            }
+        }
+        let mut circuit = Circuit::new(serial.decode(Default::default()).unwrap());
+        let signature = circuit.circuit_signature().into_owned();
+        let before = SerialCircuit::encode(circuit.hugr(), Default::default()).unwrap();
+        PauliGraphResynthesis::default()
+            .with_t_optimization(t_optimization)
+            .with_ancilla_budget(0)
+            .with_parallel_mode(ParallelMode::Off)
+            .run(circuit.hugr_mut())
+            .unwrap();
+        circuit.hugr().validate().unwrap();
+        assert_eq!(circuit.circuit_signature().as_ref(), &signature);
+        let after = SerialCircuit::encode(circuit.hugr(), Default::default()).unwrap();
+        let classical_ops = |serial: &SerialCircuit| {
+            serial
+                .commands
+                .iter()
+                .filter(|cmd| cmd.op.classical.is_some())
+                .map(|cmd| cmd.op.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(classical_ops(&before), classical_ops(&after));
+        assert_eq!(
+            count_gate(&circuit, TketOp::T) + count_gate(&circuit, TketOp::Tdg),
+            0
+        );
+    }
+
+    #[test]
+    fn classical_sections_resynthesize_with_automatic_ancillas() {
+        let mut serial = classical_circuit();
+        let set_bits = serial.commands.remove(0);
+        let copy_bits = serial.commands.remove(0);
+        serial.commands = vec![set_bits];
+        for _ in 0..2 {
+            for op_type in [
+                SerialOpType::T,
+                SerialOpType::H,
+                SerialOpType::T,
+                SerialOpType::H,
+                SerialOpType::T,
+            ] {
+                serial.commands.push(Command {
+                    op: Operation::from_optype(op_type),
+                    args: vec![serial.qubits[0].id.clone()],
+                    opgroup: None,
+                });
+            }
+            serial.commands.push(copy_bits.clone());
+        }
+        let mut circuit = Circuit::new(serial.decode(Default::default()).unwrap());
+        let signature = circuit.circuit_signature().into_owned();
+        PauliGraphResynthesis::default()
+            .with_t_optimization(true)
+            .with_parallel_mode(ParallelMode::Off)
+            .run(circuit.hugr_mut())
+            .unwrap();
+        circuit.hugr().validate().unwrap();
+        assert_eq!(circuit.circuit_signature().as_ref(), &signature);
+        let output =
+            EncodedCircuit::new(circuit.hugr(), EncodeOptions::new().with_subcircuits(true))
+                .unwrap();
+        let commands: Vec<_> = output
+            .iter()
+            .flat_map(|(_, serial)| &serial.commands)
+            .collect();
+        let copies: Vec<_> = commands
+            .iter()
+            .filter(|cmd| cmd.op.op_type == SerialOpType::CopyBits)
+            .collect();
+        assert_eq!(copies.len(), 2);
+        let mut measurement_bits = HashSet::new();
+        for cmd in commands
+            .iter()
+            .filter(|cmd| cmd.op.op_type == SerialOpType::Measure)
+        {
+            assert!(measurement_bits.insert(cmd.args[1].clone()));
+        }
+        assert!(measurement_bits.len() >= 2);
+        assert!(
+            copies
+                .iter()
+                .flat_map(|cmd| &cmd.args)
+                .all(|b| !measurement_bits.contains(b))
+        );
+    }
 
     fn resynthesize(circuit: &mut Circuit) {
         let signature = circuit.circuit_signature().into_owned();

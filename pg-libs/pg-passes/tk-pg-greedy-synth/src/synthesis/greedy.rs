@@ -108,10 +108,18 @@ where
         "top-up size must be positive"
     );
     if pg.get_n_qubits() == 0 {
-        if !pg.get_ops().is_empty() {
-            panic!("GreedySynthPass expects a graph with 0 qubits to have no operations.");
-        }
-        return PauliGraph::new(0);
+        let ops: Vec<_> = pg
+            .get_ops()
+            .iter()
+            .filter(|op| !matches!(op, Op::Tableau { .. } | Op::SetBoundary))
+            .cloned()
+            .collect();
+        assert!(
+            ops.iter()
+                .all(|op| matches!(op, Op::Classical { .. } | Op::BlackBox { .. })),
+            "Zero-qubit graphs must contain only classical or opaque operations"
+        );
+        return PauliGraph::new(0).with_ops(ops);
     }
     if pg.get_ops().is_empty() {
         return PauliGraph::new(pg.get_n_qubits());
@@ -225,6 +233,7 @@ macro_rules! impl_pass_configuration {
 /// The pass expects the output of `CanonicalFormPass` followed by
 /// `GroupCommutingOpsPass`. Output contains Clifford gates on individual
 /// qubits, Pauli rotations, measurements, resets, black boxes and TQE gates.
+/// Classical operations stay in place, with each quantum section synthesized separately
 ///
 pub struct GreedySynthPass {
     config: GreedySynthConfig,

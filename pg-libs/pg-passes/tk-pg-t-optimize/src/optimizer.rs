@@ -11,6 +11,42 @@ use tk_pg_qm_tableau::Tableau;
 pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> PauliGraph {
     validate_ancillas(pauli_graph, budget);
 
+    let mut next_bit = first_bit;
+    if !pauli_graph
+        .get_ops()
+        .iter()
+        .any(|op| matches!(op, Op::Classical { .. }))
+    {
+        return optimize_region(pauli_graph, budget, &mut next_bit);
+    }
+
+    let width = pauli_graph.get_n_qubits();
+    let mut output = PauliGraph::new(width);
+    let mut section = PauliGraph::new(width);
+    for op in pauli_graph.get_ops() {
+        if matches!(op, Op::Classical { .. }) {
+            if !section.get_ops().is_empty() {
+                output.extend(optimize_region(&section, budget, &mut next_bit));
+                // Reset the ancillas to zero before the next quantum section
+                for q in width - budget..width {
+                    output.add_op(Op::Gate {
+                        data: GateData::new(GateType::Reset, vec![q]),
+                    });
+                }
+                section = PauliGraph::new(width);
+            }
+            output.add_op(op.clone());
+        } else {
+            section.add_op(op.clone());
+        }
+    }
+    if !section.get_ops().is_empty() {
+        output.extend(optimize_region(&section, budget, &mut next_bit));
+    }
+    output
+}
+
+fn optimize_region(pauli_graph: &PauliGraph, budget: usize, next_bit: &mut usize) -> PauliGraph {
     let n_qubits = pauli_graph.get_n_qubits();
     let ancillas = n_qubits - budget..n_qubits;
     let (rotations, mut final_clifford) = normalize(pauli_graph);
@@ -22,7 +58,6 @@ pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> Pa
         output.add_op(Op::Gate { data: h });
     }
 
-    let mut next_bit = first_bit;
     for sub_graph in batch_rotations(&rotations, budget) {
         let rotations: Vec<_> = sub_graph
             .get_ops()
@@ -33,7 +68,7 @@ pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> Pa
             })
             .collect();
         let region = synthesize(&rotations, n_qubits);
-        let (prefix, mut diagonal, suffix) = gadgetize(region, budget, &mut next_bit);
+        let (prefix, mut diagonal, suffix) = gadgetize(region, budget, next_bit);
 
         t_optimization(&mut diagonal);
 

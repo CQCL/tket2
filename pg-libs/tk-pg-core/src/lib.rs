@@ -13,8 +13,8 @@ pub use errors::PauliGraphError;
 pub use gates::GateType;
 pub use graph::{Pauli, PauliGraph};
 pub use ops::{
-    BlackBoxData, ConditionalBoxData, GateData, MeasureData, Op, ResetData, RotationData,
-    TableauData,
+    BlackBoxData, ClassicalData, ConditionalBoxData, GateData, MeasureData, Op, ResetData,
+    RotationData, TableauData,
 };
 pub use traits::PGPass;
 
