@@ -1,0 +1,18 @@
+{
+  "tket_commit": "93ea902721daf8dd49fd5a6d517c13c3358818d9",
+  "guppyalgos_commit": "013f9e4766a3f2e5482e8137d07a780caa63861a",
+  "generation": "Thin @guppy wrappers calling unchanged current guppyalgos public implementations. Default Cuccaro carry-out adder replaces the handoff-local plain MAJ/UMA helper. QROM Toffoli variants use the public compute/uncompute parameters. All SELECTs use the default library factory. No added comptime or loop peeling.",
+  "settings": {
+    "ancilla_budget": null,
+    "t_optimization": true,
+    "seed": 0,
+    "scope": "default"
+  },
+  "source_sha256": {
+    "hugr_handoff_runtime/source/generate.py": "e6b22d4fbd2b3f5f3d7491e6a3f0c417c7488518a7bb509aeeff1199d246c634",
+    "Cargo.lock": "b5bca03424155df1e4607082208b1ac84cc9b10e9de2a6671d01a2e82f8cb37f",
+    "tket/tket-rs/examples/handoff_benchmark.rs": "4893b2b8f11e91e2753b0a9b018719cf891416cdd1558970f85da011e6b5eaad"
+  },
+  "guppyalgos_tracked_files_unchanged": true,
+  "manifest_sha256": "35a3a5b8f30bf14141abda94d73f62896c18946f4057a3056e920e9f2d850839"
+}

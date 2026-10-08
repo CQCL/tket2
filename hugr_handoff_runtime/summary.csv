@@ -1,0 +1,20 @@
+circuit,resynthesis_status,resynthesis_error,t_optimization_status,t_optimization_error
+qrom_unary_addr3_data3_temp_and,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+qrom_unary_addr4_data4_temp_and,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+arithmetic_gidney_adder_n4,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+arithmetic_gidney_adder_n8,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+arithmetic_gidney_multiplier_n3,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+arithmetic_gidney_multiplier_n4,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+lcu_rotation_4term_state2,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+lcu_rotation_8term_state2,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+lcu_alias_8term_state2_precision4,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+qrom_unary_addr3_data3_toffoli,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+qrom_unary_addr4_data4_toffoli,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+select_pauli_4term_state2_toffoli,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+select_pauli_8term_state2_toffoli,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,Error converting to pauli graph: Unsupported OpType: SetBits
+arithmetic_cuccaro_adder_n4,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+arithmetic_cuccaro_adder_n8,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+arithmetic_cuccaro_adder_n16,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+toffoli_v_chain_n4,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+toffoli_v_chain_n8,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
+toffoli_v_chain_n16,error,Error converting to pauli graph: Unsupported OpType: SetBits,error,T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.
