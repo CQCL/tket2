@@ -1122,7 +1122,7 @@ checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 [[package]]
 name = "hugr"
 version = "0.30.3"
-source = "git+https://github.com/quantinuum/hugr?rev=1704c5d18fbdac924424cfe111d1338fbb8f3029#1704c5d18fbdac924424cfe111d1338fbb8f3029"
+source = "git+https://github.com/quantinuum/hugr?rev=793b1014f490eca899cae0f49d46b3187bfc8da6#793b1014f490eca899cae0f49d46b3187bfc8da6"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1132,7 +1132,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.30.3"
-source = "git+https://github.com/quantinuum/hugr?rev=1704c5d18fbdac924424cfe111d1338fbb8f3029#1704c5d18fbdac924424cfe111d1338fbb8f3029"
+source = "git+https://github.com/quantinuum/hugr?rev=793b1014f490eca899cae0f49d46b3187bfc8da6#793b1014f490eca899cae0f49d46b3187bfc8da6"
 dependencies = [
  "anyhow",
  "clap",
@@ -1153,7 +1153,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.30.3"
-source = "git+https://github.com/quantinuum/hugr?rev=1704c5d18fbdac924424cfe111d1338fbb8f3029#1704c5d18fbdac924424cfe111d1338fbb8f3029"
+source = "git+https://github.com/quantinuum/hugr?rev=793b1014f490eca899cae0f49d46b3187bfc8da6#793b1014f490eca899cae0f49d46b3187bfc8da6"
 dependencies = [
  "base64",
  "cgmath",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.30.3"
-source = "git+https://github.com/quantinuum/hugr?rev=1704c5d18fbdac924424cfe111d1338fbb8f3029#1704c5d18fbdac924424cfe111d1338fbb8f3029"
+source = "git+https://github.com/quantinuum/hugr?rev=793b1014f490eca899cae0f49d46b3187bfc8da6#793b1014f490eca899cae0f49d46b3187bfc8da6"
 dependencies = [
  "anyhow",
  "cc",
@@ -1210,7 +1210,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.30.3"
-source = "git+https://github.com/quantinuum/hugr?rev=1704c5d18fbdac924424cfe111d1338fbb8f3029#1704c5d18fbdac924424cfe111d1338fbb8f3029"
+source = "git+https://github.com/quantinuum/hugr?rev=793b1014f490eca899cae0f49d46b3187bfc8da6#793b1014f490eca899cae0f49d46b3187bfc8da6"
 dependencies = [
  "base64",
  "bumpalo",

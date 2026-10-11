@@ -58,12 +58,12 @@ large_enum_variant = "allow"
 
 [patch.crates-io]
 
-# Default pointer lowering: Quantinuum/hugr#3282 and #3285.
-hugr = { git = "https://github.com/quantinuum/hugr", rev = "1704c5d18fbdac924424cfe111d1338fbb8f3029" }
-hugr-core = { git = "https://github.com/quantinuum/hugr", rev = "1704c5d18fbdac924424cfe111d1338fbb8f3029" }
-hugr-model = { git = "https://github.com/quantinuum/hugr", rev = "1704c5d18fbdac924424cfe111d1338fbb8f3029" }
-hugr-cli = { git = "https://github.com/quantinuum/hugr", rev = "1704c5d18fbdac924424cfe111d1338fbb8f3029" }
-hugr-llvm = { git = "https://github.com/quantinuum/hugr", rev = "1704c5d18fbdac924424cfe111d1338fbb8f3029" }
+# Pointer lowering and CFG serialization use the same HUGR source as Python.
+hugr = { git = "https://github.com/quantinuum/hugr", rev = "793b1014f490eca899cae0f49d46b3187bfc8da6" }
+hugr-core = { git = "https://github.com/quantinuum/hugr", rev = "793b1014f490eca899cae0f49d46b3187bfc8da6" }
+hugr-model = { git = "https://github.com/quantinuum/hugr", rev = "793b1014f490eca899cae0f49d46b3187bfc8da6" }
+hugr-cli = { git = "https://github.com/quantinuum/hugr", rev = "793b1014f490eca899cae0f49d46b3187bfc8da6" }
+hugr-llvm = { git = "https://github.com/quantinuum/hugr", rev = "793b1014f490eca899cae0f49d46b3187bfc8da6" }
 # portgraph = { git = "https://github.com/quantinuum/portgraph", rev = "68b96ac737e0c285d8c543b2d74a7aa80a18202c" }
 
 [workspace.dependencies]
