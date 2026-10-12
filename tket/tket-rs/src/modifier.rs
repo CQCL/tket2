@@ -9,7 +9,7 @@
 //! Global phase is an operation that applies some global phase to a circuit.
 //! It is implemented as a side-effect that takes a rotation angle as an input.
 
-use hugr::{extension::simple_op::MakeExtensionOp, ops::ExtensionOp};
+use hugr::{Wire, extension::simple_op::MakeExtensionOp, ops::ExtensionOp};
 use itertools::Itertools;
 
 use crate::extension::modifier::Modifier;
@@ -28,6 +28,8 @@ struct CombinedModifier {
     accum_ctrl: Vec<usize>,
     /// Whether the dagger modifier has been applied.
     dagger: bool,
+    /// The wires containing the exponent of the power modifier.
+    exponents: Vec<Wire>,
 }
 
 impl CombinedModifier {
@@ -44,11 +46,7 @@ impl CombinedModifier {
                 self.accum_ctrl.push(ctrl);
             }
             Ok(Modifier::DaggerModifier) => self.dagger = !self.dagger,
-            Ok(Modifier::PowerModifier) => {
-                return Err(
-                    modifier_resolver::ModifierResolverErrors::PowerModifierNotSupported { node },
-                );
-            }
+            Ok(Modifier::PowerModifier) => return Ok(()),
             Err(_) => {}
         }
         Ok(())
