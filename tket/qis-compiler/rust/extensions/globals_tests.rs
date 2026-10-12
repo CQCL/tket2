@@ -98,11 +98,11 @@ fn finish_graph(
     b.finish_hugr_with_outputs([ok]).unwrap()
 }
 
-fn emit<'c>(
+fn emit_with_backend<'c>(
     ctx: &'c Context,
     platform: QSystemPlatform,
     graph: &Hugr,
-    locks: Option<TracingLocks>,
+    locks: Option<impl GlobalsLockCodegen + 'static>,
 ) -> Module<'c> {
     let extensions = if let Some(locks) = locks {
         CodegenExtsBuilder::default()
@@ -130,12 +130,27 @@ fn emit<'c>(
     module
 }
 
-thread_local! { static EVENTS: RefCell<Vec<(usize, bool, u64)>> = const { RefCell::new(Vec::new()) }; }
-extern "C" fn event(global: *const u8, locked: bool, value: u64) {
-    EVENTS.with_borrow_mut(|events| events.push((global as usize, locked, value)));
+fn emit<'c>(
+    ctx: &'c Context,
+    platform: QSystemPlatform,
+    graph: &Hugr,
+    locks: Option<TracingLocks>,
+) -> Module<'c> {
+    emit_with_backend(ctx, platform, graph, locks)
+}
+
+thread_local! { static EVENTS: RefCell<Vec<(usize, u8, u64)>> = const { RefCell::new(Vec::new()) }; }
+extern "C" fn event(global: *const u8, kind: u8, value: u64) {
+    EVENTS.with_borrow_mut(|events| events.push((global as usize, kind, value)));
 }
 unsafe extern "C" fn runtime_panic(code: u32, message: *const u8) {
     // QIS strings contain a length byte followed by tagged bytes, without NUL.
+    EVENTS.with_borrow(|events| {
+        eprintln!(
+            "hook events: {:?}",
+            events.iter().map(|e| (e.1, e.2)).collect::<Vec<_>>()
+        )
+    });
     let bytes = unsafe { std::slice::from_raw_parts(message.add(1), usize::from(*message)) };
     eprintln!("globals panic {code}: {}", String::from_utf8_lossy(bytes));
     std::process::exit(86);
@@ -147,6 +162,7 @@ fn execute(module: &Module<'_>, repetitions: usize) -> bool {
     for (name, address) in [
         ("panic", runtime_panic as *const () as usize),
         ("global_lock_event", event as *const () as usize),
+        ("global_scope_check", scope_check as *const () as usize),
     ] {
         if let Some(function) = module.get_function(name) {
             engine.add_global_mapping(&function, address);
@@ -167,9 +183,9 @@ impl TracingLocks {
     fn record<'c, H: HugrView<Node = Node>>(
         context: &mut EmitFuncContext<'c, '_, H>,
         global: PointerValue<'c>,
-        locked: bool,
+        kind: u8,
     ) -> Result<()> {
-        let ty = context.iw_context().bool_type();
+        let ty = context.iw_context().i8_type();
         let value_ty =
             context.llvm_sum_type(hugr::extension::prelude::option_type([int_type(6)]))?;
         let module = context.get_current_module();
@@ -214,7 +230,7 @@ impl TracingLocks {
             f,
             &[
                 global.into(),
-                ty.const_int(u64::from(locked), false).into(),
+                ty.const_int(u64::from(kind), false).into(),
                 observed.into(),
             ],
             "",
@@ -230,7 +246,7 @@ impl GlobalsLockCodegen for TracingLocks {
         prelude: &PCG,
     ) -> Result<()> {
         DefaultGlobalsLockCodegen::default().emit_lock(context, global, prelude)?;
-        Self::record(context, global, true)
+        Self::record(context, global, 1)
     }
     fn emit_unlock<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
         &self,
@@ -242,7 +258,7 @@ impl GlobalsLockCodegen for TracingLocks {
         if self.double_unlock {
             DefaultGlobalsLockCodegen::default().emit_unlock(context, global, prelude)?;
         }
-        Self::record(context, global, false)
+        Self::record(context, global, 2)
     }
 }
 
@@ -291,14 +307,14 @@ fn globals_custom_hooks_cover_scoped_install_map_and_restore() {
         assert_eq!(
             transitions,
             &[
-                (true, 0),
-                (false, 41),
-                (true, 41),
-                (false, 42),
-                (true, 42),
-                (false, 43),
-                (true, 43),
-                (false, 0)
+                (1, 0),
+                (2, 41),
+                (1, 41),
+                (2, 42),
+                (1, 42),
+                (2, 43),
+                (1, 43),
+                (2, 0)
             ]
         )
     });
@@ -347,5 +363,177 @@ fn globals_lock_errors_use_qis_panic() {
             "{}",
             String::from_utf8_lossy(&out.stderr)
         );
+    }
+}
+
+struct LifecycleLocks;
+extern "C" fn scope_check(_global: *const u8, entering: bool) -> bool {
+    let case = std::env::var("TKET_GLOBAL_SCOPE_PANIC_CASE").unwrap_or_default();
+    !((entering && case == "enter") || (!entering && case == "exit"))
+}
+impl LifecycleLocks {
+    fn transition<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        context: &mut EmitFuncContext<'c, '_, H>,
+        global: PointerValue<'c>,
+        prelude: &PCG,
+        entering: bool,
+    ) -> Result<()> {
+        TracingLocks::record(context, global, if entering { 3 } else { 4 })?;
+        let bool_ty = context.iw_context().bool_type();
+        let module = context.get_current_module();
+        let f = module
+            .get_function("global_scope_check")
+            .unwrap_or_else(|| {
+                module.add_function(
+                    "global_scope_check",
+                    bool_ty.fn_type(&[global.get_type().into(), bool_ty.into()], false),
+                    None,
+                )
+            });
+        let success_value = context
+            .builder()
+            .build_call(
+                f,
+                &[
+                    global.into(),
+                    bool_ty.const_int(u64::from(entering), false).into(),
+                ],
+                "registered",
+            )?
+            .try_as_basic_value()
+            .basic()
+            .unwrap()
+            .into_int_value();
+        let failed = context.build_positioned_new_block("scope_error", None, |context, bb| {
+            let message = if entering {
+                "Global scope registration failed"
+            } else {
+                "Global scope retirement failed"
+            };
+            let error = hugr::llvm::emit::emit_value(
+                context,
+                &hugr::ops::Value::from(hugr::extension::prelude::ConstError::new_default_signal(
+                    message,
+                )),
+            )?;
+            prelude.emit_panic(context, error)?;
+            context.builder().build_unreachable()?;
+            anyhow::Ok(bb)
+        })?;
+        let success =
+            context.build_positioned_new_block("scope_continue", None, |_, bb| anyhow::Ok(bb))?;
+        context
+            .builder()
+            .build_conditional_branch(success_value, success, failed)?;
+        context.builder().position_at_end(success);
+        Ok(())
+    }
+}
+impl GlobalsLockCodegen for LifecycleLocks {
+    fn emit_with_enter<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        context: &mut EmitFuncContext<'c, '_, H>,
+        global: PointerValue<'c>,
+        prelude: &PCG,
+    ) -> Result<()> {
+        Self::transition(context, global, prelude, true)
+    }
+    fn emit_with_exit<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        context: &mut EmitFuncContext<'c, '_, H>,
+        global: PointerValue<'c>,
+        prelude: &PCG,
+    ) -> Result<()> {
+        Self::transition(context, global, prelude, false)
+    }
+    fn emit_lock<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        context: &mut EmitFuncContext<'c, '_, H>,
+        global: PointerValue<'c>,
+        prelude: &PCG,
+    ) -> Result<()> {
+        TracingLocks {
+            double_unlock: false,
+        }
+        .emit_lock(context, global, prelude)
+    }
+    fn emit_unlock<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        context: &mut EmitFuncContext<'c, '_, H>,
+        global: PointerValue<'c>,
+        prelude: &PCG,
+    ) -> Result<()> {
+        TracingLocks {
+            double_unlock: false,
+        }
+        .emit_unlock(context, global, prelude)
+    }
+}
+
+#[test]
+fn globals_with_lifecycle_orders_registration_and_retirement() {
+    EVENTS.with_borrow_mut(Vec::clear);
+    let ctx = Context::create();
+    let module = emit_with_backend(&ctx, QSystemPlatform::Sol, &graph(""), Some(LifecycleLocks));
+    assert!(execute(&module, 2));
+    EVENTS.with_borrow(|events| {
+        let address = events[0].0;
+        assert_ne!(address, 0);
+        assert!(events.iter().all(|e| e.0 == address));
+        let expected = [
+            (3, 0),
+            (1, 0),
+            (2, 41),
+            (1, 41),
+            (2, 42),
+            (1, 42),
+            (2, 43),
+            (1, 43),
+            (2, 0),
+            (4, 0),
+        ];
+        assert_eq!(
+            events.iter().map(|e| (e.1, e.2)).collect::<Vec<_>>(),
+            expected.repeat(2)
+        );
+    });
+}
+
+#[test]
+fn globals_with_lifecycle_failure_preserves_slot_ordering() {
+    const ENV: &str = "TKET_GLOBAL_SCOPE_PANIC_CASE";
+    if std::env::var(ENV).is_ok() {
+        let ctx = Context::create();
+        let module =
+            emit_with_backend(&ctx, QSystemPlatform::Sol, &graph(""), Some(LifecycleLocks));
+        execute(&module, 1);
+        panic!("expected nonreturning QIS panic");
+    }
+    for (case, message, events) in [
+        ("enter", "registration", "hook events: [(3, 0)]"),
+        (
+            "exit",
+            "retirement",
+            "hook events: [(3, 0), (1, 0), (2, 41), (1, 41), (2, 42), (1, 42), (2, 43), (1, 43), (2, 0), (4, 0)]",
+        ),
+    ] {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "extensions::globals_tests::globals_with_lifecycle_failure_preserves_slot_ordering",
+                "--nocapture",
+            ])
+            .env(ENV, case)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(86), "{stderr}");
+        assert!(
+            stderr.contains(&format!(
+                "globals panic 1001: EXIT:INT:Global scope {message} failed"
+            )),
+            "{stderr}"
+        );
+        assert!(stderr.contains(events), "{stderr}");
     }
 }
