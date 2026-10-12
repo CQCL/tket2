@@ -46,8 +46,8 @@ use itertools::Itertools;
 pub trait GlobalsLockCodegen {
     /// Enter a `With` scope before acquiring its installation lock or changing the slot.
     ///
-    /// Use `global` as an opaque, non-null identity, without alignment or pointee
-    /// assumptions. A runtime registration failure must panic before slot mutation.
+    /// Use `global` as an opaque identity, without alignment or pointee assumptions.
+    /// A runtime registration failure must panic before slot mutation.
     fn emit_with_enter<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
         &self,
         _context: &mut EmitFuncContext<'c, '_, H>,
