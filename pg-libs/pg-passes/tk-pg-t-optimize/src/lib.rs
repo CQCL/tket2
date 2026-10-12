@@ -16,7 +16,7 @@ use tk_pg_core::{PGPass, PauliGraph};
 use crate::optimizer::optimize;
 
 /// A T-count optimization pass for rotations, tableaux, and unconditional H gates.
-/// Classical operations stay in place, and each quantum section is optimized separately
+/// Other operations stay in place, and each Clifford + T section is optimized separately
 #[derive(Default)]
 pub struct TOptimizationPass {
     ancilla_budget: usize,
@@ -44,11 +44,11 @@ impl TOptimizationPass {
         self
     }
 
-    /// Optimize a graph whose rotation angles are multiples of 0.25 half turns.
-    /// Classical operations split the graph into sections. Measurement bits are
+    /// Optimize sections whose rotation angles are multiples of 0.25 half turns
+    /// Other operations split the graph into sections. Measurement bits are
     /// numbered from `first_bit` and aren't reused between sections.
     ///
-    /// Panics if the input contains unsupported operations or non-idle reserved ancillas.
+    /// Panics if the input contains invalid angles, unsupported gates or non-idle reserved ancillas
     pub fn optimize(&self, graph: &PauliGraph) -> PauliGraph {
         optimize(graph, self.ancilla_budget, self.first_bit)
     }
@@ -65,56 +65,115 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
     use tk_pg_converter::compare_unitaries_via_tk;
-    use tk_pg_core::{ClassicalData, GateData, GateType, Op, Pauli, RotationData};
+    use tk_pg_core::{
+        BlackBoxData, ClassicalData, ConditionalBoxData, GateData, GateType, MeasureData, Op,
+        Pauli, ResetData, RotationData,
+    };
     use tk_pg_ir_kernels::PGTableau;
     use tk_pg_qm_tableau::Tableau;
 
+    fn boundaries(n_qubits: usize) -> Vec<Op> {
+        let mut z = vec![Pauli::I; n_qubits];
+        let mut x = z.clone();
+        z[0] = Pauli::Z;
+        x[0] = Pauli::X;
+        vec![
+            Op::Classical {
+                data: ClassicalData::new(vec![7], "payload".into()),
+            },
+            Op::BlackBox {
+                data: BlackBoxData::new(vec![0], "payload".into()),
+            },
+            Op::Measure {
+                data: MeasureData::new(z.clone(), false, 7),
+            },
+            Op::Reset {
+                data: ResetData::new(z.clone(), x, false, false),
+            },
+            Op::ConditionalBox {
+                data: ConditionalBoxData::new(
+                    vec![Op::Rotation {
+                        data: RotationData::new(z.clone(), 0.5),
+                    }],
+                    vec![7],
+                    vec![true],
+                ),
+            },
+            Op::Rotation {
+                data: RotationData::new(z, 0.1),
+            },
+        ]
+    }
+
     #[test]
-    fn keeps_measurement_bits_distinct_across_classical_sections() {
+    fn preserves_consecutive_boundaries() {
+        let input = PauliGraph::new(1).with_ops(boundaries(1));
+        assert_eq!(TOptimizationPass::new().transform(&input), input);
+    }
+
+    #[test]
+    fn rejects_boundaries_using_reserved_ancillas() {
+        for op in boundaries(1) {
+            if matches!(op, Op::Classical { .. }) {
+                continue;
+            }
+            let input = PauliGraph::new(1).with_ops(vec![op]);
+            assert!(
+                std::panic::catch_unwind(|| {
+                    TOptimizationPass::new()
+                        .with_ancilla_budget(1)
+                        .transform(&input)
+                })
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn keeps_measurement_bits_distinct_across_sections() {
         let section: Vec<_> = [Pauli::Z, Pauli::X, Pauli::Z]
             .into_iter()
             .map(|p| Op::Rotation {
                 data: RotationData::new(vec![p, Pauli::I], 0.25),
             })
             .collect();
-        let classical = Op::Classical {
-            data: ClassicalData::new(vec![7], "payload".into()),
-        };
-        let mut input = PauliGraph::new(2).with_ops(section.clone());
-        input.add_op(classical.clone());
-        input.extend(PauliGraph::new(2).with_ops(section));
-        let output = TOptimizationPass::new()
-            .with_ancilla_budget(1)
-            .with_first_bit(8)
-            .transform(&input);
-        output.try_validate().unwrap();
-        let boundary = output
-            .get_ops()
-            .iter()
-            .position(|op| op == &classical)
-            .unwrap();
-        let mut bits = HashSet::new();
-        for ops in [
-            &output.get_ops()[..boundary],
-            &output.get_ops()[boundary + 1..],
-        ] {
-            let measurements: Vec<_> = ops
+        for boundary_op in boundaries(2) {
+            let mut input = PauliGraph::new(2).with_ops(section.clone());
+            input.add_op(boundary_op.clone());
+            input.extend(PauliGraph::new(2).with_ops(section.clone()));
+            let output = TOptimizationPass::new()
+                .with_ancilla_budget(1)
+                .with_first_bit(8)
+                .transform(&input);
+            output.try_validate().unwrap();
+            let boundary = output
+                .get_ops()
                 .iter()
-                .filter_map(|op| match op {
-                    Op::Gate { data } if data.get_gate_type() == &GateType::Measure => {
-                        Some(data.get_args()[1])
-                    }
-                    Op::Measure { data } => Some(data.get_cbit()),
-                    _ => None,
-                })
-                .collect();
-            assert!(!measurements.is_empty());
-            for bit in measurements {
-                assert!(bit >= 8);
-                assert!(
-                    bits.insert(bit),
-                    "measurement bit was reused across sections"
-                );
+                .position(|op| op == &boundary_op)
+                .unwrap();
+            let mut bits = HashSet::new();
+            for ops in [
+                &output.get_ops()[..boundary],
+                &output.get_ops()[boundary + 1..],
+            ] {
+                let measurements: Vec<_> = ops
+                    .iter()
+                    .filter_map(|op| match op {
+                        Op::Gate { data } if data.get_gate_type() == &GateType::Measure => {
+                            Some(data.get_args()[1])
+                        }
+                        Op::Measure { data } => Some(data.get_cbit()),
+                        _ => None,
+                    })
+                    .collect();
+                assert!(!measurements.is_empty());
+                for bit in measurements {
+                    assert!(bit >= 8);
+                    assert!(
+                        bits.insert(bit),
+                        "measurement bit was reused across sections"
+                    );
+                }
             }
         }
     }
@@ -194,30 +253,29 @@ mod tests {
             );
             assert!(compare_unitaries_via_tk(&pg, &optimized));
 
-            let classical = Op::Classical {
-                data: ClassicalData::new(vec![0], "payload".into()),
-            };
-            let mut input = pg.clone();
-            input.add_op(classical.clone());
-            input.extend(pg.clone());
-            let optimized = TOptimizationPass::new().transform(&input);
-            let boundary = optimized
-                .get_ops()
-                .iter()
-                .position(|op| op == &classical)
-                .unwrap();
-            for ops in [
-                &optimized.get_ops()[..boundary],
-                &optimized.get_ops()[boundary + 1..],
-            ] {
-                let section = PauliGraph::new(4).with_ops(ops.to_vec());
-                let t_count = section
+            for boundary_op in boundaries(4) {
+                let mut input = pg.clone();
+                input.add_op(boundary_op.clone());
+                input.extend(pg.clone());
+                let optimized = TOptimizationPass::new().transform(&input);
+                let boundary = optimized
                     .get_ops()
                     .iter()
-                    .filter(|op| matches!(op, Op::Rotation { .. }))
-                    .count();
-                assert!(t_count <= max_t_count);
-                assert!(compare_unitaries_via_tk(&pg, &section));
+                    .position(|op| op == &boundary_op)
+                    .unwrap();
+                for ops in [
+                    &optimized.get_ops()[..boundary],
+                    &optimized.get_ops()[boundary + 1..],
+                ] {
+                    let section = PauliGraph::new(4).with_ops(ops.to_vec());
+                    let t_count = section
+                        .get_ops()
+                        .iter()
+                        .filter(|op| matches!(op, Op::Rotation { .. }))
+                        .count();
+                    assert!(t_count <= max_t_count);
+                    assert!(compare_unitaries_via_tk(&pg, &section));
+                }
             }
         }
     }

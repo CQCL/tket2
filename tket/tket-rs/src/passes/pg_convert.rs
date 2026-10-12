@@ -128,6 +128,35 @@ fn cmd_to_op(
     let params = cmd.op.params.clone();
 
     match cmd.op.op_type {
+        OpType::Conditional => {
+            let condition = cmd
+                .op
+                .conditional
+                .as_ref()
+                .filter(|c| c.width == 1 && c.value <= 1)
+                .ok_or(ConversionError::UnsupportedOpType(OpType::Conditional))?;
+            let bit = bits
+                .first()
+                .ok_or(ConversionError::UnsupportedOpType(OpType::Conditional))?;
+            // The HUGR encoder can put qubits before the control bit
+            let control = cmd
+                .args
+                .iter()
+                .position(|a| register_map.bit_map.contains(a))
+                .unwrap();
+            let mut inner = cmd.clone();
+            inner.op = *condition.op.clone();
+            inner.args.remove(control);
+            cmd_to_op(&inner, register_map)?
+                .into_iter()
+                .map(|op| match op {
+                    Op::Gate { data } if data.get_conditional_bits().is_empty() => Ok(Op::Gate {
+                        data: data.with_conditional(vec![*bit], vec![condition.value == 1]),
+                    }),
+                    _ => Err(ConversionError::UnsupportedOpType(OpType::Conditional)),
+                })
+                .collect()
+        }
         op_type if is_classical_op(op_type) => {
             if !qubits.is_empty() {
                 return Err(ConversionError::UnsupportedOpType(op_type));
@@ -1061,6 +1090,14 @@ mod tests {
 
         assert_eq!(commands.len(), expected_types.len());
         for (command, expected_type) in commands.iter().zip(expected_types) {
+            let ops = cmd_to_op(command, &registers).unwrap();
+            assert_eq!(
+                op_to_cmd(&ops[0], &registers).unwrap(),
+                vec![command.clone()]
+            );
+            let mut reordered = command.clone();
+            reordered.args.swap(0, 1);
+            assert_eq!(cmd_to_op(&reordered, &registers).unwrap(), ops);
             assert_eq!(command.op.op_type, OpType::Conditional);
             assert_eq!(
                 command.args,
@@ -1075,6 +1112,29 @@ mod tests {
                 })
             );
         }
+    }
+
+    #[rstest]
+    #[case::missing_condition(None)]
+    #[case::multiple_bits(Some((2, 0)))]
+    #[case::invalid_value(Some((1, 2)))]
+    fn rejects_unsupported_serial_conditions(
+        registers: RegisterMap,
+        #[case] condition: Option<(u32, u32)>,
+    ) {
+        let mut cmd = command(
+            OpType::Conditional,
+            vec![element("result", 8), element("left", 2)],
+        );
+        cmd.op.conditional = condition.map(|(width, value)| Conditional {
+            op: Box::new(Operation::from_optype(OpType::X)),
+            width,
+            value,
+        });
+        assert!(matches!(
+            cmd_to_op(&cmd, &registers),
+            Err(ConversionError::UnsupportedOpType(OpType::Conditional))
+        ));
     }
 
     #[rstest]

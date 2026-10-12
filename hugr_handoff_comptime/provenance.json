@@ -1,0 +1,43 @@
+{
+  "execution_shots": 104,
+  "extra_t_reduction": 24,
+  "guppyalgos_checkout_used": "/Users/silas.dilkes/Code/guppyalgos",
+  "guppyalgos_commit": "013f9e4766a3f2e5482e8137d07a780caa63861a",
+  "guppyalgos_tracked_files_unchanged": true,
+  "manifest_sha256": "f24424b3af67776f851496bdba4dbb5297898fe5ea87bee44469e2759d4591fa",
+  "paired_execution_circuits": 13,
+  "passed_outputs": 38,
+  "prepared_7t_estimate": 1723,
+  "resynthesis_t_tdg": 1161,
+  "runtime_manifest_sha256": "35a3a5b8f30bf14141abda94d73f62896c18946f4057a3056e920e9f2d850839",
+  "settings": {
+    "ancilla_budget": null,
+    "comptime_expansion_added": true,
+    "scope": "default",
+    "seed": 0,
+    "t_optimization": true
+  },
+  "source_audit_sha256": "370cf3a000b5abbb1e2890567db7e20efee12e1854a60da8ddcb57b5f4bdfe5d",
+  "source_sha256": {
+    "Cargo.lock": "b5bca03424155df1e4607082208b1ac84cc9b10e9de2a6671d01a2e82f8cb37f",
+    "hugr_handoff_comptime/source/generate.py": "cdcf386a3785711514976c4c501bfaecd9069cc3d920536e6e7ec67262e79ff6",
+    "hugr_handoff_comptime/source/source_macros.py": "8837205e847f0d12416d20934ba727434e8083e4ccb3b6883d1be7574075a6c1",
+    "hugr_handoff_comptime/source/verify.py": "7fb2482d3457d12f1674f398eca018297c98b071d158825f45fd7dbeafef1ad3",
+    "hugr_handoff_runtime/source/generate.py": "e6b22d4fbd2b3f5f3d7491e6a3f0c417c7488518a7bb509aeeff1199d246c634",
+    "pg-libs/pg-passes/tk-pg-greedy-synth/src/reducer/mod.rs": "31e019a397bd83c47839d2b512ec72ed553875e968565716e86db795e92910af",
+    "pg-libs/pg-passes/tk-pg-greedy-synth/src/synthesis/tests.rs": "ec0517a9f25a76282d1abf328d8a7c854f0b018977fb8cdc5b1e59b558f171dd",
+    "pg-libs/pg-passes/tk-pg-t-optimize/src/lib.rs": "597a039edeeb18e49102313a0b6773eba2af96664ff0f1d047d4da3217de961c",
+    "pg-libs/pg-passes/tk-pg-t-optimize/src/optimizer.rs": "1e6c26194a60e5a0ee10c3295b6ad421f7ba8ebb94f0db7ccb93c2be1c3ee4f5",
+    "tket/tket-rs/examples/handoff_benchmark.rs": "3a1c06d4ed87e9a1d4f7b8941e656182133f299d6d5666186e615298e51f59c1",
+    "tket/tket-rs/src/passes/pauli_graph_resynthesis.rs": "d222e9cd48134fe9b98806a0f12840df2388129471a8747d7a0a762f806720bd",
+    "tket/tket-rs/src/passes/pg_convert.rs": "271d1c21d1bf5a6e5eb30305651d7d551fa67150f15ae862ee2cda559b6fceb2"
+  },
+  "t_optimization_t_tdg": 1137,
+  "tket_commit": "00678e2c146c194277489038c39560309d5ff461",
+  "versions": {
+    "guppyalgos": "0.1.0",
+    "guppylang": "1.1.1",
+    "hugr": "0.18.6",
+    "zixy": "0.4.0rc1"
+  }
+}

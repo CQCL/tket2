@@ -1,0 +1,158 @@
+[
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/qrom_unary_addr3_data3_temp_and.hugr",
+    "sha256": "96cb942bd22aac2ca227e91aa26cbcc2e2956777b50a18cf9176b25a7669d43f",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/qrom_unary_addr3_data3_temp_and.hugr",
+    "sha256": "1d49596b710edf16d744db7ce046ac96dbaf2060df5255e993e0f35d50abfc87",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/qrom_unary_addr4_data4_temp_and.hugr",
+    "sha256": "422d1c6ce644274803aa20718b4aa29f024a6dc2679e7742ce417cb57ed8eba7",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/qrom_unary_addr4_data4_temp_and.hugr",
+    "sha256": "7f8f88608a5c29e8083f92cdc652ac82ab690ad2a86fdaa93cfa64539e8400d1",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/arithmetic_gidney_adder_n4.hugr",
+    "sha256": "7e10b73197d82bcc432e69b29d1a12bcfa6dab5b786ceeeda307c1d485f72679",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/arithmetic_gidney_adder_n4.hugr",
+    "sha256": "3e04bac8812293d53553a6cd52d0691ab2c5a1b0d2b0eb262f62e84f98e08b05",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/arithmetic_gidney_multiplier_n3.hugr",
+    "sha256": "a228853535050f8ab5b71051b0ade5a7b08656afef05dffe9f0a4e8b897ec5fd",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/arithmetic_gidney_multiplier_n3.hugr",
+    "sha256": "3ba2f8ed549579130ffa5808d52661f9e2ea88dfd101a8b368309ffcc56942fd",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/arithmetic_gidney_multiplier_n4.hugr",
+    "sha256": "93678ad8d077ba48e6c6fdc9a56088f12c5b885cf6fe6aa628acc99a43da09a1",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/arithmetic_gidney_multiplier_n4.hugr",
+    "sha256": "123748528ef6e364483c39d76c4a68bff3bc30f1a0ce6f81035b183c8fabe8c0",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/qrom_unary_addr3_data3_toffoli.hugr",
+    "sha256": "fe114694366cc7f4431c2d145aa121f1034ab3c1c1bd12b7ed00da4d479225ea",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/qrom_unary_addr3_data3_toffoli.hugr",
+    "sha256": "36ce59ccbb2dfdae36791366b7a9eb4def0c0b6d065f548dc420d2707b299c82",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/qrom_unary_addr4_data4_toffoli.hugr",
+    "sha256": "6ce2d0e4d4905062169643a1fbabbfb471d4adb2784d03a91366bbce565403e6",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/qrom_unary_addr4_data4_toffoli.hugr",
+    "sha256": "99b013c87bb16bf3526e70f0be1b792c209e0ada2cbf4c9a8230e15dd3535e1b",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/select_pauli_4term_state2_toffoli.hugr",
+    "sha256": "8d3ecf85be9acdf0f721739d79eb30e08b50b0eed09d7c5edcfa614557a620e6",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/select_pauli_4term_state2_toffoli.hugr",
+    "sha256": "71f76afab5f2a3c02833d728f5734e2a82a50a632bc677d9d90074ea638ae0e2",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/select_pauli_8term_state2_toffoli.hugr",
+    "sha256": "5ad9e953754f867419c55433b8911917ac3371a757d1d25397f8c3ad03f0302a",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/select_pauli_8term_state2_toffoli.hugr",
+    "sha256": "e6a99bd33f4790ae54e20b7ed0d55fde6887755e8e321618afeb87195a5d1128",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/arithmetic_cuccaro_adder_n4.hugr",
+    "sha256": "fb2a9c29ccc7090589d0c97c9113dbb16d903d789c9f0886dc360b44a782dc34",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/arithmetic_cuccaro_adder_n4.hugr",
+    "sha256": "808aef0dffc9fcdab5d4dce0d11125136cb63b442913feb0e03268ff42428780",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/arithmetic_cuccaro_adder_n8.hugr",
+    "sha256": "908381ee25a496b5239a829ced3946157bcc3cc5a34a6edf8b3a5cb84a57429f",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/arithmetic_cuccaro_adder_n8.hugr",
+    "sha256": "2f1f9387637173fc2d30458ca6169f662d3cf7bb169ec3e4f6561e93fcf2bf27",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/toffoli_v_chain_n4.hugr",
+    "sha256": "0ac355d069d55fc2c003c0d882339159d50c0add6c8ba0f2399cc4318be94441",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/toffoli_v_chain_n4.hugr",
+    "sha256": "26339e27dfd37795f7ecb968daf49026574d10219f2ecba23d7005432a1bf074",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_runtime",
+    "file": "artifacts/toffoli_v_chain_n8.hugr",
+    "sha256": "1a00573d7baa2712c47b9072907974b5efbca459da301c42204e467b7707b857",
+    "shots": 4
+  },
+  {
+    "suite": "hugr_handoff_comptime",
+    "file": "artifacts/toffoli_v_chain_n8.hugr",
+    "sha256": "c24933668bd3d295b6690ab39ba1253c2e293e2db5170a1c00efdd5f675674f3",
+    "shots": 4
+  }
+]

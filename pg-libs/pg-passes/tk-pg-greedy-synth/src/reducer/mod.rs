@@ -238,10 +238,14 @@ where
                     self.parallel_mode,
                     self.enable_progress,
                 ));
-                output.add_op(Op::Gate {
-                    data: GateData::new(GateType::BlackBox, data.get_qubits().clone())
-                        .with_data(data.get_content().clone()),
-                });
+                if data.get_qubits().is_empty() {
+                    output.add_op(Op::BlackBox { data });
+                } else {
+                    output.add_op(Op::Gate {
+                        data: GateData::new(GateType::BlackBox, data.get_qubits().clone())
+                            .with_data(data.get_content().clone()),
+                    });
+                }
             }
             FrontSetKind::Conditional(data) => {
                 let inner = PauliGraph::new(qubit_depth.len()).with_ops(data.get_ops().clone());

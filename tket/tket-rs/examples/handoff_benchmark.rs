@@ -1,4 +1,4 @@
-//! Benchmark the unexpanded Guppy handoff suite through HUGR resynthesis.
+//! Benchmark a Guppy handoff suite through HUGR resynthesis.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -133,7 +133,7 @@ fn main() {
         );
         results.push(json!({"circuit": name, "raw_static_counts": counts(input.hugr()), "prepared_static_counts": prepared_counts, "resynthesis_only": off, "resynthesis_t_optimization": on}));
         fs::write(directory.join("results.json"), serde_json::to_string_pretty(&json!({
-            "settings": {"t_optimization": true, "ancilla_budget": null, "seed": 0, "scope": "default", "comptime_expansion_added": false},
+            "settings": {"t_optimization": true, "ancilla_budget": null, "seed": 0, "scope": "default", "comptime_expansion_added": manifest["comptime_expansion_added"].as_bool().unwrap_or(false)},
             "count_kind": "static_gate_nodes_not_execution_weighted",
             "artifacts": results,
         })).unwrap()).unwrap();

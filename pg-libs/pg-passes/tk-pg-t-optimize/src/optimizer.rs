@@ -12,11 +12,7 @@ pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> Pa
     validate_ancillas(pauli_graph, budget);
 
     let mut next_bit = first_bit;
-    if !pauli_graph
-        .get_ops()
-        .iter()
-        .any(|op| matches!(op, Op::Classical { .. }))
-    {
+    if !pauli_graph.get_ops().iter().any(is_boundary) {
         return optimize_region(pauli_graph, budget, &mut next_bit);
     }
 
@@ -24,7 +20,7 @@ pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> Pa
     let mut output = PauliGraph::new(width);
     let mut section = PauliGraph::new(width);
     for op in pauli_graph.get_ops() {
-        if matches!(op, Op::Classical { .. }) {
+        if is_boundary(op) {
             if !section.get_ops().is_empty() {
                 output.extend(optimize_region(&section, budget, &mut next_bit));
                 // Reset the ancillas to zero before the next quantum section
@@ -44,6 +40,21 @@ pub fn optimize(pauli_graph: &PauliGraph, budget: usize, first_bit: usize) -> Pa
         output.extend(optimize_region(&section, budget, &mut next_bit));
     }
     output
+}
+
+fn is_boundary(op: &Op) -> bool {
+    match op {
+        Op::Classical { .. }
+        | Op::BlackBox { .. }
+        | Op::Measure { .. }
+        | Op::Reset { .. }
+        | Op::ConditionalBox { .. } => true,
+        Op::Rotation { data } => {
+            let turns = 4.0 * data.get_angle();
+            turns.is_finite() && (turns - turns.round()).abs() > 1e-10
+        }
+        _ => false,
+    }
 }
 
 fn optimize_region(pauli_graph: &PauliGraph, budget: usize, next_bit: &mut usize) -> PauliGraph {
@@ -98,16 +109,27 @@ fn validate_ancillas(graph: &PauliGraph, budget: usize) {
     );
     let identity = TableauData::from(Tableau::eye(n_qubits));
     for q in n_qubits - budget..n_qubits {
-        let idle = graph.get_ops().iter().all(|op| match op {
-            Op::Rotation { data } => data.get_string()[q] == Pauli::I,
-            Op::Gate { data } => !data.get_args().contains(&q),
-            Op::Tableau { data } => {
-                data.get_x_images()[q] == identity.get_x_images()[q]
-                    && data.get_z_images()[q] == identity.get_z_images()[q]
-            }
-            _ => true,
-        });
+        let idle = graph.get_ops().iter().all(|op| is_idle(op, q, &identity));
         assert!(idle, "Reserved ancilla qubit {q} is not idle");
+    }
+}
+
+fn is_idle(op: &Op, q: usize, identity: &TableauData) -> bool {
+    match op {
+        Op::Rotation { data } => data.get_string()[q] == Pauli::I,
+        Op::Measure { data } => data.get_string()[q] == Pauli::I,
+        Op::Reset { data } => {
+            data.get_first_string()[q] == Pauli::I && data.get_second_string()[q] == Pauli::I
+        }
+        Op::BlackBox { data } => !data.get_qubits().contains(&q),
+        Op::ConditionalBox { data } => data.get_ops().iter().all(|op| is_idle(op, q, identity)),
+        Op::Gate { data } if *data.get_gate_type() == GateType::Measure => data.get_args()[0] != q,
+        Op::Gate { data } => !data.get_args().contains(&q),
+        Op::Tableau { data } => {
+            data.get_x_images()[q] == identity.get_x_images()[q]
+                && data.get_z_images()[q] == identity.get_z_images()[q]
+        }
+        Op::Classical { .. } | Op::SetBoundary => true,
     }
 }
 

@@ -1,0 +1,380 @@
+{
+  "artifacts": [
+    {
+      "bytes": 188487,
+      "description": "Unary-iteration lookup with 8 fixed 3-bit words and 4T temporary-AND compute / measurement uncompute.",
+      "entrypoint_inputs": {},
+      "family": "qrom",
+      "file": "artifacts/qrom_unary_addr3_data3_temp_and.hugr",
+      "fixed_inputs": {
+        "address": 5
+      },
+      "logical_qubits": 6,
+      "named_outputs": {
+        "address": "bit[3]",
+        "data": "bit[3]"
+      },
+      "peak_qubit_budget": 8,
+      "sha256": "1d49596b710edf16d744db7ce046ac96dbaf2060df5255e993e0f35d50abfc87"
+    },
+    {
+      "bytes": 266356,
+      "description": "Unary-iteration lookup with 16 fixed 4-bit words and 4T temporary-AND compute / measurement uncompute.",
+      "entrypoint_inputs": {},
+      "family": "qrom",
+      "file": "artifacts/qrom_unary_addr4_data4_temp_and.hugr",
+      "fixed_inputs": {
+        "address": 9
+      },
+      "logical_qubits": 8,
+      "named_outputs": {
+        "address": "bit[4]",
+        "data": "bit[4]"
+      },
+      "peak_qubit_budget": 11,
+      "sha256": "7f8f88608a5c29e8083f92cdc652ac82ab690ad2a86fdaa93cfa64539e8400d1"
+    },
+    {
+      "bytes": 56062,
+      "description": "4-bit Gidney ripple-carry addition with a separate carry-out.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_gidney_adder_n4.hugr",
+      "fixed_inputs": {
+        "a": 13,
+        "b": 5
+      },
+      "logical_qubits": 9,
+      "named_outputs": {
+        "a": "bit[4]",
+        "carry": "bit",
+        "sum": "bit[4]"
+      },
+      "peak_qubit_budget": 12,
+      "sha256": "3e04bac8812293d53553a6cd52d0691ab2c5a1b0d2b0eb262f62e84f98e08b05"
+    },
+    {
+      "bytes": 100907,
+      "description": "8-bit Gidney ripple-carry addition with a separate carry-out.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_gidney_adder_n8.hugr",
+      "fixed_inputs": {
+        "a": 253,
+        "b": 5
+      },
+      "logical_qubits": 17,
+      "named_outputs": {
+        "a": "bit[8]",
+        "carry": "bit",
+        "sum": "bit[8]"
+      },
+      "peak_qubit_budget": 24,
+      "sha256": "61a7fc69ca62c463a9585a4e6f9ee38508782c9a5976d1ee5d366db16924387b"
+    },
+    {
+      "bytes": 139112,
+      "description": "3-bit Gidney shift-and-add multiplier modulo 2^3.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_gidney_multiplier_n3.hugr",
+      "fixed_inputs": {
+        "a": 3,
+        "b": 3
+      },
+      "logical_qubits": 9,
+      "named_outputs": {
+        "a": "bit[3]",
+        "b": "bit[3]",
+        "product": "bit[3]"
+      },
+      "peak_qubit_budget": 14,
+      "sha256": "3ba2f8ed549579130ffa5808d52661f9e2ea88dfd101a8b368309ffcc56942fd"
+    },
+    {
+      "bytes": 238195,
+      "description": "4-bit Gidney shift-and-add multiplier modulo 2^4.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_gidney_multiplier_n4.hugr",
+      "fixed_inputs": {
+        "a": 7,
+        "b": 3
+      },
+      "logical_qubits": 12,
+      "named_outputs": {
+        "a": "bit[4]",
+        "b": "bit[4]",
+        "product": "bit[4]"
+      },
+      "peak_qubit_budget": 19,
+      "sha256": "123748528ef6e364483c39d76c4a68bff3bc30f1a0ce6f81035b183c8fabe8c0"
+    },
+    {
+      "bytes": 142408,
+      "description": "4-term, 2-qubit LCU block encoding with default library rotation PREPARE and unary SELECT.",
+      "entrypoint_inputs": {},
+      "family": "lcu",
+      "file": "artifacts/lcu_rotation_4term_state2.hugr",
+      "fixed_inputs": {
+        "state": 1
+      },
+      "logical_qubits": 4,
+      "named_outputs": {
+        "prepare": "bit[2]",
+        "state": "bit[2]"
+      },
+      "peak_qubit_budget": 5,
+      "sha256": "48f8c9718d27d2d9b5095790d4edbec28ed6dd1396e24ab88f4f1f047b7b725e"
+    },
+    {
+      "bytes": 153034,
+      "description": "8-term, 2-qubit LCU block encoding with default library rotation PREPARE and unary SELECT.",
+      "entrypoint_inputs": {},
+      "family": "lcu",
+      "file": "artifacts/lcu_rotation_8term_state2.hugr",
+      "fixed_inputs": {
+        "state": 1
+      },
+      "logical_qubits": 5,
+      "named_outputs": {
+        "prepare": "bit[3]",
+        "state": "bit[2]"
+      },
+      "peak_qubit_budget": 7,
+      "sha256": "1fa11042fc7b3515b6daccfc6be83a034e1c75ee0b3dda438cb4ca013667382a"
+    },
+    {
+      "bytes": 294966,
+      "description": "Eight-term, two-qubit LCU using four-bit alias-sampling PREPARE, default library QROM, comparison, and unary SELECT.",
+      "entrypoint_inputs": {},
+      "family": "lcu",
+      "file": "artifacts/lcu_alias_8term_state2_precision4.hugr",
+      "fixed_inputs": {
+        "state": 1
+      },
+      "logical_qubits": 17,
+      "named_outputs": {
+        "alternative": "bit[3]",
+        "comparison": "bit[4]",
+        "comparison_result": "bit",
+        "index": "bit[3]",
+        "keep": "bit[4]",
+        "state": "bit[2]"
+      },
+      "peak_qubit_budget": 20,
+      "sha256": "56442fd20a315364860aa6eb42cff506539a02397b33ec43673f603702251aa1"
+    },
+    {
+      "bytes": 138360,
+      "description": "Unary-iteration lookup with 8 fixed 3-bit words and ordinary Toffoli compute/uncompute.",
+      "entrypoint_inputs": {},
+      "family": "qrom",
+      "file": "artifacts/qrom_unary_addr3_data3_toffoli.hugr",
+      "fixed_inputs": {
+        "address": 5
+      },
+      "logical_qubits": 6,
+      "named_outputs": {
+        "address": "bit[3]",
+        "data": "bit[3]"
+      },
+      "peak_qubit_budget": 8,
+      "sha256": "36ce59ccbb2dfdae36791366b7a9eb4def0c0b6d065f548dc420d2707b299c82"
+    },
+    {
+      "bytes": 150117,
+      "description": "Unary-iteration lookup with 16 fixed 4-bit words and ordinary Toffoli compute/uncompute.",
+      "entrypoint_inputs": {},
+      "family": "qrom",
+      "file": "artifacts/qrom_unary_addr4_data4_toffoli.hugr",
+      "fixed_inputs": {
+        "address": 9
+      },
+      "logical_qubits": 8,
+      "named_outputs": {
+        "address": "bit[4]",
+        "data": "bit[4]"
+      },
+      "peak_qubit_budget": 11,
+      "sha256": "99b013c87bb16bf3526e70f0be1b792c209e0ada2cbf4c9a8230e15dd3535e1b"
+    },
+    {
+      "bytes": 133020,
+      "description": "Runtime library Pauli SELECT with ordinary Toffolis.",
+      "entrypoint_inputs": {},
+      "family": "select",
+      "file": "artifacts/select_pauli_4term_state2_toffoli.hugr",
+      "fixed_inputs": {
+        "index": 1,
+        "state": 0,
+        "terms": [
+          "(1, Z0)",
+          "(-1, X1)",
+          "(1, Y0 Y1)",
+          "(1, Z0 X1)"
+        ]
+      },
+      "logical_qubits": 4,
+      "named_outputs": {
+        "index": "bit[2]",
+        "state": "bit[2]"
+      },
+      "peak_qubit_budget": 5,
+      "sha256": "71f76afab5f2a3c02833d728f5734e2a82a50a632bc677d9d90074ea638ae0e2"
+    },
+    {
+      "bytes": 138734,
+      "description": "Runtime library Pauli SELECT with ordinary Toffolis.",
+      "entrypoint_inputs": {},
+      "family": "select",
+      "file": "artifacts/select_pauli_8term_state2_toffoli.hugr",
+      "fixed_inputs": {
+        "index": 1,
+        "state": 0,
+        "terms": [
+          "(1, Z0)",
+          "(-1, X1)",
+          "(1, Y0 Y1)",
+          "(1, Z0 X1)",
+          "(1, X0)",
+          "(1, Z1)",
+          "(1, X0 Z1)",
+          "(-1, Z0 Z1)"
+        ]
+      },
+      "logical_qubits": 5,
+      "named_outputs": {
+        "index": "bit[3]",
+        "state": "bit[2]"
+      },
+      "peak_qubit_budget": 7,
+      "sha256": "e6a99bd33f4790ae54e20b7ed0d55fde6887755e8e321618afeb87195a5d1128"
+    },
+    {
+      "bytes": 39213,
+      "description": "Default library Cuccaro carry-out adder.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_cuccaro_adder_n4.hugr",
+      "fixed_inputs": {
+        "a": 15,
+        "b": 1
+      },
+      "logical_qubits": 9,
+      "named_outputs": {
+        "a": "bit[4]",
+        "carry": "bit",
+        "sum": "bit[4]"
+      },
+      "peak_qubit_budget": 10,
+      "sha256": "808aef0dffc9fcdab5d4dce0d11125136cb63b442913feb0e03268ff42428780"
+    },
+    {
+      "bytes": 50053,
+      "description": "Default library Cuccaro carry-out adder.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_cuccaro_adder_n8.hugr",
+      "fixed_inputs": {
+        "a": 255,
+        "b": 1
+      },
+      "logical_qubits": 17,
+      "named_outputs": {
+        "a": "bit[8]",
+        "carry": "bit",
+        "sum": "bit[8]"
+      },
+      "peak_qubit_budget": 18,
+      "sha256": "2f1f9387637173fc2d30458ca6169f662d3cf7bb169ec3e4f6561e93fcf2bf27"
+    },
+    {
+      "bytes": 72163,
+      "description": "Default library Cuccaro carry-out adder.",
+      "entrypoint_inputs": {},
+      "family": "arithmetic",
+      "file": "artifacts/arithmetic_cuccaro_adder_n16.hugr",
+      "fixed_inputs": {
+        "a": 65535,
+        "b": 1
+      },
+      "logical_qubits": 33,
+      "named_outputs": {
+        "a": "bit[16]",
+        "carry": "bit",
+        "sum": "bit[16]"
+      },
+      "peak_qubit_budget": 34,
+      "sha256": "f81098deaeb967c7087e235afea692713b411645e0a1081af535eff6bc57ec82"
+    },
+    {
+      "bytes": 25929,
+      "description": "Ordinary-Toffoli runtime V-chain.",
+      "entrypoint_inputs": {},
+      "family": "toffoli_chain",
+      "file": "artifacts/toffoli_v_chain_n4.hugr",
+      "fixed_inputs": {
+        "a": 1,
+        "b": 15
+      },
+      "logical_qubits": 9,
+      "named_outputs": {
+        "a": "bit[4]",
+        "b": "bit[4]",
+        "target": "bit"
+      },
+      "peak_qubit_budget": 9,
+      "sha256": "26339e27dfd37795f7ecb968daf49026574d10219f2ecba23d7005432a1bf074"
+    },
+    {
+      "bytes": 32807,
+      "description": "Ordinary-Toffoli runtime V-chain.",
+      "entrypoint_inputs": {},
+      "family": "toffoli_chain",
+      "file": "artifacts/toffoli_v_chain_n8.hugr",
+      "fixed_inputs": {
+        "a": 1,
+        "b": 255
+      },
+      "logical_qubits": 17,
+      "named_outputs": {
+        "a": "bit[8]",
+        "b": "bit[8]",
+        "target": "bit"
+      },
+      "peak_qubit_budget": 17,
+      "sha256": "c24933668bd3d295b6690ab39ba1253c2e293e2db5170a1c00efdd5f675674f3"
+    },
+    {
+      "bytes": 47202,
+      "description": "Ordinary-Toffoli runtime V-chain.",
+      "entrypoint_inputs": {},
+      "family": "toffoli_chain",
+      "file": "artifacts/toffoli_v_chain_n16.hugr",
+      "fixed_inputs": {
+        "a": 1,
+        "b": 65535
+      },
+      "logical_qubits": 33,
+      "named_outputs": {
+        "a": "bit[16]",
+        "b": "bit[16]",
+        "target": "bit"
+      },
+      "peak_qubit_budget": 33,
+      "sha256": "92a1562f23fe5734d51c4c2536b5c835b2e7fd5f258d50cab0d18780ca725fa1"
+    }
+  ],
+  "comptime_expansion_added": true,
+  "format": "HUGR envelope (text)",
+  "generation": "same library bodies executed during @guppy.comptime tracing",
+  "runtime_source_sha256": "e6b22d4fbd2b3f5f3d7491e6a3f0c417c7488518a7bb509aeeff1199d246c634",
+  "schema_version": 1,
+  "versions": {
+    "guppyalgos": "0.1.0",
+    "guppylang": "1.1.1",
+    "hugr": "0.18.6",
+    "zixy": "0.4.0rc1"
+  }
+}

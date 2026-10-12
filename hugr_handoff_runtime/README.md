@@ -4,37 +4,37 @@
 
 Both variants run `PauliGraphResynthesis::default()` on independent copies of each same generated HUGR. The enabled variant sets only `with_t_optimization(true)`. Ancilla budget is unset (`None`, automatic); seed and scope retain their defaults.
 
-| Run | Completed | Failed | Failure |
-|---|---:|---:|---|
-| Resynthesis only | 0 | 19 | Unsupported `SetBits` |
-| Resynthesis + T optimisation | 0 | 6 | Unsupported `SetBits` |
-| Resynthesis + T optimisation | 0 | 13 | Unsupported black boxes |
+| Run | Completed | Failed |
+|---|---:|---:|
+| Resynthesis only | 19 | 0 |
+| Resynthesis + T optimisation | 19 | 0 |
 
-**No before/after optimisation comparison is available: failed transformations have no accepted output and are not counted as unchanged circuits.** Diagnostic counts in results.json are static gate nodes, not execution-weighted costs; loops, calls and control flow remain. Seven T gates per Toffoli is only an explicitly labelled diagnostic lowering estimate and excludes synthesis of arbitrary rotations.
+All 38 outputs validated. All 19 input hashes still match the original manifest. No guppyalgos package files were edited.
 
-All 19 generated envelopes loaded and validated in the Rust loader; Python envelope/checksum verification passed. No guppyalgos package files were edited.
+Counts are static gate nodes, not execution-weighted costs; loops, calls and control flow remain. The prepared column estimates seven T gates per remaining Toffoli and excludes synthesis of arbitrary rotations. The other columns count actual T/Tdg nodes after the same resynthesis pipeline, with only the extra T optimisation switched on or off.
 
-| Circuit | Resynthesis only | With T optimisation |
-|---|---|---|
-| qrom_unary_addr3_data3_temp_and | SetBits | SetBits |
-| qrom_unary_addr4_data4_temp_and | SetBits | SetBits |
-| arithmetic_gidney_adder_n4 | SetBits | Black boxes |
-| arithmetic_gidney_adder_n8 | SetBits | Black boxes |
-| arithmetic_gidney_multiplier_n3 | SetBits | Black boxes |
-| arithmetic_gidney_multiplier_n4 | SetBits | Black boxes |
-| lcu_rotation_4term_state2 | SetBits | Black boxes |
-| lcu_rotation_8term_state2 | SetBits | Black boxes |
-| lcu_alias_8term_state2_precision4 | SetBits | Black boxes |
-| qrom_unary_addr3_data3_toffoli | SetBits | SetBits |
-| qrom_unary_addr4_data4_toffoli | SetBits | SetBits |
-| select_pauli_4term_state2_toffoli | SetBits | SetBits |
-| select_pauli_8term_state2_toffoli | SetBits | SetBits |
-| arithmetic_cuccaro_adder_n4 | SetBits | Black boxes |
-| arithmetic_cuccaro_adder_n8 | SetBits | Black boxes |
-| arithmetic_cuccaro_adder_n16 | SetBits | Black boxes |
-| toffoli_v_chain_n4 | SetBits | Black boxes |
-| toffoli_v_chain_n8 | SetBits | Black boxes |
-| toffoli_v_chain_n16 | SetBits | Black boxes |
+| Circuit | Prepared 7T estimate | Resynthesis T/Tdg | With T optimisation | Extra T reduction |
+|---|---:|---:|---:|---:|
+| qrom_unary_addr3_data3_temp_and | 8 | 8 | 8 | 0 |
+| qrom_unary_addr4_data4_temp_and | 8 | 8 | 8 | 0 |
+| arithmetic_gidney_adder_n4 | 12 | 12 | 12 | 0 |
+| arithmetic_gidney_adder_n8 | 12 | 12 | 12 | 0 |
+| arithmetic_gidney_multiplier_n3 | 12 | 12 | 12 | 0 |
+| arithmetic_gidney_multiplier_n4 | 12 | 12 | 12 | 0 |
+| lcu_rotation_4term_state2 | 28 | 28 | 28 | 0 |
+| lcu_rotation_8term_state2 | 28 | 28 | 28 | 0 |
+| lcu_alias_8term_state2_precision4 | 170 | 166 | 160 | 6 |
+| qrom_unary_addr3_data3_toffoli | 28 | 28 | 28 | 0 |
+| qrom_unary_addr4_data4_toffoli | 28 | 28 | 28 | 0 |
+| select_pauli_4term_state2_toffoli | 28 | 28 | 28 | 0 |
+| select_pauli_8term_state2_toffoli | 28 | 28 | 28 | 0 |
+| arithmetic_cuccaro_adder_n4 | 48 | 48 | 48 | 0 |
+| arithmetic_cuccaro_adder_n8 | 48 | 48 | 48 | 0 |
+| arithmetic_cuccaro_adder_n16 | 48 | 48 | 48 | 0 |
+| toffoli_v_chain_n4 | 21 | 21 | 21 | 0 |
+| toffoli_v_chain_n8 | 21 | 21 | 21 | 0 |
+| toffoli_v_chain_n16 | 21 | 21 | 21 | 0 |
+| **Total** | **609** | **605** | **599** | **6** |
 
 Reproduce from the tket2 root:
 

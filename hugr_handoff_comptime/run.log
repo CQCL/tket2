@@ -1,0 +1,38 @@
+Processing qrom_unary_addr3_data3_temp_and
+qrom_unary_addr3_data3_temp_and: resynthesis="ok" T optimisation="ok"
+Processing qrom_unary_addr4_data4_temp_and
+qrom_unary_addr4_data4_temp_and: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_gidney_adder_n4
+arithmetic_gidney_adder_n4: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_gidney_adder_n8
+arithmetic_gidney_adder_n8: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_gidney_multiplier_n3
+arithmetic_gidney_multiplier_n3: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_gidney_multiplier_n4
+arithmetic_gidney_multiplier_n4: resynthesis="ok" T optimisation="ok"
+Processing lcu_rotation_4term_state2
+lcu_rotation_4term_state2: resynthesis="ok" T optimisation="ok"
+Processing lcu_rotation_8term_state2
+lcu_rotation_8term_state2: resynthesis="ok" T optimisation="ok"
+Processing lcu_alias_8term_state2_precision4
+lcu_alias_8term_state2_precision4: resynthesis="ok" T optimisation="ok"
+Processing qrom_unary_addr3_data3_toffoli
+qrom_unary_addr3_data3_toffoli: resynthesis="ok" T optimisation="ok"
+Processing qrom_unary_addr4_data4_toffoli
+qrom_unary_addr4_data4_toffoli: resynthesis="ok" T optimisation="ok"
+Processing select_pauli_4term_state2_toffoli
+select_pauli_4term_state2_toffoli: resynthesis="ok" T optimisation="ok"
+Processing select_pauli_8term_state2_toffoli
+select_pauli_8term_state2_toffoli: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_cuccaro_adder_n4
+arithmetic_cuccaro_adder_n4: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_cuccaro_adder_n8
+arithmetic_cuccaro_adder_n8: resynthesis="ok" T optimisation="ok"
+Processing arithmetic_cuccaro_adder_n16
+arithmetic_cuccaro_adder_n16: resynthesis="ok" T optimisation="ok"
+Processing toffoli_v_chain_n4
+toffoli_v_chain_n4: resynthesis="ok" T optimisation="ok"
+Processing toffoli_v_chain_n8
+toffoli_v_chain_n8: resynthesis="ok" T optimisation="ok"
+Processing toffoli_v_chain_n16
+toffoli_v_chain_n16: resynthesis="ok" T optimisation="ok"

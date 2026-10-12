@@ -442,11 +442,14 @@ fn test_nonlocal_reset() {
 }
 
 #[rstest]
-fn test_classical_only_graph(#[values(false, true)] with_barrier: bool) {
+fn test_classical_only_graph(
+    #[values(false, true)] with_barrier: bool,
+    #[values(0, 1)] n_qubits: usize,
+) {
     let classical = Op::Classical {
         data: ClassicalData::new(vec![1, 0], "classical".into()),
     };
-    let mut input = graph(0, vec![classical.clone()]);
+    let mut input = graph(n_qubits, vec![classical.clone()]);
     if with_barrier {
         input.add_op(Op::BlackBox {
             data: BlackBoxData::new(vec![], "barrier".into()),

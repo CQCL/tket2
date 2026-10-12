@@ -1,0 +1,2100 @@
+{
+  "artifacts": [
+    {
+      "circuit": "qrom_unary_addr3_data3_temp_and",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 24,
+        "nodes": 622,
+        "quantum_ops": {
+          "CX": 36,
+          "CZ": 6,
+          "H": 18,
+          "MeasureFree": 8,
+          "QAlloc": 9,
+          "Reset": 6,
+          "Sdg": 6,
+          "T": 12,
+          "Tdg": 12,
+          "X": 18
+        },
+        "structure": {
+          "CFG": 16,
+          "Call": 1,
+          "CallIndirect": 6,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 24,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 24,
+        "nodes": 622,
+        "quantum_ops": {
+          "CX": 36,
+          "CZ": 6,
+          "H": 18,
+          "MeasureFree": 8,
+          "QAlloc": 9,
+          "Reset": 6,
+          "Sdg": 6,
+          "T": 12,
+          "Tdg": 12,
+          "X": 18
+        },
+        "structure": {
+          "CFG": 16,
+          "Call": 1,
+          "CallIndirect": 6,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 24,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 24,
+          "nodes": 722,
+          "quantum_ops": {
+            "CX": 48,
+            "H": 106,
+            "MeasureFree": 8,
+            "QAlloc": 9,
+            "Reset": 6,
+            "S": 4,
+            "Sdg": 10,
+            "T": 15,
+            "Tdg": 9,
+            "X": 15,
+            "Z": 1
+          },
+          "structure": {
+            "CFG": 16,
+            "Call": 1,
+            "CallIndirect": 6,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 24,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr3_data3_temp_and_resynthesis.hugr",
+        "seconds": 0.009983666,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 24,
+          "nodes": 1061,
+          "quantum_ops": {
+            "CX": 55,
+            "H": 90,
+            "Measure": 2,
+            "MeasureFree": 8,
+            "QAlloc": 33,
+            "QFree": 24,
+            "Reset": 140,
+            "S": 7,
+            "Sdg": 15,
+            "T": 24,
+            "V": 10,
+            "Vdg": 14,
+            "X": 30,
+            "Y": 4,
+            "Z": 10
+          },
+          "structure": {
+            "CFG": 16,
+            "Call": 1,
+            "CallIndirect": 6,
+            "Conditional": 24,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 24,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr3_data3_temp_and_t_optimization.hugr",
+        "seconds": 0.018397125,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "qrom_unary_addr4_data4_temp_and",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 56,
+        "nodes": 1057,
+        "quantum_ops": {
+          "CX": 88,
+          "CZ": 14,
+          "H": 42,
+          "MeasureFree": 10,
+          "QAlloc": 12,
+          "Reset": 14,
+          "Sdg": 14,
+          "T": 28,
+          "Tdg": 28,
+          "X": 42
+        },
+        "structure": {
+          "CFG": 32,
+          "Call": 1,
+          "CallIndirect": 14,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 56,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 56,
+        "nodes": 1057,
+        "quantum_ops": {
+          "CX": 88,
+          "CZ": 14,
+          "H": 42,
+          "MeasureFree": 10,
+          "QAlloc": 12,
+          "Reset": 14,
+          "Sdg": 14,
+          "T": 28,
+          "Tdg": 28,
+          "X": 42
+        },
+        "structure": {
+          "CFG": 32,
+          "Call": 1,
+          "CallIndirect": 14,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 56,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 56,
+          "nodes": 1289,
+          "quantum_ops": {
+            "CX": 109,
+            "H": 254,
+            "MeasureFree": 10,
+            "QAlloc": 12,
+            "Reset": 14,
+            "S": 8,
+            "Sdg": 22,
+            "T": 33,
+            "Tdg": 23,
+            "X": 33,
+            "Z": 6
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 1,
+            "CallIndirect": 14,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 56,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr4_data4_temp_and_resynthesis.hugr",
+        "seconds": 0.016448792,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 56,
+          "nodes": 2330,
+          "quantum_ops": {
+            "CX": 130,
+            "H": 213,
+            "Measure": 5,
+            "MeasureFree": 10,
+            "QAlloc": 68,
+            "QFree": 56,
+            "Reset": 523,
+            "S": 21,
+            "Sdg": 41,
+            "T": 56,
+            "V": 37,
+            "Vdg": 48,
+            "X": 76,
+            "Y": 10,
+            "Z": 25
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 1,
+            "CallIndirect": 14,
+            "Conditional": 43,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 56,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr4_data4_temp_and_t_optimization.hugr",
+        "seconds": 0.050205709,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_gidney_adder_n4",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 16,
+        "nodes": 227,
+        "quantum_ops": {
+          "CX": 30,
+          "CZ": 3,
+          "H": 11,
+          "MeasureFree": 10,
+          "QAlloc": 13,
+          "QFree": 3,
+          "Sdg": 4,
+          "T": 8,
+          "Tdg": 8,
+          "X": 8
+        },
+        "structure": {
+          "CFG": 6,
+          "CallIndirect": 3
+        },
+        "t_with_7t_toffoli_lowering": 16,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 16,
+        "nodes": 227,
+        "quantum_ops": {
+          "CX": 30,
+          "CZ": 3,
+          "H": 11,
+          "MeasureFree": 10,
+          "QAlloc": 13,
+          "QFree": 3,
+          "Sdg": 4,
+          "T": 8,
+          "Tdg": 8,
+          "X": 8
+        },
+        "structure": {
+          "CFG": 6,
+          "CallIndirect": 3
+        },
+        "t_with_7t_toffoli_lowering": 16,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 314,
+          "quantum_ops": {
+            "CX": 41,
+            "H": 73,
+            "MeasureFree": 10,
+            "QAlloc": 13,
+            "QFree": 3,
+            "S": 6,
+            "Sdg": 7,
+            "T": 12,
+            "Tdg": 4,
+            "V": 2,
+            "Vdg": 2,
+            "X": 9,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 6,
+            "CallIndirect": 3
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_adder_n4_resynthesis.hugr",
+        "seconds": 0.00425075,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 744,
+          "quantum_ops": {
+            "CX": 47,
+            "H": 57,
+            "Measure": 3,
+            "MeasureFree": 10,
+            "QAlloc": 29,
+            "QFree": 19,
+            "Reset": 67,
+            "S": 7,
+            "Sdg": 19,
+            "T": 16,
+            "V": 8,
+            "Vdg": 13,
+            "X": 20,
+            "Y": 9,
+            "Z": 13
+          },
+          "structure": {
+            "CFG": 6,
+            "CallIndirect": 3,
+            "Conditional": 38
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_adder_n4_t_optimization.hugr",
+        "seconds": 0.010846375,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_gidney_adder_n8",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 32,
+        "nodes": 475,
+        "quantum_ops": {
+          "CX": 66,
+          "CZ": 7,
+          "H": 23,
+          "MeasureFree": 18,
+          "QAlloc": 25,
+          "QFree": 7,
+          "Sdg": 8,
+          "T": 16,
+          "Tdg": 16,
+          "X": 16
+        },
+        "structure": {
+          "CFG": 14,
+          "CallIndirect": 7
+        },
+        "t_with_7t_toffoli_lowering": 32,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 32,
+        "nodes": 475,
+        "quantum_ops": {
+          "CX": 66,
+          "CZ": 7,
+          "H": 23,
+          "MeasureFree": 18,
+          "QAlloc": 25,
+          "QFree": 7,
+          "Sdg": 8,
+          "T": 16,
+          "Tdg": 16,
+          "X": 16
+        },
+        "structure": {
+          "CFG": 14,
+          "CallIndirect": 7
+        },
+        "t_with_7t_toffoli_lowering": 32,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 32,
+          "nodes": 666,
+          "quantum_ops": {
+            "CX": 93,
+            "H": 165,
+            "MeasureFree": 18,
+            "QAlloc": 25,
+            "QFree": 7,
+            "S": 14,
+            "Sdg": 15,
+            "T": 20,
+            "Tdg": 12,
+            "V": 2,
+            "Vdg": 2,
+            "X": 17,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 14,
+            "CallIndirect": 7
+          },
+          "t_with_7t_toffoli_lowering": 32,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_adder_n8_resynthesis.hugr",
+        "seconds": 0.00958725,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 32,
+          "nodes": 2471,
+          "quantum_ops": {
+            "CX": 104,
+            "H": 105,
+            "Measure": 7,
+            "MeasureFree": 18,
+            "QAlloc": 57,
+            "QFree": 39,
+            "Reset": 199,
+            "S": 23,
+            "Sdg": 70,
+            "T": 32,
+            "V": 27,
+            "Vdg": 54,
+            "X": 72,
+            "Y": 67,
+            "Z": 40
+          },
+          "structure": {
+            "CFG": 14,
+            "CallIndirect": 7,
+            "Conditional": 180
+          },
+          "t_with_7t_toffoli_lowering": 32,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_adder_n8_t_optimization.hugr",
+        "seconds": 0.039239208,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_gidney_multiplier_n3",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 48,
+        "nodes": 676,
+        "quantum_ops": {
+          "CX": 63,
+          "CZ": 12,
+          "H": 36,
+          "MeasureFree": 10,
+          "QAlloc": 25,
+          "QFree": 15,
+          "Sdg": 12,
+          "T": 24,
+          "Tdg": 24,
+          "X": 16
+        },
+        "structure": {
+          "CFG": 24,
+          "CallIndirect": 12
+        },
+        "t_with_7t_toffoli_lowering": 48,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 48,
+        "nodes": 676,
+        "quantum_ops": {
+          "CX": 63,
+          "CZ": 12,
+          "H": 36,
+          "MeasureFree": 10,
+          "QAlloc": 25,
+          "QFree": 15,
+          "Sdg": 12,
+          "T": 24,
+          "Tdg": 24,
+          "X": 16
+        },
+        "structure": {
+          "CFG": 24,
+          "CallIndirect": 12
+        },
+        "t_with_7t_toffoli_lowering": 48,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 906,
+          "quantum_ops": {
+            "CX": 91,
+            "H": 242,
+            "MeasureFree": 10,
+            "QAlloc": 25,
+            "QFree": 15,
+            "S": 2,
+            "Sdg": 14,
+            "T": 28,
+            "Tdg": 20,
+            "X": 16,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 24,
+            "CallIndirect": 12
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_multiplier_n3_resynthesis.hugr",
+        "seconds": 0.011920125,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 1841,
+          "quantum_ops": {
+            "CX": 111,
+            "H": 177,
+            "Measure": 6,
+            "MeasureFree": 10,
+            "QAlloc": 73,
+            "QFree": 63,
+            "Reset": 318,
+            "S": 14,
+            "Sdg": 37,
+            "T": 48,
+            "V": 32,
+            "Vdg": 49,
+            "X": 40,
+            "Y": 5,
+            "Z": 38
+          },
+          "structure": {
+            "CFG": 24,
+            "CallIndirect": 12,
+            "Conditional": 51
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_multiplier_n3_t_optimization.hugr",
+        "seconds": 0.037643083,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_gidney_multiplier_n4",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 88,
+        "nodes": 1215,
+        "quantum_ops": {
+          "CX": 126,
+          "CZ": 22,
+          "H": 66,
+          "MeasureFree": 13,
+          "QAlloc": 41,
+          "QFree": 28,
+          "Sdg": 22,
+          "T": 44,
+          "Tdg": 44,
+          "X": 27
+        },
+        "structure": {
+          "CFG": 44,
+          "CallIndirect": 22
+        },
+        "t_with_7t_toffoli_lowering": 88,
+        "toffoli_nodes": 0
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 88,
+        "nodes": 1215,
+        "quantum_ops": {
+          "CX": 126,
+          "CZ": 22,
+          "H": 66,
+          "MeasureFree": 13,
+          "QAlloc": 41,
+          "QFree": 28,
+          "Sdg": 22,
+          "T": 44,
+          "Tdg": 44,
+          "X": 27
+        },
+        "structure": {
+          "CFG": 44,
+          "CallIndirect": 22
+        },
+        "t_with_7t_toffoli_lowering": 88,
+        "toffoli_nodes": 0
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 88,
+          "nodes": 1656,
+          "quantum_ops": {
+            "CX": 183,
+            "H": 452,
+            "MeasureFree": 13,
+            "QAlloc": 41,
+            "QFree": 28,
+            "S": 9,
+            "Sdg": 27,
+            "T": 50,
+            "Tdg": 38,
+            "X": 27,
+            "Z": 6
+          },
+          "structure": {
+            "CFG": 44,
+            "CallIndirect": 22
+          },
+          "t_with_7t_toffoli_lowering": 88,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_multiplier_n4_resynthesis.hugr",
+        "seconds": 0.023643416,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 88,
+          "nodes": 4053,
+          "quantum_ops": {
+            "CX": 233,
+            "H": 327,
+            "Measure": 14,
+            "MeasureFree": 13,
+            "QAlloc": 129,
+            "QFree": 116,
+            "Reset": 894,
+            "S": 25,
+            "Sdg": 72,
+            "T": 88,
+            "V": 88,
+            "Vdg": 129,
+            "X": 87,
+            "Y": 42,
+            "Z": 56
+          },
+          "structure": {
+            "CFG": 44,
+            "CallIndirect": 22,
+            "Conditional": 130
+          },
+          "t_with_7t_toffoli_lowering": 88,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_gidney_multiplier_n4_t_optimization.hugr",
+        "seconds": 0.109538084,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "lcu_rotation_4term_state2",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 351,
+        "quantum_ops": {
+          "CX": 8,
+          "CY": 2,
+          "CZ": 2,
+          "MeasureFree": 5,
+          "QAlloc": 5,
+          "Reset": 2,
+          "Ry": 6,
+          "Rz": 1,
+          "Toffoli": 4,
+          "X": 7
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "CallIndirect": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 28,
+        "toffoli_nodes": 4
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 351,
+        "quantum_ops": {
+          "CX": 8,
+          "CY": 2,
+          "CZ": 2,
+          "MeasureFree": 5,
+          "QAlloc": 5,
+          "Reset": 2,
+          "Ry": 6,
+          "Rz": 1,
+          "Toffoli": 4,
+          "X": 7
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "CallIndirect": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 28,
+        "toffoli_nodes": 4
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 455,
+          "quantum_ops": {
+            "CX": 25,
+            "H": 38,
+            "MeasureFree": 5,
+            "QAlloc": 5,
+            "Reset": 2,
+            "Rx": 1,
+            "Ry": 3,
+            "Rz": 2,
+            "S": 9,
+            "Sdg": 10,
+            "T": 10,
+            "Tdg": 6,
+            "V": 9,
+            "Vdg": 12,
+            "X": 3,
+            "Z": 5
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "CallIndirect": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_rotation_4term_state2_resynthesis.hugr",
+        "seconds": 0.005892667,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 451,
+          "quantum_ops": {
+            "CX": 26,
+            "H": 45,
+            "MeasureFree": 5,
+            "QAlloc": 5,
+            "Reset": 2,
+            "Rx": 1,
+            "Ry": 3,
+            "Rz": 2,
+            "S": 7,
+            "Sdg": 7,
+            "T": 16,
+            "V": 6,
+            "Vdg": 7,
+            "X": 4,
+            "Z": 5
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "CallIndirect": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_rotation_4term_state2_t_optimization.hugr",
+        "seconds": 0.006378083,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "lcu_rotation_8term_state2",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 420,
+        "quantum_ops": {
+          "CX": 22,
+          "CY": 2,
+          "CZ": 6,
+          "MeasureFree": 6,
+          "QAlloc": 7,
+          "Reset": 6,
+          "Ry": 14,
+          "Rz": 2,
+          "Toffoli": 12,
+          "X": 15
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "CallIndirect": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 420,
+        "quantum_ops": {
+          "CX": 22,
+          "CY": 2,
+          "CZ": 6,
+          "MeasureFree": 6,
+          "QAlloc": 7,
+          "Reset": 6,
+          "Ry": 14,
+          "Rz": 2,
+          "Toffoli": 12,
+          "X": 15
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "CallIndirect": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 806,
+          "quantum_ops": {
+            "CX": 91,
+            "H": 130,
+            "MeasureFree": 6,
+            "QAlloc": 7,
+            "Reset": 6,
+            "Rx": 3,
+            "Ry": 7,
+            "Rz": 4,
+            "S": 46,
+            "Sdg": 50,
+            "T": 20,
+            "Tdg": 28,
+            "V": 24,
+            "Vdg": 27,
+            "X": 5,
+            "Y": 6,
+            "Z": 10
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "CallIndirect": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_rotation_8term_state2_resynthesis.hugr",
+        "seconds": 0.009594791,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 775,
+          "quantum_ops": {
+            "CX": 83,
+            "H": 113,
+            "MeasureFree": 6,
+            "QAlloc": 7,
+            "Reset": 6,
+            "Rx": 3,
+            "Ry": 7,
+            "Rz": 4,
+            "S": 40,
+            "Sdg": 44,
+            "T": 32,
+            "Tdg": 16,
+            "V": 31,
+            "Vdg": 34,
+            "X": 7,
+            "Y": 2,
+            "Z": 10
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "CallIndirect": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_rotation_8term_state2_t_optimization.hugr",
+        "seconds": 0.011581542,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "lcu_alias_8term_state2_precision4",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 56,
+        "nodes": 1222,
+        "quantum_ops": {
+          "CX": 114,
+          "CY": 2,
+          "CZ": 20,
+          "H": 56,
+          "MeasureFree": 19,
+          "QAlloc": 26,
+          "QFree": 2,
+          "Reset": 18,
+          "Rz": 2,
+          "Sdg": 14,
+          "T": 28,
+          "Tdg": 28,
+          "Toffoli": 28,
+          "X": 67
+        },
+        "structure": {
+          "CFG": 32,
+          "Call": 3,
+          "CallIndirect": 14,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 252,
+        "toffoli_nodes": 28
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 56,
+        "nodes": 1222,
+        "quantum_ops": {
+          "CX": 114,
+          "CY": 2,
+          "CZ": 20,
+          "H": 56,
+          "MeasureFree": 19,
+          "QAlloc": 26,
+          "QFree": 2,
+          "Reset": 18,
+          "Rz": 2,
+          "Sdg": 14,
+          "T": 28,
+          "Tdg": 28,
+          "Toffoli": 28,
+          "X": 67
+        },
+        "structure": {
+          "CFG": 32,
+          "Call": 3,
+          "CallIndirect": 14,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 252,
+        "toffoli_nodes": 28
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 188,
+          "nodes": 2258,
+          "quantum_ops": {
+            "CX": 285,
+            "H": 532,
+            "MeasureFree": 19,
+            "QAlloc": 26,
+            "QFree": 2,
+            "Reset": 18,
+            "S": 92,
+            "Sdg": 111,
+            "T": 106,
+            "Tdg": 82,
+            "V": 54,
+            "Vdg": 61,
+            "X": 41,
+            "Y": 6,
+            "Z": 17
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 3,
+            "CallIndirect": 14,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 188,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_alias_8term_state2_precision4_resynthesis.hugr",
+        "seconds": 0.029633459,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 166,
+          "nodes": 5995,
+          "quantum_ops": {
+            "CX": 458,
+            "H": 620,
+            "Measure": 17,
+            "MeasureFree": 19,
+            "QAlloc": 110,
+            "QFree": 86,
+            "Reset": 1085,
+            "S": 122,
+            "Sdg": 160,
+            "T": 122,
+            "Tdg": 44,
+            "V": 142,
+            "Vdg": 167,
+            "X": 89,
+            "Y": 42,
+            "Z": 73
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 3,
+            "CallIndirect": 14,
+            "Conditional": 259,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 166,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/lcu_alias_8term_state2_precision4_t_optimization.hugr",
+        "seconds": 0.145320166,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "qrom_unary_addr3_data3_toffoli",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 347,
+        "quantum_ops": {
+          "CX": 18,
+          "MeasureFree": 7,
+          "QAlloc": 8,
+          "Reset": 6,
+          "Toffoli": 12,
+          "X": 12
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 347,
+        "quantum_ops": {
+          "CX": 18,
+          "MeasureFree": 7,
+          "QAlloc": 8,
+          "Reset": 6,
+          "Toffoli": 12,
+          "X": 12
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 677,
+          "quantum_ops": {
+            "CX": 84,
+            "H": 117,
+            "MeasureFree": 7,
+            "QAlloc": 8,
+            "Reset": 6,
+            "S": 13,
+            "Sdg": 14,
+            "T": 24,
+            "Tdg": 24,
+            "V": 33,
+            "Vdg": 37,
+            "X": 8,
+            "Y": 1,
+            "Z": 5
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr3_data3_toffoli_resynthesis.hugr",
+        "seconds": 0.007893542,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 640,
+          "quantum_ops": {
+            "CX": 73,
+            "H": 134,
+            "MeasureFree": 7,
+            "QAlloc": 8,
+            "Reset": 6,
+            "S": 15,
+            "Sdg": 16,
+            "T": 28,
+            "Tdg": 20,
+            "V": 16,
+            "Vdg": 18,
+            "X": 3,
+            "Y": 1,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr3_data3_toffoli_t_optimization.hugr",
+        "seconds": 0.00923775,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "qrom_unary_addr4_data4_toffoli",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 422,
+        "quantum_ops": {
+          "CX": 46,
+          "MeasureFree": 9,
+          "QAlloc": 11,
+          "Reset": 14,
+          "Toffoli": 28,
+          "X": 28
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 196,
+        "toffoli_nodes": 28
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 422,
+        "quantum_ops": {
+          "CX": 46,
+          "MeasureFree": 9,
+          "QAlloc": 11,
+          "Reset": 14,
+          "Toffoli": 28,
+          "X": 28
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 196,
+        "toffoli_nodes": 28
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 112,
+          "nodes": 1175,
+          "quantum_ops": {
+            "CX": 182,
+            "H": 285,
+            "MeasureFree": 9,
+            "QAlloc": 11,
+            "Reset": 14,
+            "S": 66,
+            "Sdg": 71,
+            "T": 54,
+            "Tdg": 58,
+            "V": 52,
+            "Vdg": 53,
+            "X": 9,
+            "Y": 10,
+            "Z": 6
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 112,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr4_data4_toffoli_resynthesis.hugr",
+        "seconds": 0.01430425,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 112,
+          "nodes": 1084,
+          "quantum_ops": {
+            "CX": 178,
+            "H": 257,
+            "MeasureFree": 9,
+            "QAlloc": 11,
+            "Reset": 14,
+            "S": 48,
+            "Sdg": 49,
+            "T": 90,
+            "Tdg": 22,
+            "V": 41,
+            "Vdg": 45,
+            "X": 8,
+            "Y": 4,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 112,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/qrom_unary_addr4_data4_toffoli_t_optimization.hugr",
+        "seconds": 0.018737875,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "select_pauli_4term_state2_toffoli",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 314,
+        "quantum_ops": {
+          "CX": 4,
+          "CY": 2,
+          "CZ": 2,
+          "MeasureFree": 5,
+          "QAlloc": 5,
+          "Reset": 2,
+          "Rz": 1,
+          "Toffoli": 4,
+          "X": 5
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 28,
+        "toffoli_nodes": 4
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 314,
+        "quantum_ops": {
+          "CX": 4,
+          "CY": 2,
+          "CZ": 2,
+          "MeasureFree": 5,
+          "QAlloc": 5,
+          "Reset": 2,
+          "Rz": 1,
+          "Toffoli": 4,
+          "X": 5
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 28,
+        "toffoli_nodes": 4
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 405,
+          "quantum_ops": {
+            "CX": 21,
+            "H": 36,
+            "MeasureFree": 5,
+            "QAlloc": 5,
+            "Reset": 2,
+            "S": 8,
+            "Sdg": 9,
+            "T": 6,
+            "Tdg": 10,
+            "V": 5,
+            "Vdg": 7,
+            "X": 2,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/select_pauli_4term_state2_toffoli_resynthesis.hugr",
+        "seconds": 0.004391917,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 16,
+          "nodes": 403,
+          "quantum_ops": {
+            "CX": 21,
+            "H": 42,
+            "MeasureFree": 5,
+            "QAlloc": 5,
+            "Reset": 2,
+            "S": 7,
+            "Sdg": 9,
+            "T": 16,
+            "V": 1,
+            "Vdg": 2,
+            "X": 2,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 16,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/select_pauli_4term_state2_toffoli_t_optimization.hugr",
+        "seconds": 0.005064125,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "select_pauli_8term_state2_toffoli",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 351,
+        "quantum_ops": {
+          "CX": 10,
+          "CY": 2,
+          "CZ": 6,
+          "MeasureFree": 6,
+          "QAlloc": 7,
+          "Reset": 6,
+          "Rz": 2,
+          "Toffoli": 12,
+          "X": 13
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 351,
+        "quantum_ops": {
+          "CX": 10,
+          "CY": 2,
+          "CZ": 6,
+          "MeasureFree": 6,
+          "QAlloc": 7,
+          "Reset": 6,
+          "Rz": 2,
+          "Toffoli": 12,
+          "X": 13
+        },
+        "structure": {
+          "CFG": 4,
+          "Call": 1,
+          "Conditional": 10,
+          "TailLoop": 2
+        },
+        "t_with_7t_toffoli_lowering": 84,
+        "toffoli_nodes": 12
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 682,
+          "quantum_ops": {
+            "CX": 76,
+            "H": 109,
+            "MeasureFree": 6,
+            "QAlloc": 7,
+            "Reset": 6,
+            "S": 37,
+            "Sdg": 40,
+            "T": 24,
+            "Tdg": 24,
+            "V": 22,
+            "Vdg": 23,
+            "X": 3,
+            "Y": 6,
+            "Z": 7
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/select_pauli_8term_state2_toffoli_resynthesis.hugr",
+        "seconds": 0.007830583,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 651,
+          "quantum_ops": {
+            "CX": 69,
+            "H": 108,
+            "MeasureFree": 6,
+            "QAlloc": 7,
+            "Reset": 6,
+            "S": 28,
+            "Sdg": 32,
+            "T": 40,
+            "Tdg": 8,
+            "V": 18,
+            "Vdg": 20,
+            "X": 9,
+            "Y": 1,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 4,
+            "Call": 1,
+            "Conditional": 10,
+            "TailLoop": 2
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/select_pauli_8term_state2_toffoli_t_optimization.hugr",
+        "seconds": 0.009555625,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_cuccaro_adder_n4",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 136,
+        "quantum_ops": {
+          "CX": 23,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 10,
+          "QAlloc": 11,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 4,
+          "X": 10
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 36,
+        "toffoli_nodes": 4
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 136,
+        "quantum_ops": {
+          "CX": 23,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 10,
+          "QAlloc": 11,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 4,
+          "X": 10
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 36,
+        "toffoli_nodes": 4
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 24,
+          "nodes": 289,
+          "quantum_ops": {
+            "CX": 41,
+            "H": 59,
+            "MeasureFree": 10,
+            "QAlloc": 11,
+            "QFree": 1,
+            "S": 25,
+            "Sdg": 29,
+            "T": 18,
+            "Tdg": 6,
+            "V": 6,
+            "Vdg": 6,
+            "X": 6,
+            "Y": 2,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1
+          },
+          "t_with_7t_toffoli_lowering": 24,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n4_resynthesis.hugr",
+        "seconds": 0.00374575,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 22,
+          "nodes": 665,
+          "quantum_ops": {
+            "CX": 68,
+            "H": 70,
+            "Measure": 4,
+            "MeasureFree": 10,
+            "QAlloc": 19,
+            "QFree": 9,
+            "Reset": 28,
+            "S": 22,
+            "Sdg": 28,
+            "T": 14,
+            "Tdg": 8,
+            "V": 22,
+            "Vdg": 32,
+            "X": 11,
+            "Y": 11,
+            "Z": 20
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1,
+            "Conditional": 30
+          },
+          "t_with_7t_toffoli_lowering": 22,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n4_t_optimization.hugr",
+        "seconds": 0.009741292,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_cuccaro_adder_n8",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 200,
+        "quantum_ops": {
+          "CX": 43,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 18,
+          "QAlloc": 19,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 12,
+          "X": 22
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 92,
+        "toffoli_nodes": 12
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 200,
+        "quantum_ops": {
+          "CX": 43,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 18,
+          "QAlloc": 19,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 12,
+          "X": 22
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 92,
+        "toffoli_nodes": 12
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 56,
+          "nodes": 576,
+          "quantum_ops": {
+            "CX": 100,
+            "H": 164,
+            "MeasureFree": 18,
+            "QAlloc": 19,
+            "QFree": 1,
+            "S": 33,
+            "Sdg": 37,
+            "T": 28,
+            "Tdg": 28,
+            "V": 24,
+            "Vdg": 29,
+            "X": 8,
+            "Y": 5,
+            "Z": 1
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1
+          },
+          "t_with_7t_toffoli_lowering": 56,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n8_resynthesis.hugr",
+        "seconds": 0.007526041,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 56,
+          "nodes": 2420,
+          "quantum_ops": {
+            "CX": 202,
+            "H": 263,
+            "Measure": 11,
+            "MeasureFree": 18,
+            "QAlloc": 27,
+            "QFree": 9,
+            "Reset": 35,
+            "S": 56,
+            "Sdg": 67,
+            "T": 28,
+            "Tdg": 28,
+            "V": 63,
+            "Vdg": 80,
+            "X": 42,
+            "Y": 35,
+            "Z": 37
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1,
+            "Conditional": 186
+          },
+          "t_with_7t_toffoli_lowering": 56,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n8_t_optimization.hugr",
+        "seconds": 0.0275555,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "arithmetic_cuccaro_adder_n16",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 328,
+        "quantum_ops": {
+          "CX": 83,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 34,
+          "QAlloc": 35,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 28,
+          "X": 46
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 204,
+        "toffoli_nodes": 28
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 8,
+        "nodes": 328,
+        "quantum_ops": {
+          "CX": 83,
+          "CZ": 1,
+          "H": 5,
+          "MeasureFree": 34,
+          "QAlloc": 35,
+          "QFree": 1,
+          "Sdg": 2,
+          "T": 4,
+          "Tdg": 4,
+          "Toffoli": 28,
+          "X": 46
+        },
+        "structure": {
+          "CFG": 2,
+          "CallIndirect": 1
+        },
+        "t_with_7t_toffoli_lowering": 204,
+        "toffoli_nodes": 28
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 120,
+          "nodes": 1212,
+          "quantum_ops": {
+            "CX": 228,
+            "H": 351,
+            "MeasureFree": 34,
+            "QAlloc": 35,
+            "QFree": 1,
+            "S": 72,
+            "Sdg": 80,
+            "T": 60,
+            "Tdg": 60,
+            "V": 66,
+            "Vdg": 73,
+            "X": 12,
+            "Y": 8,
+            "Z": 8
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1
+          },
+          "t_with_7t_toffoli_lowering": 120,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n16_resynthesis.hugr",
+        "seconds": 0.015901167,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 120,
+          "nodes": 7644,
+          "quantum_ops": {
+            "CX": 481,
+            "H": 485,
+            "Measure": 24,
+            "MeasureFree": 34,
+            "QAlloc": 43,
+            "QFree": 9,
+            "Reset": 48,
+            "S": 174,
+            "Sdg": 182,
+            "T": 58,
+            "Tdg": 62,
+            "V": 255,
+            "Vdg": 301,
+            "X": 93,
+            "Y": 93,
+            "Z": 95
+          },
+          "structure": {
+            "CFG": 2,
+            "CallIndirect": 1,
+            "Conditional": 721
+          },
+          "t_with_7t_toffoli_lowering": 120,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/arithmetic_cuccaro_adder_n16_t_optimization.hugr",
+        "seconds": 0.096312375,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "toffoli_v_chain_n4",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 54,
+        "quantum_ops": {
+          "MeasureFree": 9,
+          "QAlloc": 9,
+          "Toffoli": 7,
+          "X": 5
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 49,
+        "toffoli_nodes": 7
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 54,
+        "quantum_ops": {
+          "MeasureFree": 9,
+          "QAlloc": 9,
+          "Toffoli": 7,
+          "X": 5
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 49,
+        "toffoli_nodes": 7
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 31,
+          "nodes": 225,
+          "quantum_ops": {
+            "CX": 37,
+            "H": 82,
+            "MeasureFree": 9,
+            "QAlloc": 9,
+            "S": 5,
+            "Sdg": 8,
+            "T": 16,
+            "Tdg": 15,
+            "V": 3,
+            "Vdg": 4,
+            "X": 3,
+            "Y": 4
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 31,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n4_resynthesis.hugr",
+        "seconds": 0.003024375,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 31,
+          "nodes": 216,
+          "quantum_ops": {
+            "CX": 35,
+            "H": 66,
+            "MeasureFree": 9,
+            "QAlloc": 9,
+            "S": 9,
+            "Sdg": 12,
+            "T": 19,
+            "Tdg": 12,
+            "V": 4,
+            "Vdg": 4,
+            "X": 5,
+            "Y": 1,
+            "Z": 1
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 31,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n4_t_optimization.hugr",
+        "seconds": 0.003806042,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "toffoli_v_chain_n8",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 90,
+        "quantum_ops": {
+          "MeasureFree": 17,
+          "QAlloc": 17,
+          "Toffoli": 15,
+          "X": 9
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 105,
+        "toffoli_nodes": 15
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 90,
+        "quantum_ops": {
+          "MeasureFree": 17,
+          "QAlloc": 17,
+          "Toffoli": 15,
+          "X": 9
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 105,
+        "toffoli_nodes": 15
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 63,
+          "nodes": 429,
+          "quantum_ops": {
+            "CX": 77,
+            "H": 138,
+            "MeasureFree": 17,
+            "QAlloc": 17,
+            "S": 9,
+            "Sdg": 12,
+            "T": 32,
+            "Tdg": 31,
+            "V": 15,
+            "Vdg": 16,
+            "X": 7,
+            "Y": 8
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 63,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n8_resynthesis.hugr",
+        "seconds": 0.0051445,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 63,
+          "nodes": 433,
+          "quantum_ops": {
+            "CX": 71,
+            "H": 160,
+            "MeasureFree": 17,
+            "QAlloc": 17,
+            "S": 14,
+            "Sdg": 21,
+            "T": 31,
+            "Tdg": 32,
+            "V": 7,
+            "Vdg": 11,
+            "X": 8,
+            "Y": 6
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 63,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n8_t_optimization.hugr",
+        "seconds": 0.009473792,
+        "status": "ok"
+      }
+    },
+    {
+      "circuit": "toffoli_v_chain_n16",
+      "prepared_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 162,
+        "quantum_ops": {
+          "MeasureFree": 33,
+          "QAlloc": 33,
+          "Toffoli": 31,
+          "X": 17
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 217,
+        "toffoli_nodes": 31
+      },
+      "raw_static_counts": {
+        "explicit_t_tdg_nodes": 0,
+        "nodes": 162,
+        "quantum_ops": {
+          "MeasureFree": 33,
+          "QAlloc": 33,
+          "Toffoli": 31,
+          "X": 17
+        },
+        "structure": {},
+        "t_with_7t_toffoli_lowering": 217,
+        "toffoli_nodes": 31
+      },
+      "resynthesis_only": {
+        "counts": {
+          "explicit_t_tdg_nodes": 127,
+          "nodes": 837,
+          "quantum_ops": {
+            "CX": 157,
+            "H": 250,
+            "MeasureFree": 33,
+            "QAlloc": 33,
+            "S": 17,
+            "Sdg": 20,
+            "T": 64,
+            "Tdg": 63,
+            "V": 39,
+            "Vdg": 40,
+            "X": 15,
+            "Y": 16
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 127,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n16_resynthesis.hugr",
+        "seconds": 0.010043416,
+        "status": "ok"
+      },
+      "resynthesis_t_optimization": {
+        "counts": {
+          "explicit_t_tdg_nodes": 127,
+          "nodes": 873,
+          "quantum_ops": {
+            "CX": 143,
+            "H": 352,
+            "MeasureFree": 33,
+            "QAlloc": 33,
+            "S": 22,
+            "Sdg": 37,
+            "T": 63,
+            "Tdg": 64,
+            "V": 15,
+            "Vdg": 27,
+            "X": 16,
+            "Y": 14
+          },
+          "structure": {},
+          "t_with_7t_toffoli_lowering": 127,
+          "toffoli_nodes": 0
+        },
+        "output": "hugr_handoff_comptime/outputs/toffoli_v_chain_n16_t_optimization.hugr",
+        "seconds": 0.034291583,
+        "status": "ok"
+      }
+    }
+  ],
+  "count_kind": "static_gate_nodes_not_execution_weighted",
+  "settings": {
+    "ancilla_budget": null,
+    "comptime_expansion_added": true,
+    "scope": "default",
+    "seed": 0,
+    "t_optimization": true
+  }
+}

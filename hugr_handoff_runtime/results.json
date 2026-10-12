@@ -53,16 +53,65 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.067267292,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 8,
+          "nodes": 6924,
+          "quantum_ops": {
+            "CX": 22,
+            "H": 26,
+            "MeasureFree": 4,
+            "QAlloc": 4,
+            "Reset": 1,
+            "Sdg": 2,
+            "T": 4,
+            "Tdg": 4,
+            "X": 21
+          },
+          "structure": {
+            "CFG": 82,
+            "Call": 10,
+            "CallIndirect": 12,
+            "Conditional": 215,
+            "TailLoop": 25
+          },
+          "t_with_7t_toffoli_lowering": 8,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr3_data3_temp_and_resynthesis.hugr",
+        "seconds": 0.07705075,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.070315709,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 8,
+          "nodes": 7042,
+          "quantum_ops": {
+            "CX": 22,
+            "H": 24,
+            "MeasureFree": 4,
+            "QAlloc": 24,
+            "QFree": 20,
+            "Reset": 65,
+            "S": 2,
+            "Sdg": 4,
+            "T": 8,
+            "Vdg": 2,
+            "X": 21,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 82,
+            "Call": 10,
+            "CallIndirect": 12,
+            "Conditional": 215,
+            "TailLoop": 25
+          },
+          "t_with_7t_toffoli_lowering": 8,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr3_data3_temp_and_t_optimization.hugr",
+        "seconds": 0.088475166,
+        "status": "ok"
       }
     },
     {
@@ -118,16 +167,65 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.126248959,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 8,
+          "nodes": 11624,
+          "quantum_ops": {
+            "CX": 30,
+            "H": 26,
+            "MeasureFree": 4,
+            "QAlloc": 4,
+            "Reset": 1,
+            "Sdg": 2,
+            "T": 4,
+            "Tdg": 4,
+            "X": 21
+          },
+          "structure": {
+            "CFG": 138,
+            "Call": 11,
+            "CallIndirect": 20,
+            "Conditional": 383,
+            "TailLoop": 41
+          },
+          "t_with_7t_toffoli_lowering": 8,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr4_data4_temp_and_resynthesis.hugr",
+        "seconds": 0.118081833,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.120580208,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 8,
+          "nodes": 11846,
+          "quantum_ops": {
+            "CX": 30,
+            "H": 24,
+            "MeasureFree": 4,
+            "QAlloc": 40,
+            "QFree": 36,
+            "Reset": 137,
+            "S": 2,
+            "Sdg": 4,
+            "T": 8,
+            "Vdg": 2,
+            "X": 21,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 138,
+            "Call": 11,
+            "CallIndirect": 20,
+            "Conditional": 383,
+            "TailLoop": 41
+          },
+          "t_with_7t_toffoli_lowering": 8,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr4_data4_temp_and_t_optimization.hugr",
+        "seconds": 0.1618755,
+        "status": "ok"
       }
     },
     {
@@ -183,16 +281,68 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.014775792,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 1390,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 24,
+            "MeasureFree": 4,
+            "QAlloc": 5,
+            "QFree": 1,
+            "S": 6,
+            "Sdg": 9,
+            "T": 6,
+            "Tdg": 6,
+            "X": 3,
+            "Z": 1
+          },
+          "structure": {
+            "CFG": 18,
+            "Call": 4,
+            "CallIndirect": 2,
+            "Conditional": 36,
+            "TailLoop": 7
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_adder_n4_resynthesis.hugr",
+        "seconds": 0.015189375,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.01374475,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 1423,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 22,
+            "MeasureFree": 4,
+            "QAlloc": 9,
+            "QFree": 5,
+            "Reset": 18,
+            "S": 4,
+            "Sdg": 7,
+            "T": 12,
+            "Vdg": 2,
+            "X": 5,
+            "Y": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 18,
+            "Call": 4,
+            "CallIndirect": 2,
+            "Conditional": 36,
+            "TailLoop": 7
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_adder_n4_t_optimization.hugr",
+        "seconds": 0.019268667,
+        "status": "ok"
       }
     },
     {
@@ -248,16 +398,68 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.014298125,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 1390,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 24,
+            "MeasureFree": 4,
+            "QAlloc": 5,
+            "QFree": 1,
+            "S": 6,
+            "Sdg": 9,
+            "T": 6,
+            "Tdg": 6,
+            "X": 3,
+            "Z": 1
+          },
+          "structure": {
+            "CFG": 18,
+            "Call": 4,
+            "CallIndirect": 2,
+            "Conditional": 36,
+            "TailLoop": 7
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_adder_n8_resynthesis.hugr",
+        "seconds": 0.015586583,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.013634333,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 1423,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 22,
+            "MeasureFree": 4,
+            "QAlloc": 9,
+            "QFree": 5,
+            "Reset": 18,
+            "S": 4,
+            "Sdg": 7,
+            "T": 12,
+            "Vdg": 2,
+            "X": 5,
+            "Y": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 18,
+            "Call": 4,
+            "CallIndirect": 2,
+            "Conditional": 36,
+            "TailLoop": 7
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_adder_n8_t_optimization.hugr",
+        "seconds": 0.019520708,
+        "status": "ok"
       }
     },
     {
@@ -313,16 +515,67 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.0247965,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 2392,
+          "quantum_ops": {
+            "CX": 26,
+            "H": 27,
+            "MeasureFree": 4,
+            "QAlloc": 6,
+            "QFree": 2,
+            "S": 5,
+            "Sdg": 8,
+            "T": 6,
+            "Tdg": 6,
+            "X": 4
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 8,
+            "CallIndirect": 3,
+            "Conditional": 66,
+            "TailLoop": 11
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_multiplier_n3_resynthesis.hugr",
+        "seconds": 0.026720833,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.025072667,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 2433,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 25,
+            "MeasureFree": 4,
+            "QAlloc": 14,
+            "QFree": 10,
+            "Reset": 20,
+            "S": 4,
+            "Sdg": 7,
+            "T": 12,
+            "Vdg": 2,
+            "X": 6,
+            "Y": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 8,
+            "CallIndirect": 3,
+            "Conditional": 66,
+            "TailLoop": 11
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_multiplier_n3_t_optimization.hugr",
+        "seconds": 0.03264725,
+        "status": "ok"
       }
     },
     {
@@ -378,16 +631,67 @@
         "toffoli_nodes": 0
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.027069458,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 2392,
+          "quantum_ops": {
+            "CX": 26,
+            "H": 27,
+            "MeasureFree": 4,
+            "QAlloc": 6,
+            "QFree": 2,
+            "S": 5,
+            "Sdg": 8,
+            "T": 6,
+            "Tdg": 6,
+            "X": 4
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 8,
+            "CallIndirect": 3,
+            "Conditional": 66,
+            "TailLoop": 11
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_multiplier_n4_resynthesis.hugr",
+        "seconds": 0.028422625,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.0257945,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 12,
+          "nodes": 2433,
+          "quantum_ops": {
+            "CX": 24,
+            "H": 25,
+            "MeasureFree": 4,
+            "QAlloc": 14,
+            "QFree": 10,
+            "Reset": 20,
+            "S": 4,
+            "Sdg": 7,
+            "T": 12,
+            "Vdg": 2,
+            "X": 6,
+            "Y": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 32,
+            "Call": 8,
+            "CallIndirect": 3,
+            "Conditional": 66,
+            "TailLoop": 11
+          },
+          "t_with_7t_toffoli_lowering": 12,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_gidney_multiplier_n4_t_optimization.hugr",
+        "seconds": 0.032859625,
+        "status": "ok"
       }
     },
     {
@@ -443,16 +747,75 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.019908292,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2401,
+          "quantum_ops": {
+            "CX": 36,
+            "H": 46,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "Rx": 1,
+            "Ry": 3,
+            "Rz": 2,
+            "S": 3,
+            "Sdg": 3,
+            "T": 16,
+            "Tdg": 12,
+            "V": 4,
+            "Vdg": 5,
+            "X": 20,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 10,
+            "CallIndirect": 6,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_rotation_4term_state2_resynthesis.hugr",
+        "seconds": 0.023410292,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.020389833,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2421,
+          "quantum_ops": {
+            "CX": 36,
+            "H": 38,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "Rx": 1,
+            "Ry": 3,
+            "Rz": 2,
+            "S": 7,
+            "Sdg": 11,
+            "T": 28,
+            "V": 8,
+            "Vdg": 13,
+            "X": 20,
+            "Z": 6
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 10,
+            "CallIndirect": 6,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_rotation_4term_state2_t_optimization.hugr",
+        "seconds": 0.028364083,
+        "status": "ok"
       }
     },
     {
@@ -508,16 +871,75 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.020537416,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2537,
+          "quantum_ops": {
+            "CX": 51,
+            "H": 65,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "Rx": 3,
+            "Ry": 7,
+            "Rz": 4,
+            "S": 4,
+            "Sdg": 5,
+            "T": 16,
+            "Tdg": 12,
+            "V": 5,
+            "Vdg": 6,
+            "X": 20,
+            "Z": 7
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 10,
+            "CallIndirect": 6,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_rotation_8term_state2_resynthesis.hugr",
+        "seconds": 0.025065875,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.020855959,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2557,
+          "quantum_ops": {
+            "CX": 51,
+            "H": 57,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "Rx": 3,
+            "Ry": 7,
+            "Rz": 4,
+            "S": 8,
+            "Sdg": 13,
+            "T": 28,
+            "V": 9,
+            "Vdg": 14,
+            "X": 20,
+            "Z": 11
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 10,
+            "CallIndirect": 6,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_rotation_8term_state2_t_optimization.hugr",
+        "seconds": 0.030738875,
+        "status": "ok"
       }
     },
     {
@@ -581,16 +1003,74 @@
         "toffoli_nodes": 22
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.159348417,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 166,
+          "nodes": 17615,
+          "quantum_ops": {
+            "CX": 208,
+            "H": 328,
+            "MeasureFree": 8,
+            "QAlloc": 10,
+            "QFree": 1,
+            "Reset": 2,
+            "S": 35,
+            "Sdg": 41,
+            "T": 92,
+            "Tdg": 74,
+            "V": 12,
+            "Vdg": 12,
+            "X": 41,
+            "Y": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 188,
+            "Call": 92,
+            "CallIndirect": 28,
+            "Conditional": 462,
+            "TailLoop": 74
+          },
+          "t_with_7t_toffoli_lowering": 166,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_alias_8term_state2_precision4_resynthesis.hugr",
+        "seconds": 0.177244334,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.167031792,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 160,
+          "nodes": 18067,
+          "quantum_ops": {
+            "CX": 209,
+            "H": 260,
+            "MeasureFree": 8,
+            "QAlloc": 74,
+            "QFree": 65,
+            "Reset": 198,
+            "S": 63,
+            "Sdg": 85,
+            "T": 144,
+            "Tdg": 16,
+            "V": 37,
+            "Vdg": 59,
+            "X": 43,
+            "Y": 7,
+            "Z": 25
+          },
+          "structure": {
+            "CFG": 188,
+            "Call": 92,
+            "CallIndirect": 28,
+            "Conditional": 462,
+            "TailLoop": 74
+          },
+          "t_with_7t_toffoli_lowering": 160,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/lcu_alias_8term_state2_precision4_t_optimization.hugr",
+        "seconds": 0.225456625,
+        "status": "ok"
       }
     },
     {
@@ -638,16 +1118,64 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.063285792,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 6893,
+          "quantum_ops": {
+            "CX": 34,
+            "H": 40,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "T": 16,
+            "Tdg": 12,
+            "X": 19
+          },
+          "structure": {
+            "CFG": 78,
+            "Call": 10,
+            "CallIndirect": 10,
+            "Conditional": 215,
+            "TailLoop": 25
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr3_data3_toffoli_resynthesis.hugr",
+        "seconds": 0.06744675,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.065595958,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 6913,
+          "quantum_ops": {
+            "CX": 34,
+            "H": 32,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 4,
+            "Sdg": 8,
+            "T": 28,
+            "V": 4,
+            "Vdg": 8,
+            "X": 19,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 78,
+            "Call": 10,
+            "CallIndirect": 10,
+            "Conditional": 215,
+            "TailLoop": 25
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr3_data3_toffoli_t_optimization.hugr",
+        "seconds": 0.081990875,
+        "status": "ok"
       }
     },
     {
@@ -695,16 +1223,64 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.109881792,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 11593,
+          "quantum_ops": {
+            "CX": 42,
+            "H": 40,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "T": 16,
+            "Tdg": 12,
+            "X": 19
+          },
+          "structure": {
+            "CFG": 134,
+            "Call": 11,
+            "CallIndirect": 18,
+            "Conditional": 383,
+            "TailLoop": 41
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr4_data4_toffoli_resynthesis.hugr",
+        "seconds": 0.114015,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.115062084,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 11613,
+          "quantum_ops": {
+            "CX": 42,
+            "H": 32,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 4,
+            "Sdg": 8,
+            "T": 28,
+            "V": 4,
+            "Vdg": 8,
+            "X": 19,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 134,
+            "Call": 11,
+            "CallIndirect": 18,
+            "Conditional": 383,
+            "TailLoop": 41
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/qrom_unary_addr4_data4_toffoli_t_optimization.hugr",
+        "seconds": 0.141455125,
+        "status": "ok"
       }
     },
     {
@@ -758,16 +1334,67 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.019194917,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2344,
+          "quantum_ops": {
+            "CX": 32,
+            "H": 44,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 2,
+            "Sdg": 2,
+            "T": 16,
+            "Tdg": 12,
+            "X": 19,
+            "Z": 1
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 11,
+            "CallIndirect": 2,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/select_pauli_4term_state2_toffoli_resynthesis.hugr",
+        "seconds": 0.023261625,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.020080583,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2364,
+          "quantum_ops": {
+            "CX": 32,
+            "H": 36,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 6,
+            "Sdg": 10,
+            "T": 28,
+            "V": 4,
+            "Vdg": 8,
+            "X": 19,
+            "Z": 5
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 11,
+            "CallIndirect": 2,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/select_pauli_4term_state2_toffoli_t_optimization.hugr",
+        "seconds": 0.027538917,
+        "status": "ok"
       }
     },
     {
@@ -821,16 +1448,67 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.019327958,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2427,
+          "quantum_ops": {
+            "CX": 38,
+            "H": 52,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 2,
+            "Sdg": 2,
+            "T": 16,
+            "Tdg": 12,
+            "X": 19,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 11,
+            "CallIndirect": 2,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/select_pauli_8term_state2_toffoli_resynthesis.hugr",
+        "seconds": 0.023260208,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.019949292,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 28,
+          "nodes": 2447,
+          "quantum_ops": {
+            "CX": 38,
+            "H": 44,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "Reset": 1,
+            "S": 6,
+            "Sdg": 10,
+            "T": 28,
+            "V": 4,
+            "Vdg": 8,
+            "X": 19,
+            "Z": 6
+          },
+          "structure": {
+            "CFG": 22,
+            "Call": 11,
+            "CallIndirect": 2,
+            "Conditional": 56,
+            "TailLoop": 9
+          },
+          "t_with_7t_toffoli_lowering": 28,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/select_pauli_8term_state2_toffoli_t_optimization.hugr",
+        "seconds": 0.029168458,
+        "status": "ok"
       }
     },
     {
@@ -888,16 +1566,69 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.049001459,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4739,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 67,
+            "MeasureFree": 4,
+            "QAlloc": 5,
+            "QFree": 3,
+            "S": 1,
+            "Sdg": 6,
+            "T": 26,
+            "Tdg": 22,
+            "Vdg": 1,
+            "X": 5,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n4_resynthesis.hugr",
+        "seconds": 0.053659333,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.04943425,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4798,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 53,
+            "MeasureFree": 4,
+            "QAlloc": 13,
+            "QFree": 11,
+            "Reset": 16,
+            "S": 8,
+            "Sdg": 17,
+            "T": 48,
+            "V": 4,
+            "Vdg": 13,
+            "X": 10,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n4_t_optimization.hugr",
+        "seconds": 0.065348625,
+        "status": "ok"
       }
     },
     {
@@ -955,16 +1686,69 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.047291916,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4739,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 67,
+            "MeasureFree": 4,
+            "QAlloc": 5,
+            "QFree": 3,
+            "S": 1,
+            "Sdg": 6,
+            "T": 26,
+            "Tdg": 22,
+            "Vdg": 1,
+            "X": 5,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n8_resynthesis.hugr",
+        "seconds": 0.053304416,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.047693125,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4798,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 53,
+            "MeasureFree": 4,
+            "QAlloc": 13,
+            "QFree": 11,
+            "Reset": 16,
+            "S": 8,
+            "Sdg": 17,
+            "T": 48,
+            "V": 4,
+            "Vdg": 13,
+            "X": 10,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n8_t_optimization.hugr",
+        "seconds": 0.065798084,
+        "status": "ok"
       }
     },
     {
@@ -1022,16 +1806,69 @@
         "toffoli_nodes": 4
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.048782333,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4739,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 67,
+            "MeasureFree": 4,
+            "QAlloc": 5,
+            "QFree": 3,
+            "S": 1,
+            "Sdg": 6,
+            "T": 26,
+            "Tdg": 22,
+            "Vdg": 1,
+            "X": 5,
+            "Z": 2
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n16_resynthesis.hugr",
+        "seconds": 0.053974125,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.05232625,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 48,
+          "nodes": 4798,
+          "quantum_ops": {
+            "CX": 58,
+            "H": 53,
+            "MeasureFree": 4,
+            "QAlloc": 13,
+            "QFree": 11,
+            "Reset": 16,
+            "S": 8,
+            "Sdg": 17,
+            "T": 48,
+            "V": 4,
+            "Vdg": 13,
+            "X": 10,
+            "Z": 4
+          },
+          "structure": {
+            "CFG": 54,
+            "Call": 14,
+            "CallIndirect": 8,
+            "Conditional": 134,
+            "TailLoop": 19
+          },
+          "t_with_7t_toffoli_lowering": 48,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/arithmetic_cuccaro_adder_n16_t_optimization.hugr",
+        "seconds": 0.065799541,
+        "status": "ok"
       }
     },
     {
@@ -1073,16 +1910,62 @@
         "toffoli_nodes": 3
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.009747,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1080,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 28,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 2,
+            "Sdg": 2,
+            "T": 12,
+            "Tdg": 9,
+            "X": 1
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n4_resynthesis.hugr",
+        "seconds": 0.011508458,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.00998175,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1095,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 22,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 5,
+            "Sdg": 8,
+            "T": 21,
+            "V": 3,
+            "Vdg": 6,
+            "X": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n4_t_optimization.hugr",
+        "seconds": 0.013898292,
+        "status": "ok"
       }
     },
     {
@@ -1124,16 +2007,62 @@
         "toffoli_nodes": 3
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.00993575,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1080,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 28,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 2,
+            "Sdg": 2,
+            "T": 12,
+            "Tdg": 9,
+            "X": 1
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n8_resynthesis.hugr",
+        "seconds": 0.011294834,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.010135125,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1095,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 22,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 5,
+            "Sdg": 8,
+            "T": 21,
+            "V": 3,
+            "Vdg": 6,
+            "X": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n8_t_optimization.hugr",
+        "seconds": 0.013616208,
+        "status": "ok"
       }
     },
     {
@@ -1175,16 +2104,62 @@
         "toffoli_nodes": 3
       },
       "resynthesis_only": {
-        "debug_error": "ConversionError(UnsupportedOpType(SetBits))",
-        "error": "Error converting to pauli graph: Unsupported OpType: SetBits",
-        "seconds": 0.009698,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1080,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 28,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 2,
+            "Sdg": 2,
+            "T": 12,
+            "Tdg": 9,
+            "X": 1
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n16_resynthesis.hugr",
+        "seconds": 0.0112815,
+        "status": "ok"
       },
       "resynthesis_t_optimization": {
-        "debug_error": "UnsupportedTOptimizationInput { operation: \"black boxes\" }",
-        "error": "T optimization does not support black boxes in the input circuit. Disable t_optimization or apply it to a unitary Clifford + T region.",
-        "seconds": 0.00992275,
-        "status": "error"
+        "counts": {
+          "explicit_t_tdg_nodes": 21,
+          "nodes": 1095,
+          "quantum_ops": {
+            "CX": 18,
+            "H": 22,
+            "MeasureFree": 3,
+            "QAlloc": 3,
+            "S": 5,
+            "Sdg": 8,
+            "T": 21,
+            "V": 3,
+            "Vdg": 6,
+            "X": 1,
+            "Z": 3
+          },
+          "structure": {
+            "CFG": 12,
+            "Call": 3,
+            "Conditional": 29,
+            "TailLoop": 6
+          },
+          "t_with_7t_toffoli_lowering": 21,
+          "toffoli_nodes": 0
+        },
+        "output": "/tmp/handoff-t-boundaries/outputs/toffoli_v_chain_n16_t_optimization.hugr",
+        "seconds": 0.013622666,
+        "status": "ok"
       }
     }
   ],

@@ -47,7 +47,7 @@ use tket_json_rs::{OpType as SerialOpType, SerialCircuit};
 ///   qubit gates
 ///
 /// Rotation angles must be numeric as symbolic angles are not supported currently.
-/// Circuits must be Clifford + T when `t_optimization` is enabled.
+/// T optimization acts on Clifford + T sections, preserving other operations as boundaries
 ///
 /// - `window_size` (`Option<usize>`) - Size of the sliding window for lookahead during synthesis. Default to 1280.
 /// - `pool_size` (`Option<usize>`) - Number of candidate gates to maintain in the pool. Default to max(1000, 0.2*N^2) where N is the number of qubits.
@@ -228,8 +228,11 @@ impl ComposablePass<Hugr> for PauliGraphResynthesis {
             let registers = &ancillas[&region];
             let mut qubits = serial_circ.qubits.clone();
             qubits.sort_by_key(|q| registers.contains(&q.id));
+            let budget = qubits.iter().filter(|q| registers.contains(&q.id)).count();
 
-            let register_map = RegisterMap::new(&qubits, &serial_circ.bits);
+            // Opaque operations can't use the fresh ancillas, even when they involve bits
+            let register_map =
+                RegisterMap::new(&qubits[..qubits.len() - budget], &serial_circ.bits);
             let mut pauli_graph = serial_circuit_to_pauli_graph(serial_circ, &register_map)?;
 
             let canonical_pass = CanonicalFormPass::new().with_forward(true);
@@ -257,25 +260,6 @@ impl ComposablePass<Hugr> for PauliGraphResynthesis {
             pauli_graph = rotation_merging_pass.transform(&pauli_graph);
 
             if self.t_optimization {
-                let unsupported = pauli_graph.get_ops().iter().find_map(|op| match op {
-                    Op::Measure { .. } => Some("measurements"),
-                    Op::Reset { .. } => Some("resets"),
-                    Op::BlackBox { .. } => Some("black boxes"),
-                    Op::ConditionalBox { .. } => Some("conditional operations"),
-                    _ => None,
-                });
-                if let Some(operation) = unsupported {
-                    return Err(PauliGraphResynthesisErrors::UnsupportedTOptimizationInput {
-                        operation,
-                    });
-                }
-
-                let budget = serial_circ
-                    .qubits
-                    .iter()
-                    .filter(|q| registers.contains(&q.id))
-                    .count();
-
                 let optimized = TOptimizationPass::new()
                     .with_ancilla_budget(budget)
                     .with_first_bit(serial_circ.bits.len())
@@ -416,12 +400,7 @@ impl PytketDecoder for ResynthesisDecoder {
             SerialOpType::CY => (Some(TketOp::CY), 2),
             SerialOpType::CZ => (Some(TketOp::CZ), 2),
             SerialOpType::SWAP => (None, 2),
-            _ => {
-                return Err(PytketDecodeError::custom(format!(
-                    "Unsupported conditional correction gate: {:?}",
-                    condition.op.op_type,
-                )));
-            }
+            _ => return Ok(DecodeStatus::Unsupported),
         };
         if qubits.len() != arity
             || !params.is_empty()
@@ -517,15 +496,6 @@ pub enum PauliGraphResynthesisErrors {
         /// Name of the invalid size parameter.
         parameter: &'static str,
     },
-    /// The input contains operations unsupported by T optimization.
-    #[display(
-        "T optimization does not support {operation} in the input circuit. \
-         Disable t_optimization or apply it to a unitary Clifford + T region."
-    )]
-    UnsupportedTOptimizationInput {
-        /// Kind of unsupported operation.
-        operation: &'static str,
-    },
     /// Error inlining functions
     #[from]
     InlineError(InlineFuncsError),
@@ -563,7 +533,7 @@ mod tests {
     use crate::serialize::pytket::TKETDecode;
     use crate::utils::build_simple_circuit;
     use crate::{Circuit, TketOp};
-    use tket_json_rs::circuit_json::Command;
+    use tket_json_rs::circuit_json::{Command, Conditional};
 
     #[rstest]
     #[case::without_t_optimization(false)]
@@ -663,6 +633,86 @@ mod tests {
                 .iter()
                 .flat_map(|cmd| &cmd.args)
                 .all(|b| !measurement_bits.contains(b))
+        );
+    }
+
+    #[rstest]
+    #[case::black_box(SerialOpType::Barrier, None)]
+    #[case::measurement(SerialOpType::Measure, None)]
+    #[case::reset(SerialOpType::Reset, None)]
+    #[case::conditional(SerialOpType::Conditional, Some(SerialOpType::H))]
+    #[case::conditional_t(SerialOpType::Conditional, Some(SerialOpType::T))]
+    fn optimizes_sections_around_boundaries(
+        #[case] op_type: SerialOpType,
+        #[case] conditional_gate: Option<SerialOpType>,
+        #[values(0, 1)] budget: usize,
+    ) {
+        let mut serial = classical_circuit();
+        serial.commands.truncate(1);
+        let mut op = Operation::from_optype(op_type);
+        let mut args = vec![serial.qubits[0].id.clone()];
+        if op_type == SerialOpType::Measure {
+            args.push(serial.bits[0].id.clone());
+        }
+        if let Some(gate) = conditional_gate {
+            op.conditional = Some(Conditional {
+                op: Box::new(Operation::from_optype(gate)),
+                width: 1,
+                value: 1,
+            });
+            args.insert(0, serial.bits[0].id.clone());
+        }
+        let gates: Vec<_> = [SerialOpType::T, SerialOpType::Tdg]
+            .into_iter()
+            .map(|gate| Command {
+                op: Operation::from_optype(gate),
+                args: vec![serial.qubits[0].id.clone()],
+                opgroup: None,
+            })
+            .collect();
+        serial.commands.extend(gates.clone());
+        serial.commands.push(Command {
+            op,
+            args,
+            opgroup: None,
+        });
+        serial.commands.extend(gates);
+        let mut circuit = Circuit::new(serial.decode(Default::default()).unwrap());
+        let signature = circuit.circuit_signature().into_owned();
+        let pass = PauliGraphResynthesis::default()
+            .with_t_optimization(true)
+            .with_ancilla_budget(budget)
+            .with_parallel_mode(ParallelMode::Off);
+        pass.run(circuit.hugr_mut()).unwrap();
+        if conditional_gate == Some(SerialOpType::H) {
+            // Native HUGR conditionals become opaque barriers involving bits
+            pass.run(circuit.hugr_mut()).unwrap();
+        }
+        circuit.hugr().validate().unwrap();
+        assert_eq!(circuit.circuit_signature().as_ref(), &signature);
+        if conditional_gate == Some(SerialOpType::H) {
+            assert!(
+                circuit
+                    .hugr()
+                    .nodes()
+                    .any(|n| circuit.hugr().get_optype(n).is_conditional())
+            );
+            assert_eq!(count_gate(&circuit, TketOp::H), 1);
+        } else {
+            let after = SerialCircuit::encode(circuit.hugr(), Default::default()).unwrap();
+            let op = &after
+                .commands
+                .iter()
+                .find(|cmd| cmd.op.op_type == op_type)
+                .unwrap()
+                .op;
+            if let Some(gate) = conditional_gate {
+                assert_eq!(op.conditional.as_ref().unwrap().op.op_type, gate);
+            }
+        }
+        assert_eq!(
+            count_gate(&circuit, TketOp::T) + count_gate(&circuit, TketOp::Tdg),
+            0
         );
     }
 
@@ -808,7 +858,11 @@ mod tests {
     #[rstest]
     #[case::different_angles([0.1, 0.2], 0.3)]
     #[case::opposite_angles([0.1, -0.1], 0.0)]
-    fn merges_arbitrary_rz_angles(#[case] angles: [f64; 2], #[case] expected: f64) {
+    fn merges_arbitrary_rz_angles(
+        #[case] angles: [f64; 2],
+        #[case] expected: f64,
+        #[values(false, true)] t_optimization: bool,
+    ) {
         let mut circuit = build_simple_circuit(1, |circ| {
             for angle in angles {
                 let angle = circ.add_constant(ConstRotation::new(angle).unwrap());
@@ -820,7 +874,12 @@ mod tests {
             Ok(())
         })
         .unwrap();
-        resynthesize(&mut circuit);
+        PauliGraphResynthesis::default()
+            .with_t_optimization(t_optimization)
+            .with_parallel_mode(ParallelMode::Off)
+            .run(circuit.hugr_mut())
+            .unwrap();
+        circuit.hugr().validate().unwrap();
 
         if expected == 0.0 {
             let identity = build_simple_circuit(1, |_| Ok(())).unwrap();

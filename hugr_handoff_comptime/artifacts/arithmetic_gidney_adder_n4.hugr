@@ -1,0 +1,891 @@
+HUGRiHJv)@[{"version": "0.3.0", "name": "tket.quantum", "types": {}, "operations": {"CRz": {"extension": "tket.quantum", "name": "CRz", "description": "CRz", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Q"}, {"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Q"}, {"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "CX": {"extension": "tket.quantum", "name": "CX", "description": "CX", "misc": {"commutation": [[0, "Z"], [1, "X"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Q"}], "output": [{"t": "Q"}, {"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "CY": {"extension": "tket.quantum", "name": "CY", "description": "CY", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Q"}], "output": [{"t": "Q"}, {"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "CZ": {"extension": "tket.quantum", "name": "CZ", "description": "CZ", "misc": {"commutation": [[0, "Z"], [1, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Q"}], "output": [{"t": "Q"}, {"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "H": {"extension": "tket.quantum", "name": "H", "description": "H", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Measure": {"extension": "tket.quantum", "name": "Measure", "description": "Measure", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}, {"t": "Sum", "s": "Unit", "size": 2}]}}, "binary": false, "lower_funcs": []}, "MeasureFree": {"extension": "tket.quantum", "name": "MeasureFree", "description": "MeasureFree", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Opaque", "extension": "tket.measurement", "extension_version": "0.1.0", "id": "Measurement", "args": [], "bound": "C"}]}}, "binary": false, "lower_funcs": []}, "QAlloc": {"extension": "tket.quantum", "name": "QAlloc", "description": "QAlloc", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "QFree": {"extension": "tket.quantum", "name": "QFree", "description": "QFree", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": []}}, "binary": false, "lower_funcs": []}, "Reset": {"extension": "tket.quantum", "name": "Reset", "description": "Reset", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Rx": {"extension": "tket.quantum", "name": "Rx", "description": "Rx", "misc": {"commutation": [[0, "X"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Ry": {"extension": "tket.quantum", "name": "Ry", "description": "Ry", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Rz": {"extension": "tket.quantum", "name": "Rz", "description": "Rz", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "S": {"extension": "tket.quantum", "name": "S", "description": "S", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Sdg": {"extension": "tket.quantum", "name": "Sdg", "description": "Sdg", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "T": {"extension": "tket.quantum", "name": "T", "description": "T", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Tdg": {"extension": "tket.quantum", "name": "Tdg", "description": "Tdg", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Toffoli": {"extension": "tket.quantum", "name": "Toffoli", "description": "Toffoli", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}, {"t": "Q"}, {"t": "Q"}], "output": [{"t": "Q"}, {"t": "Q"}, {"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "TryQAlloc": {"extension": "tket.quantum", "name": "TryQAlloc", "description": "TryQAlloc", "misc": {"commutation": []}, "signature": {"params": [], "body": {"t": "G", "input": [], "output": [{"t": "Sum", "s": "General", "rows": [[], [{"t": "Q"}]]}]}}, "binary": false, "lower_funcs": []}, "V": {"extension": "tket.quantum", "name": "V", "description": "V", "misc": {"commutation": [[0, "X"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Vdg": {"extension": "tket.quantum", "name": "Vdg", "description": "Vdg", "misc": {"commutation": [[0, "X"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "X": {"extension": "tket.quantum", "name": "X", "description": "X", "misc": {"commutation": [[0, "X"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Y": {"extension": "tket.quantum", "name": "Y", "description": "Y", "misc": {"commutation": [[0, "Y"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "Z": {"extension": "tket.quantum", "name": "Z", "description": "Z", "misc": {"commutation": [[0, "Z"]]}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Q"}], "output": [{"t": "Q"}]}}, "binary": false, "lower_funcs": []}, "symbolic_angle": {"extension": "tket.quantum", "name": "symbolic_angle", "description": "Store a sympy expression that can be evaluated to an angle.", "misc": {}, "signature": {"params": [{"tp": "String"}], "body": {"t": "G", "input": [], "output": [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}]}}, "binary": false, "lower_funcs": []}}}, {"version": "0.1.0", "name": "tket.measurement", "types": {"Measurement": {"extension": "tket.measurement", "name": "Measurement", "description": "A copyable type representing the result of a measurement operation", "params": [], "bound": {"b": "Explicit", "bound": "C"}}}, "operations": {"Read": {"extension": "tket.measurement", "name": "Read", "description": "Consumes a measurement, converting it into a bool.", "misc": {}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "tket.measurement", "extension_version": "0.1.0", "id": "Measurement", "args": [], "bound": "C"}], "output": [{"t": "Sum", "s": "Unit", "size": 2}]}}, "binary": false, "lower_funcs": []}}}, {"version": "0.2.0", "name": "tket.result", "types": {}, "operations": {"result_array_bool": {"extension": "tket.result", "name": "result_array_bool", "description": "Report an array of boolean results.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": null}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "collections.array", "extension_version": "0.1.2", "id": "array", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": null}}, {"tya": "Type", "ty": {"t": "Sum", "s": "Unit", "size": 2}}], "bound": "A"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_array_f64": {"extension": "tket.result", "name": "result_array_f64", "description": "Report an array of floating-point results.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": null}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "collections.array", "extension_version": "0.1.2", "id": "array", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": null}}, {"tya": "Type", "ty": {"t": "Opaque", "extension": "arithmetic.float.types", "extension_version": "0.1.0", "id": "float64", "args": [], "bound": "C"}}], "bound": "A"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_array_int": {"extension": "tket.result", "name": "result_array_int", "description": "Report an array of signed integer results.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": null}, {"tp": "BoundedNat", "bound": 7}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "collections.array", "extension_version": "0.1.2", "id": "array", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": null}}, {"tya": "Type", "ty": {"t": "Opaque", "extension": "arithmetic.int.types", "extension_version": "0.1.0", "id": "int", "args": [{"tya": "Variable", "idx": 2, "cached_decl": {"tp": "BoundedNat", "bound": 7}}], "bound": "C"}}], "bound": "A"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_array_uint": {"extension": "tket.result", "name": "result_array_uint", "description": "Report an array of unsigned integer results.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": null}, {"tp": "BoundedNat", "bound": 7}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "collections.array", "extension_version": "0.1.2", "id": "array", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": null}}, {"tya": "Type", "ty": {"t": "Opaque", "extension": "arithmetic.int.types", "extension_version": "0.1.0", "id": "int", "args": [{"tya": "Variable", "idx": 2, "cached_decl": {"tp": "BoundedNat", "bound": 7}}], "bound": "C"}}], "bound": "A"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_bool": {"extension": "tket.result", "name": "result_bool", "description": "Report a boolean result.", "misc": {}, "signature": {"params": [{"tp": "String"}], "body": {"t": "G", "input": [{"t": "Sum", "s": "Unit", "size": 2}], "output": []}}, "binary": false, "lower_funcs": []}, "result_f64": {"extension": "tket.result", "name": "result_f64", "description": "Report a floating-point result.", "misc": {}, "signature": {"params": [{"tp": "String"}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "arithmetic.float.types", "extension_version": "0.1.0", "id": "float64", "args": [], "bound": "C"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_int": {"extension": "tket.result", "name": "result_int", "description": "Report a signed integer result.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": 7}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "arithmetic.int.types", "extension_version": "0.1.0", "id": "int", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": 7}}], "bound": "C"}], "output": []}}, "binary": false, "lower_funcs": []}, "result_uint": {"extension": "tket.result", "name": "result_uint", "description": "Report an unsigned integer result.", "misc": {}, "signature": {"params": [{"tp": "String"}, {"tp": "BoundedNat", "bound": 7}], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "arithmetic.int.types", "extension_version": "0.1.0", "id": "int", "args": [{"tya": "Variable", "idx": 1, "cached_decl": {"tp": "BoundedNat", "bound": 7}}], "bound": "C"}], "output": []}}, "binary": false, "lower_funcs": []}}}, {"version": "0.2.0", "name": "tket.rotation", "types": {"rotation": {"extension": "tket.rotation", "name": "rotation", "description": "rotation type expressed as number of half turns", "params": [], "bound": {"b": "Explicit", "bound": "C"}}}, "operations": {"from_halfturns": {"extension": "tket.rotation", "name": "from_halfturns", "description": "Construct rotation from number of half-turns (would be multiples of PI in radians). Returns None if the float is non-finite.", "misc": {}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "arithmetic.float.types", "extension_version": "0.1.0", "id": "float64", "args": [], "bound": "C"}], "output": [{"t": "Sum", "s": "General", "rows": [[], [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}]]}]}}, "binary": false, "lower_funcs": []}, "from_halfturns_unchecked": {"extension": "tket.rotation", "name": "from_halfturns_unchecked", "description": "Construct rotation from number of half-turns (would be multiples of PI in radians). Panics if the float is non-finite.", "misc": {}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "arithmetic.float.types", "extension_version": "0.1.0", "id": "float64", "args": [], "bound": "C"}], "output": [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}]}}, "binary": false, "lower_funcs": []}, "radd": {"extension": "tket.rotation", "name": "radd", "description": "Add two angles together (experimental).", "misc": {}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}, {"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}]}}, "binary": false, "lower_funcs": []}, "to_halfturns": {"extension": "tket.rotation", "name": "to_halfturns", "description": "Convert rotation to number of half-turns (would be multiples of PI in radians).", "misc": {}, "signature": {"params": [], "body": {"t": "G", "input": [{"t": "Opaque", "extension": "tket.rotation", "extension_version": "0.2.0", "id": "rotation", "args": [], "bound": "C"}], "output": [{"t": "Opaque", "extension": "arithmetic.float.types", "extension_version": "0.1.0", "id": "float64", "args": [], "bound": "C"}]}}, "binary": false, "lower_funcs": []}}}](hugr 0)
+
+(mod)
+
+(meta
+  (compat.meta_json
+    "core.generator"
+    "{\"name\": \"guppylang (guppylang-internals-v1.1.1)\", \"version\": \"1.1.1\"}"))
+
+(meta
+  (compat.meta_json
+    "core.used_extensions"
+    "[{\"name\": \"tket.quantum\", \"version\": \"0.3.0\"}, {\"name\": \"prelude\", \"version\": \"0.2.2\"}, {\"name\": \"tket.measurement\", \"version\": \"0.1.0\"}, {\"name\": \"collections.borrow_arr\", \"version\": \"0.2.1\"}, {\"name\": \"collections.array\", \"version\": \"0.1.2\"}, {\"name\": \"tket.result\", \"version\": \"0.2.0\"}, {\"name\": \"arithmetic.float.types\", \"version\": \"0.1.0\"}, {\"name\": \"arithmetic.int.types\", \"version\": \"0.1.0\"}, {\"name\": \"tket.rotation\", \"version\": \"0.2.0\"}]"))
+
+(meta (compat.meta_json "name" "\"__main__\""))
+
+(define-func private _1 (core.fn [] [])
+  (meta (compat.meta_json "tket.unitary" "0"))
+  (meta core.entrypoint)
+  (meta (core.title "main"))
+  (dfg
+    (signature (core.fn [] []))
+    (meta (core.order_hint.input_key 2))
+    (meta (core.order_hint.order 2 4))
+    (meta (core.order_hint.output_key 3))
+    (meta (core.order_hint.order 4 5))
+    (meta (core.order_hint.order 5 6))
+    (meta (core.order_hint.order 6 7))
+    (meta (core.order_hint.order 7 8))
+    (meta (core.order_hint.order 8 9))
+    (meta (core.order_hint.order 9 10))
+    (meta (core.order_hint.order 10 11))
+    (meta (core.order_hint.order 11 12))
+    (meta (core.order_hint.order 12 13))
+    (meta (core.order_hint.order 13 14))
+    (meta (core.order_hint.order 14 15))
+    (meta (core.order_hint.order 15 73))
+    (meta (core.order_hint.order 73 113))
+    (meta (core.order_hint.order 113 154))
+    (meta (core.order_hint.order 151 152))
+    (meta (core.order_hint.order 152 153))
+    (meta (core.order_hint.order 153 193))
+    (meta (core.order_hint.order 154 151))
+    (meta (core.order_hint.order 193 194))
+    (meta (core.order_hint.order 194 195))
+    (meta (core.order_hint.order 195 196))
+    (meta (core.order_hint.order 196 204))
+    (meta (core.order_hint.order 204 206))
+    (meta (core.order_hint.order 206 207))
+    (meta (core.order_hint.order 207 208))
+    (meta (core.order_hint.order 208 209))
+    (meta (core.order_hint.order 209 217))
+    (meta (core.order_hint.order 217 219))
+    (meta (core.order_hint.order 219 221))
+    (meta (core.order_hint.order 221 3))
+    (tket.quantum.QAlloc@0.3.0 [] [%_1]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 4)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_2]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 5)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_3]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 6)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_4]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 7)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_5]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 8)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_6]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 9)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_7]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 10)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_8]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 11)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_9]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 12)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_10]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 13)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_11]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 14)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_12]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 15)))
+    (tket.quantum.X@0.3.0 [%_1] [%_13]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.X@0.3.0 [%_3] [%_14]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.X@0.3.0 [%_4] [%_15]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.X@0.3.0 [%_5] [%_16]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.X@0.3.0 [%_7] [%_17]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_9] [%_18]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_10] [%_19]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_11] [%_20]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_12] [%_21]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_18] [%_22]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_19] [%_23]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_20] [%_24]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_21] [%_25]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_16 %_23] [%_26 %_27]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_27] [%_28]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_13 %_28] [%_29 %_30]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_30] [%_31]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_26 %_31] [%_32 %_33]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_33] [%_34]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_34] [%_35]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.Sdg@0.3.0 [%_35] [%_36]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_36 %_2] [%_37 %_38]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_37 %_6] [%_39 %_40]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_40 %_24] [%_41 %_42]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_42] [%_43]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_38 %_43] [%_44 %_45]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_45] [%_46]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_41 %_46] [%_47 %_48]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_48] [%_49]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_49] [%_50]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.Sdg@0.3.0 [%_50] [%_51]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_39 %_51] [%_52 %_53]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_53 %_14] [%_54 %_55]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_54 %_17] [%_56 %_57]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_57 %_25] [%_58 %_59]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_59] [%_60]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_55 %_60] [%_61 %_62]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_62] [%_63]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_58 %_63] [%_64 %_65]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_65] [%_66]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_66] [%_67]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.Sdg@0.3.0 [%_67] [%_68]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_56 %_68] [%_69 %_70]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_70 %_15] [%_71 %_72]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_71 %_8] [%_73 %_74]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_74 %_22] [%_75 %_76]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_76] [%_77]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_72 %_77] [%_78 %_79]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.T@0.3.0 [%_79] [%_80]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_75 %_80] [%_81 %_82]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.Tdg@0.3.0 [%_82] [%_83]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.H@0.3.0 [%_83] [%_84]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.Sdg@0.3.0 [%_84] [%_85]
+      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_73 %_85] [%_86 %_87]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_86 %_78] [%_88 %_89]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_89 %_81] [%_90 %_91]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_69 %_88] [%_92 %_93]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (cfg [%_61 %_64 %_93] [%_94 %_95 %_96]
+      (signature
+        (core.fn
+          [prelude.qubit prelude.qubit prelude.qubit]
+          [prelude.qubit prelude.qubit prelude.qubit]))
+      (meta (core.order_hint.key 73))
+      (cfg [%_125] [%_126]
+        (signature
+          (core.ctrl
+            [[prelude.qubit prelude.qubit prelude.qubit]]
+            [[prelude.qubit prelude.qubit prelude.qubit]]))
+        (block [%_125] [%_97 %_98]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]
+               [prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_99 %_100 %_101] [%_102 %_99 %_100 %_103]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[] []]) prelude.qubit prelude.qubit prelude.qubit]))
+            (meta (core.order_hint.input_key 75))
+            (meta (core.order_hint.order 75 79))
+            (meta (core.order_hint.output_key 76))
+            (meta (core.order_hint.order 79 76))
+            (tket.quantum.H@0.3.0 [%_101] [%_104]
+              (signature (core.fn [prelude.qubit] [prelude.qubit])))
+            (tket.measurement.Read@0.1.0 [%_105] [%_102]
+              (signature
+                (core.fn
+                  [tket.measurement.Measurement@0.1.0]
+                  [(core.adt [[] []])])))
+            (cfg [%_104] [%_105 %_103]
+              (signature
+                (core.fn
+                  [prelude.qubit]
+                  [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+              (meta (core.order_hint.key 79))
+              (cfg [%_114] [%_115]
+                (signature
+                  (core.ctrl
+                    [[prelude.qubit]]
+                    [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                (block [%_114] [%_106 %_107]
+                  (signature
+                    (core.ctrl
+                      [[prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]
+                       [tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_108] [%_109 %_110 %_111]
+                    (signature
+                      (core.fn
+                        [prelude.qubit]
+                        [(core.adt [[] []])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (meta (core.order_hint.input_key 81))
+                    (meta (core.order_hint.order 81 84))
+                    (meta (core.order_hint.output_key 82))
+                    (meta (core.order_hint.order 84 82))
+                    ((core.load_const
+                        (core.fn
+                          [prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                        _222)
+                      [] [%_113]
+                      (signature
+                        (core.fn
+                          []
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0
+                              prelude.qubit])])))
+                    ((core.call_indirect
+                        [prelude.qubit]
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                      [%_113 %_108] [%_110 %_111]
+                      (signature
+                        (core.fn
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                           prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+                      (meta (core.order_hint.key 84)))
+                    (tket.measurement.Read@0.1.0 [%_110] [%_109]
+                      (signature
+                        (core.fn
+                          [tket.measurement.Measurement@0.1.0]
+                          [(core.adt [[] []])])))))
+                (block [%_107] [%_115]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_116 %_117] [%_118 %_116 %_119]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (tket.quantum.X@0.3.0 [%_117] [%_119]
+                      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_118]
+                      (signature (core.fn [] [(core.adt [[]])])))))
+                (block [%_106] [%_115]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_121 %_122] [%_123 %_121 %_122]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_123]
+                      (signature (core.fn [] [(core.adt [[]])])))))))))
+        (block [%_98] [%_126]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_127 %_128 %_129] [%_130 %_131 %_132 %_129]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            (tket.quantum.CZ@0.3.0 [%_127 %_128] [%_131 %_132]
+              (signature
+                (core.fn
+                  [prelude.qubit prelude.qubit]
+                  [prelude.qubit prelude.qubit])))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_130]
+              (signature (core.fn [] [(core.adt [[]])])))))
+        (block [%_97] [%_126]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_134 %_135 %_136] [%_137 %_134 %_135 %_136]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_137]
+              (signature (core.fn [] [(core.adt [[]])])))))))
+    (tket.quantum.CX@0.3.0 [%_92 %_94] [%_139 %_140]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_140 %_95] [%_141 %_142]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_52 %_139] [%_143 %_144]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (cfg [%_44 %_47 %_144] [%_145 %_146 %_147]
+      (signature
+        (core.fn
+          [prelude.qubit prelude.qubit prelude.qubit]
+          [prelude.qubit prelude.qubit prelude.qubit]))
+      (meta (core.order_hint.key 113))
+      (cfg [%_175] [%_176]
+        (signature
+          (core.ctrl
+            [[prelude.qubit prelude.qubit prelude.qubit]]
+            [[prelude.qubit prelude.qubit prelude.qubit]]))
+        (block [%_175] [%_148 %_149]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]
+               [prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_150 %_151 %_152] [%_153 %_150 %_151 %_154]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[] []]) prelude.qubit prelude.qubit prelude.qubit]))
+            (meta (core.order_hint.input_key 115))
+            (meta (core.order_hint.order 115 119))
+            (meta (core.order_hint.output_key 116))
+            (meta (core.order_hint.order 119 116))
+            (tket.quantum.H@0.3.0 [%_152] [%_155]
+              (signature (core.fn [prelude.qubit] [prelude.qubit])))
+            (tket.measurement.Read@0.1.0 [%_156] [%_153]
+              (signature
+                (core.fn
+                  [tket.measurement.Measurement@0.1.0]
+                  [(core.adt [[] []])])))
+            (cfg [%_155] [%_156 %_154]
+              (signature
+                (core.fn
+                  [prelude.qubit]
+                  [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+              (meta (core.order_hint.key 119))
+              (cfg [%_164] [%_165]
+                (signature
+                  (core.ctrl
+                    [[prelude.qubit]]
+                    [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                (block [%_164] [%_157 %_158]
+                  (signature
+                    (core.ctrl
+                      [[prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]
+                       [tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_159] [%_160 %_161 %_162]
+                    (signature
+                      (core.fn
+                        [prelude.qubit]
+                        [(core.adt [[] []])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (meta (core.order_hint.input_key 121))
+                    (meta (core.order_hint.order 121 124))
+                    (meta (core.order_hint.output_key 122))
+                    (meta (core.order_hint.order 124 122))
+                    ((core.load_const
+                        (core.fn
+                          [prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                        _222)
+                      [] [%_163]
+                      (signature
+                        (core.fn
+                          []
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0
+                              prelude.qubit])])))
+                    ((core.call_indirect
+                        [prelude.qubit]
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                      [%_163 %_159] [%_161 %_162]
+                      (signature
+                        (core.fn
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                           prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+                      (meta (core.order_hint.key 124)))
+                    (tket.measurement.Read@0.1.0 [%_161] [%_160]
+                      (signature
+                        (core.fn
+                          [tket.measurement.Measurement@0.1.0]
+                          [(core.adt [[] []])])))))
+                (block [%_158] [%_165]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_166 %_167] [%_168 %_166 %_169]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (tket.quantum.X@0.3.0 [%_167] [%_169]
+                      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_168]
+                      (signature (core.fn [] [(core.adt [[]])])))))
+                (block [%_157] [%_165]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_171 %_172] [%_173 %_171 %_172]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_173]
+                      (signature (core.fn [] [(core.adt [[]])])))))))))
+        (block [%_149] [%_176]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_177 %_178 %_179] [%_180 %_181 %_182 %_179]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            (tket.quantum.CZ@0.3.0 [%_177 %_178] [%_181 %_182]
+              (signature
+                (core.fn
+                  [prelude.qubit prelude.qubit]
+                  [prelude.qubit prelude.qubit])))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_180]
+              (signature (core.fn [] [(core.adt [[]])])))))
+        (block [%_148] [%_176]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_184 %_185 %_186] [%_187 %_184 %_185 %_186]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_187]
+              (signature (core.fn [] [(core.adt [[]])])))))))
+    (tket.quantum.CX@0.3.0 [%_143 %_145] [%_189 %_190]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.QFree@0.3.0 [%_191] []
+      (signature (core.fn [prelude.qubit] []))
+      (meta (core.order_hint.key 151)))
+    (tket.quantum.QFree@0.3.0 [%_147] []
+      (signature (core.fn [prelude.qubit] []))
+      (meta (core.order_hint.key 152)))
+    (tket.quantum.QFree@0.3.0 [%_96] []
+      (signature (core.fn [prelude.qubit] []))
+      (meta (core.order_hint.key 153)))
+    (cfg [%_29 %_32 %_189] [%_192 %_193 %_191]
+      (signature
+        (core.fn
+          [prelude.qubit prelude.qubit prelude.qubit]
+          [prelude.qubit prelude.qubit prelude.qubit]))
+      (meta (core.order_hint.key 154))
+      (cfg [%_221] [%_222]
+        (signature
+          (core.ctrl
+            [[prelude.qubit prelude.qubit prelude.qubit]]
+            [[prelude.qubit prelude.qubit prelude.qubit]]))
+        (block [%_221] [%_194 %_195]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]
+               [prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_196 %_197 %_198] [%_199 %_196 %_197 %_200]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[] []]) prelude.qubit prelude.qubit prelude.qubit]))
+            (meta (core.order_hint.input_key 156))
+            (meta (core.order_hint.order 156 160))
+            (meta (core.order_hint.output_key 157))
+            (meta (core.order_hint.order 160 157))
+            (tket.quantum.H@0.3.0 [%_198] [%_201]
+              (signature (core.fn [prelude.qubit] [prelude.qubit])))
+            (tket.measurement.Read@0.1.0 [%_202] [%_199]
+              (signature
+                (core.fn
+                  [tket.measurement.Measurement@0.1.0]
+                  [(core.adt [[] []])])))
+            (cfg [%_201] [%_202 %_200]
+              (signature
+                (core.fn
+                  [prelude.qubit]
+                  [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+              (meta (core.order_hint.key 160))
+              (cfg [%_210] [%_211]
+                (signature
+                  (core.ctrl
+                    [[prelude.qubit]]
+                    [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                (block [%_210] [%_203 %_204]
+                  (signature
+                    (core.ctrl
+                      [[prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]
+                       [tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_205] [%_206 %_207 %_208]
+                    (signature
+                      (core.fn
+                        [prelude.qubit]
+                        [(core.adt [[] []])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (meta (core.order_hint.input_key 162))
+                    (meta (core.order_hint.order 162 165))
+                    (meta (core.order_hint.output_key 163))
+                    (meta (core.order_hint.order 165 163))
+                    ((core.load_const
+                        (core.fn
+                          [prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                        _222)
+                      [] [%_209]
+                      (signature
+                        (core.fn
+                          []
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0
+                              prelude.qubit])])))
+                    ((core.call_indirect
+                        [prelude.qubit]
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                      [%_209 %_205] [%_207 %_208]
+                      (signature
+                        (core.fn
+                          [(core.fn
+                             [prelude.qubit]
+                             [tket.measurement.Measurement@0.1.0 prelude.qubit])
+                           prelude.qubit]
+                          [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+                      (meta (core.order_hint.key 165)))
+                    (tket.measurement.Read@0.1.0 [%_207] [%_206]
+                      (signature
+                        (core.fn
+                          [tket.measurement.Measurement@0.1.0]
+                          [(core.adt [[] []])])))))
+                (block [%_204] [%_211]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_212 %_213] [%_214 %_212 %_215]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    (tket.quantum.X@0.3.0 [%_213] [%_215]
+                      (signature (core.fn [prelude.qubit] [prelude.qubit])))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_214]
+                      (signature (core.fn [] [(core.adt [[]])])))))
+                (block [%_203] [%_211]
+                  (signature
+                    (core.ctrl
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]
+                      [[tket.measurement.Measurement@0.1.0 prelude.qubit]]))
+                  (dfg [%_217 %_218] [%_219 %_217 %_218]
+                    (signature
+                      (core.fn
+                        [tket.measurement.Measurement@0.1.0 prelude.qubit]
+                        [(core.adt [[]])
+                         tket.measurement.Measurement@0.1.0
+                         prelude.qubit]))
+                    ((core.load_const
+                        (core.adt [[]])
+                        (core.const.adt [[]] [] 0 (tuple)))
+                      [] [%_219]
+                      (signature (core.fn [] [(core.adt [[]])])))))))))
+        (block [%_195] [%_222]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_223 %_224 %_225] [%_226 %_227 %_228 %_225]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            (tket.quantum.CZ@0.3.0 [%_223 %_224] [%_227 %_228]
+              (signature
+                (core.fn
+                  [prelude.qubit prelude.qubit]
+                  [prelude.qubit prelude.qubit])))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_226]
+              (signature (core.fn [] [(core.adt [[]])])))))
+        (block [%_194] [%_222]
+          (signature
+            (core.ctrl
+              [[prelude.qubit prelude.qubit prelude.qubit]]
+              [[prelude.qubit prelude.qubit prelude.qubit]]))
+          (dfg [%_230 %_231 %_232] [%_233 %_230 %_231 %_232]
+            (signature
+              (core.fn
+                [prelude.qubit prelude.qubit prelude.qubit]
+                [(core.adt [[]]) prelude.qubit prelude.qubit prelude.qubit]))
+            ((core.load_const
+                (core.adt [[]])
+                (core.const.adt [[]] [] 0 (tuple)))
+              [] [%_233]
+              (signature (core.fn [] [(core.adt [[]])])))))))
+    (tket.quantum.CX@0.3.0 [%_190 %_146] [%_235 %_236]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.CX@0.3.0 [%_192 %_193] [%_237 %_238]
+      (signature
+        (core.fn [prelude.qubit prelude.qubit] [prelude.qubit prelude.qubit])))
+    (tket.quantum.MeasureFree@0.3.0 [%_237] [%_239]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 193)))
+    (tket.quantum.MeasureFree@0.3.0 [%_235] [%_240]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 194)))
+    (tket.quantum.MeasureFree@0.3.0 [%_141] [%_241]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 195)))
+    (tket.quantum.MeasureFree@0.3.0 [%_90] [%_242]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 196)))
+    (tket.measurement.Read@0.1.0 [%_239] [%_243]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_240] [%_244]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_241] [%_245]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_242] [%_246]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    ((collections.borrow_arr.new_array@0.2.1 4 (core.adt [[] []]))
+      [%_243 %_244 %_245 %_246] [%_247]
+      (signature
+        (core.fn
+          [(core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])]
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))])))
+    ((collections.borrow_arr.clone@0.2.1 4 (core.adt [[] []]))
+      [%_247] [%_248 %_249]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))
+           (collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))])))
+    ((collections.borrow_arr.to_array@0.2.1 4 (core.adt [[] []]))
+      [%_248] [%_250]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(collections.array.array@0.1.2 4 (core.adt [[] []]))])))
+    ((tket.result.result_array_bool@0.2.0 "a" 4) [%_250] []
+      (signature
+        (core.fn [(collections.array.array@0.1.2 4 (core.adt [[] []]))] []))
+      (meta (core.order_hint.key 204)))
+    ((collections.borrow_arr.unpack@0.2.1 4 (core.adt [[] []]))
+      [%_249] [%_251 %_252 %_253 %_254]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])])))
+    (tket.quantum.MeasureFree@0.3.0 [%_238] [%_255]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 206)))
+    (tket.quantum.MeasureFree@0.3.0 [%_236] [%_256]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 207)))
+    (tket.quantum.MeasureFree@0.3.0 [%_142] [%_257]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 208)))
+    (tket.quantum.MeasureFree@0.3.0 [%_91] [%_258]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 209)))
+    (tket.measurement.Read@0.1.0 [%_255] [%_259]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_256] [%_260]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_257] [%_261]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    (tket.measurement.Read@0.1.0 [%_258] [%_262]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    ((collections.borrow_arr.new_array@0.2.1 4 (core.adt [[] []]))
+      [%_259 %_260 %_261 %_262] [%_263]
+      (signature
+        (core.fn
+          [(core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])]
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))])))
+    ((collections.borrow_arr.clone@0.2.1 4 (core.adt [[] []]))
+      [%_263] [%_264 %_265]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))
+           (collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))])))
+    ((collections.borrow_arr.to_array@0.2.1 4 (core.adt [[] []]))
+      [%_264] [%_266]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(collections.array.array@0.1.2 4 (core.adt [[] []]))])))
+    ((tket.result.result_array_bool@0.2.0 "sum" 4) [%_266] []
+      (signature
+        (core.fn [(collections.array.array@0.1.2 4 (core.adt [[] []]))] []))
+      (meta (core.order_hint.key 217)))
+    ((collections.borrow_arr.unpack@0.2.1 4 (core.adt [[] []]))
+      [%_265] [%_267 %_268 %_269 %_270]
+      (signature
+        (core.fn
+          [(collections.borrow_arr.borrow_array@0.2.1 4 (core.adt [[] []]))]
+          [(core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])
+           (core.adt [[] []])])))
+    (tket.quantum.MeasureFree@0.3.0 [%_87] [%_271]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 219)))
+    (tket.measurement.Read@0.1.0 [%_271] [%_272]
+      (signature
+        (core.fn [tket.measurement.Measurement@0.1.0] [(core.adt [[] []])])))
+    ((tket.result.result_bool@0.2.0 "carry") [%_272] []
+      (signature (core.fn [(core.adt [[] []])] []))
+      (meta (core.order_hint.key 221)))))
+
+(define-func
+  private
+  _222
+  (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0 prelude.qubit])
+  (meta (core.title "helper"))
+  (dfg [%_273] [%_274 %_275]
+    (signature
+      (core.fn
+        [prelude.qubit]
+        [tket.measurement.Measurement@0.1.0 prelude.qubit]))
+    (meta (core.order_hint.input_key 223))
+    (meta (core.order_hint.order 223 225))
+    (meta (core.order_hint.output_key 224))
+    (meta (core.order_hint.order 225 226))
+    (meta (core.order_hint.order 226 224))
+    (tket.quantum.MeasureFree@0.3.0 [%_273] [%_274]
+      (signature (core.fn [prelude.qubit] [tket.measurement.Measurement@0.1.0]))
+      (meta (core.order_hint.key 225)))
+    (tket.quantum.QAlloc@0.3.0 [] [%_275]
+      (signature (core.fn [] [prelude.qubit]))
+      (meta (core.order_hint.key 226)))))

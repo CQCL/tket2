@@ -14,5 +14,15 @@
     "tket/tket-rs/examples/handoff_benchmark.rs": "4893b2b8f11e91e2753b0a9b018719cf891416cdd1558970f85da011e6b5eaad"
   },
   "guppyalgos_tracked_files_unchanged": true,
-  "manifest_sha256": "35a3a5b8f30bf14141abda94d73f62896c18946f4057a3056e920e9f2d850839"
+  "manifest_sha256": "35a3a5b8f30bf14141abda94d73f62896c18946f4057a3056e920e9f2d850839",
+  "benchmark_tket_commit": "00678e2c146c194277489038c39560309d5ff461",
+  "benchmark_source_sha256": {
+    "pg-libs/pg-passes/tk-pg-greedy-synth/src/reducer/mod.rs": "31e019a397bd83c47839d2b512ec72ed553875e968565716e86db795e92910af",
+    "pg-libs/pg-passes/tk-pg-greedy-synth/src/synthesis/tests.rs": "ec0517a9f25a76282d1abf328d8a7c854f0b018977fb8cdc5b1e59b558f171dd",
+    "pg-libs/pg-passes/tk-pg-t-optimize/src/lib.rs": "597a039edeeb18e49102313a0b6773eba2af96664ff0f1d047d4da3217de961c",
+    "pg-libs/pg-passes/tk-pg-t-optimize/src/optimizer.rs": "1e6c26194a60e5a0ee10c3295b6ad421f7ba8ebb94f0db7ccb93c2be1c3ee4f5",
+    "tket/tket-rs/src/passes/pauli_graph_resynthesis.rs": "d222e9cd48134fe9b98806a0f12840df2388129471a8747d7a0a762f806720bd",
+    "tket/tket-rs/src/passes/pg_convert.rs": "271d1c21d1bf5a6e5eb30305651d7d551fa67150f15ae862ee2cda559b6fceb2"
+  },
+  "benchmark_input_artifacts_regenerated": false
 }
