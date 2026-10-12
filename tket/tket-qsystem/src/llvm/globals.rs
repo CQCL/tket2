@@ -33,13 +33,43 @@ use itertools::Itertools;
 ///
 /// `global` is the stable address of the LLVM global variable storing the slot,
 /// not the value stored in that slot. A backend must use the same lock for every
-/// access to that address. Both methods must leave the builder in a continuation block.
+/// access to that address. All hooks must leave the builder in a continuation block.
 /// Lock must reject reentrant access and unlock must reject an unmatched release.
 /// `Map` holds the lock throughout its callback and restores the value before
 /// unlocking. `With` locks only while installing/restoring its scoped value;
 /// its callback runs unlocked so it can use `Map`. These hooks do not make
-/// overlapping `With` scopes across threads safe.
+/// overlapping `With` scopes across threads safe by themselves. The lifecycle
+/// hooks can register and retire a scoped lock using the same slot address.
+/// Their default implementations do nothing, preserving existing backends.
+/// A backend can reject nested or overlapping scopes in `emit_with_enter`.
+/// Hooks run on normal completion; they do not provide unwind cleanup.
 pub trait GlobalsLockCodegen {
+    /// Enter a `With` scope before acquiring its installation lock or changing the slot.
+    ///
+    /// Use `global` as an opaque identity, without alignment or pointee assumptions.
+    /// A runtime registration failure must panic before slot mutation.
+    fn emit_with_enter<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        _context: &mut EmitFuncContext<'c, '_, H>,
+        _global: PointerValue<'c>,
+        _prelude: &PCG,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    /// Exit a `With` scope after restoring the previous value and releasing its lock.
+    ///
+    /// A runtime retirement failure can panic here; the slot has already been
+    /// restored. Leave the builder in a continuation block before returning.
+    fn emit_with_exit<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
+        &self,
+        _context: &mut EmitFuncContext<'c, '_, H>,
+        _global: PointerValue<'c>,
+        _prelude: &PCG,
+    ) -> Result<()> {
+        Ok(())
+    }
+
     /// Acquire exclusive access to the slot at `global`.
     fn emit_lock<'c, H: HugrView<Node = Node>, PCG: PreludeCodegen>(
         &self,
@@ -264,6 +294,8 @@ impl<PCG: PreludeCodegen, LCG: GlobalsLockCodegen> GlobalsCodegenExtension<PCG, 
                     "Input type does not match global variable type. Found {global_ty}, Expected {sym_ty}"
                 );
                 self.locks
+                    .emit_with_enter(context, global.as_pointer_value(), &self.pcg)?;
+                self.locks
                     .emit_lock(context, global.as_pointer_value(), &self.pcg)?;
                 let builder = context.builder();
                 let start_value =
@@ -302,6 +334,9 @@ impl<PCG: PreludeCodegen, LCG: GlobalsLockCodegen> GlobalsCodegenExtension<PCG, 
 
                 self.locks
                     .emit_unlock(context, global.as_pointer_value(), &self.pcg)?;
+
+                self.locks
+                    .emit_with_exit(context, global.as_pointer_value(), &self.pcg)?;
                 let builder = context.builder();
 
                 let mut call_results =
