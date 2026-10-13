@@ -9,7 +9,10 @@
 //! Global phase is an operation that applies some global phase to a circuit.
 //! It is implemented as a side-effect that takes a rotation angle as an input.
 
-use hugr::{Wire, extension::simple_op::MakeExtensionOp, ops::ExtensionOp};
+use hugr::{
+    HugrView, IncomingPort, Wire, core::HugrNode, extension::simple_op::MakeExtensionOp,
+    ops::ExtensionOp,
+};
 use itertools::Itertools;
 
 use crate::extension::modifier::Modifier;
@@ -19,8 +22,8 @@ pub mod modifier_resolver;
 pub mod power;
 
 /// An accumulated modifier that combines control, dagger, and power modifiers.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-struct CombinedModifier {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct CombinedModifier<N: HugrNode> {
     // Number of all control qubits
     control: usize,
     // Control arrays applied so far
@@ -29,15 +32,16 @@ struct CombinedModifier {
     /// Whether the dagger modifier has been applied.
     dagger: bool,
     /// The wires containing the exponent of the power modifier.
-    exponents: Vec<Wire>,
+    exponents: Vec<Wire<N>>,
 }
 
-impl CombinedModifier {
+impl<N: HugrNode> CombinedModifier<N> {
     /// Add a modifier
-    fn push<N>(
+    fn push(
         &mut self,
         ext_op: &ExtensionOp,
         node: N,
+        hugr: &impl HugrView<Node = N>,
     ) -> Result<(), modifier_resolver::ModifierResolverErrors<N>> {
         match Modifier::from_extension_op(ext_op) {
             Ok(Modifier::ControlModifier) => {
@@ -46,7 +50,10 @@ impl CombinedModifier {
                 self.accum_ctrl.push(ctrl);
             }
             Ok(Modifier::DaggerModifier) => self.dagger = !self.dagger,
-            Ok(Modifier::PowerModifier) => return Ok(()),
+            Ok(Modifier::PowerModifier) => {
+                let exponent = Wire::from_connected_port(node, IncomingPort::from(1), hugr);
+                self.exponents.push(exponent);
+            }
             Err(_) => {}
         }
         Ok(())
@@ -67,5 +74,16 @@ impl CombinedModifier {
             s.push('D');
         }
         s
+    }
+}
+
+impl<N: HugrNode> Default for CombinedModifier<N> {
+    fn default() -> Self {
+        Self {
+            control: 0,
+            accum_ctrl: Vec::new(),
+            dagger: false,
+            exponents: Vec::new(),
+        }
     }
 }

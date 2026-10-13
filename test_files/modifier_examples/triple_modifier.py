@@ -25,12 +25,12 @@ def main(c1: qubit, c2: qubit, t: qubit) -> None:
     # c1 = qubit()
     # t = qubit()
     # h(c1)
-    # with power(2):
-    #     h(c1)
+    with power(2):
+        h(c1)
 
     with control(c1):
-        with control(c2):  # , dagger:
-            h(t)
+        # with control(c2):  # , dagger:
+        h(t)
 
     # with dagger:
     #     h(t)

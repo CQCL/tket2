@@ -116,9 +116,16 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok(new_load)
     }
 
-    /// Trace the chain of modifiers starting from node `n`, collecting all modifier nodes until reaching
-    /// a non-modifier target node. Returns the chain of nodes in order from the starting node to the target node.
-    /// The return includes the starting node and the target node.
+    /// Trace upstream from `n`, following the producer connected to each modifier's input port 0
+    /// until reaching a non-modifier target (normally a `LoadFunction`).
+    /// For an indirect call, `n` is the producer of the `CallIndirect` node's function input,
+    /// so traversal runs from the modifier closest to the call back towards the load,
+    /// opposite to dataflow. The `CallIndirect` node itself is not included.
+    /// Collects modifiers in traversal order and returns the nodes in that same order,
+    /// including both `n` and the target. If `n` is not a modifier, returns only `n`.
+    ///
+    /// For example, given the dataflow `load -> modifier_a -> modifier_b -> call_indirect`,
+    /// tracing from `n = modifier_b` returns `[modifier_b, modifier_a, load]`.
     pub(super) fn trace_modifiers_chain(
         &mut self,
         h: &impl HugrMut<Node = N>,
@@ -138,7 +145,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 break;
             }
 
-            modifiers.push(optype.as_extension_op().unwrap(), current)?;
+            modifiers.push(optype.as_extension_op().unwrap(), current, h)?;
             let next = h
                 .single_linked_output(current, 0)
                 .ok_or(ModifierError::NoTarget(n))?;

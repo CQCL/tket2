@@ -103,6 +103,7 @@
 //!   rewrites. Their reversal under dagger has not yet been implemented, thus we simply ignore them.
 //! - User defined extension ops: There is no way to infer modified unknown extension ops
 //!   that operate on quantum data. We currently raise an error if one is found.
+// NICOLA: TODO: UPDATE THE DOCUMENTATION ABOUT POWER MODIFIER
 use fxhash::FxHashSet;
 use itertools::{Either, Itertools};
 use std::{
@@ -306,9 +307,9 @@ impl<N: HugrNode> PortVector<N> {
 
 /// A container for modifier resolving.
 /// This struct holds the state during the modifier resolution process.
-pub struct ModifierResolver<N = Node> {
+pub struct ModifierResolver<N: HugrNode = Node> {
     /// Current accumulated modifiers.
-    modifiers: CombinedModifier,
+    modifiers: CombinedModifier<N>,
     /// A map from old wire to new wires.
     /// The keys are old wires, and the values are new wires.
     /// As noted at the head of this module, especially when dagger is applied,
@@ -329,9 +330,9 @@ pub struct ModifierResolver<N = Node> {
     /// full modifier, including the control-array layout.
     /// Entries are inserted before transforming bodies so recursive calls can
     /// reference the function currently being generated.
-    modified_impls: HashMap<(N, CombinedModifier), N>,
+    modified_impls: HashMap<(N, CombinedModifier<N>), N>,
     /// Cached adapters from the resolver's controls-first ABI to custom controls-last functions.
-    custom_adapters: HashMap<(N, N, CombinedModifier), N>,
+    custom_adapters: HashMap<(N, N, CombinedModifier<N>), N>,
     /// Analyser used to find qubits in types. Used to check when a type carries quantum data.
     qubit_finder: TypeUnpacker,
     /// Indicate whether the extension op being modified is targeted by some
@@ -339,7 +340,7 @@ pub struct ModifierResolver<N = Node> {
     insert_state_order_edges: bool,
 }
 
-impl<N> ModifierResolver<N> {
+impl<N: HugrNode> ModifierResolver<N> {
     /// Create a new modifier resolver.
     fn new() -> Self {
         ModifierResolver {
@@ -357,7 +358,7 @@ impl<N> ModifierResolver<N> {
     }
 }
 
-impl<N> Default for ModifierResolver<N> {
+impl<N: HugrNode> Default for ModifierResolver<N> {
     fn default() -> Self {
         Self::new()
     }
@@ -455,10 +456,10 @@ impl<N> ModifierResolverErrors<N> {
 
 // Utility functions for ModifierResolver
 impl<N: HugrNode> ModifierResolver<N> {
-    fn modifiers_mut(&mut self) -> &mut CombinedModifier {
+    fn modifiers_mut(&mut self) -> &mut CombinedModifier<N> {
         &mut self.modifiers
     }
-    fn modifiers(&self) -> &CombinedModifier {
+    fn modifiers(&self) -> &CombinedModifier<N> {
         &self.modifiers
     }
     fn control_num(&self) -> usize {
@@ -517,7 +518,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
     fn with_modifiers<T>(
         &mut self,
-        modifiers: CombinedModifier,
+        modifiers: CombinedModifier<N>,
         f: impl FnOnce(&mut Self) -> T,
     ) -> T {
         let modifiers = mem::replace(self.modifiers_mut(), modifiers);
