@@ -25,7 +25,7 @@
 //! The resolver finds the last modifier in a chain of modifiers,
 //! and starts resolving the function loaded by the `LoadFunction` node,
 //! which is done in
-//! `apply_modifier_chain_to_loaded_fn`.
+//! `resolve_modified_load`.
 //! After resolution, original function nodes that have been replaced by solved
 //! modified versions may be removed if they are no longer needed and the pass
 //! scope allows removing them. Nodes whose interface must be preserved by the
@@ -697,50 +697,63 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
-    fn verify(&self, h: &impl HugrView<Node = N>, n: N) -> Result<(), ModifierError<N>> {
+    fn should_modify(&self, h: &impl HugrView<Node = N>, n: N) -> bool {
         // Check if the node is a modifier, modifying an operation.
         let optype = h.get_optype(n);
         if Modifier::from_optype(optype).is_none() {
-            return Err(ModifierError::NotModifier(n, optype.clone()));
+            return false;
         }
-        // Check if this is the first modifier in a chain.
+        // Check if this is the last modifier in a chain, i.e., it targets directly an indirect call node.
         let Ok((caller, _)) = h.linked_inputs(n, 0).exactly_one() else {
-            return Err(ModifierError::NoCaller(n));
+            return false;
         };
         let optype = h.get_optype(caller);
         if Modifier::from_optype(optype).is_some() {
-            return Err(ModifierError::NotInitialModifier(caller, optype.clone()));
+            return false;
         }
-        Ok(())
+        true
     }
 
-    /// Apply the resolver to the current node `n`.
-    /// It first checks if the node is a modifier and can be applied.
-    /// If not, it returns a [`ModifierError`].
-    /// If yes, it applies the modifier to the loaded function,
-    fn try_rewrite(
+    /// Resolve a modifier chain in place, starting with no enclosing modifiers.
+    /// `modifier_node` must be the last modifier in a chain, as checked by `should_modify`.
+    fn apply_modification(
         &mut self,
         hugr: &mut impl HugrMut<Node = N>,
         modifier_node: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // Verify that the rewrite can be applied.
-        self.verify(hugr, modifier_node)?;
+        let modifiers = CombinedModifier::default();
+        // Make sure that the modifiers are initially empty.
+        self.with_modifiers(modifiers, |this| {
+            this.apply_modification_inner(hugr, modifier_node)
+        })
+    }
 
-        // The ports that takes inputs from the modified function to the IndirectCall node.
-        let modified_fn_loader: Vec<(_, Vec<_>)> = hugr
+    /// Resolve a modifier chain in place using the current modifier state.
+    /// `modifier_node` must be the last modifier in a chain, as checked by `should_modify`.
+    fn apply_modification_inner(
+        &mut self,
+        hugr: &mut impl HugrMut<Node = N>,
+        modifier_node: N,
+    ) -> Result<(), ModifierResolverErrors<N>> {
+        // Save the output connections so the replacement loader can use the same consumers.
+        let modifier_output_consumers: Vec<(_, Vec<_>)> = hugr
             .node_outputs(modifier_node)
             .map(|p| (p, hugr.linked_inputs(modifier_node, p).collect()))
             .collect();
 
-        // Modify the chain of modifiers.
-        // Make sure that the modifiers are initially empty.
-        let modifiers = CombinedModifier::default();
-        let new_load = self.with_modifiers(modifiers, |this| {
-            this.apply_modifier_chain_to_loaded_fn(hugr, modifier_node)
-        })?;
+        let trace = self.trace_modifiers_chain(hugr, modifier_node)?;
+        let load_node = *trace.last().ok_or(ModifierError::NoTarget(modifier_node))?;
+        let (modified_fn, load) = self.resolve_modified_load(hugr, modifier_node, load_node)?;
+
+        // Preserve loaders shared with consumers outside this modifier chain.
+        if hugr.linked_inputs(load_node, 0).count() == 1 {
+            hugr.remove_node(load_node);
+        }
+        let new_load = hugr.add_node_after(modifier_node, load);
+        hugr.connect(modified_fn, 0, new_load, 0);
 
         // Connect the modified function to the inputs
-        for (out_port, inputs) in modified_fn_loader {
+        for (out_port, inputs) in modifier_output_consumers {
             for (recv, recv_port) in inputs {
                 hugr.disconnect(recv, recv_port);
                 hugr.connect(new_load, out_port, recv, recv_port);
@@ -1389,8 +1402,6 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
     entry_points: impl IntoIterator<Item = Node>,
     scope: &PassScope,
 ) -> Result<(), ModifierResolverErrors<Node>> {
-    use ModifierResolverErrors::*;
-
     // Collect entry points into a deque so they can be cloned for later cleanup passes.
     let entry_points: VecDeque<_> = entry_points.into_iter().collect();
 
@@ -1419,13 +1430,9 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
         worklist.extend(h.children(node).filter(|n| !visited.contains(n)));
         worklist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
         visited.insert(node);
-        if let Err(e) = resolver.try_rewrite(h, node) {
-            // ModifierError means this node is not a modifier (or is not the first
-            // in its chain) and can safely be skipped.
-            // Any other error is a genuine failure and must be propagated.
-            if !matches!(e, ModifierError(_)) {
-                return Err(e);
-            }
+
+        if resolver.should_modify(h, node) {
+            resolver.apply_modification(h, node)?;
         }
     }
 
