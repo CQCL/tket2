@@ -14,6 +14,7 @@ use crate::extension::modifier::Modifier;
 
 /// Where an indirect-call rewrite installs its replacement.
 /// The default builder type allows selecting `InPlace` without supplying a builder.
+// todo: delete this enum and use a flag instead called: "change_indirect_call_node"
 pub(super) enum IndirectCallDestination<'a, D = DFGBuilder<Hugr>> {
     /// Reuse the indirect call node and its data and StateOrder connections in the original graph.
     /// There must be no enclosing modifiers affecting the call's signature.
@@ -182,24 +183,24 @@ impl<N: HugrNode> ModifierResolver<N> {
     pub(super) fn modify_indirect_call(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
-        n: N,
+        ind_node_call: N,
         indir_call: &CallIndirect,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         // An unmodified classical call can be copied without resolving its target.
         // A non-modifier function operand corresponds to a trace of length one.
-        let (call_indirect_input, _) = h.single_linked_output(n, 0).unwrap();
+        let (call_indirect_input, _) = h.single_linked_output(ind_node_call, 0).unwrap();
         // If a function has no quantum effects and is not directly modified, we can skip modifying the call
         if !self.signature_has_quantum_data(&indir_call.signature)
             && Modifier::from_optype(h.get_optype(call_indirect_input)).is_none()
         {
-            self.add_node_no_modification(h, n, indir_call.clone(), new_dfg)?;
+            self.add_node_no_modification(h, ind_node_call, indir_call.clone(), new_dfg)?;
             return Ok(());
         }
 
         self.rewrite_indirect_call(
             h,
-            n,
+            ind_node_call,
             indir_call,
             IndirectCallDestination::IntoDataflow(new_dfg),
         )

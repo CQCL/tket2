@@ -379,6 +379,12 @@ pub enum ModifierError<N = Node> {
     #[display("The modifier node {_0} chain has no target")]
     #[error(ignore)]
     NoTarget(N),
+    /// An indirect call's function input does not have exactly one source.
+    #[display(
+        "Indirect call node {_0} must have exactly one source connected to its function input (port 0)"
+    )]
+    #[error(ignore)]
+    InvalidIndirectCallTarget(N),
     /// Not the first modifier in a chain.
     #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
     NotInitialModifier(N, OpType),
@@ -393,6 +399,7 @@ impl<N> ModifierError<N> {
             ModifierError::NotModifier(n, _)
             | ModifierError::NoCaller(n)
             | ModifierError::NoTarget(n)
+            | ModifierError::InvalidIndirectCallTarget(n)
             | ModifierError::NotInitialModifier(n, _)
             | ModifierError::ModifierNotApplicable(n, _) => n,
         }
@@ -698,66 +705,58 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
-    // NICOLA: TODO: this function should check that we have Indirect Call on which in the first input port we have a modifier chain (while doing so also checking that every modifier node is properly chained)
-    fn should_modify(&self, h: &impl HugrView<Node = N>, n: N) -> bool {
-        // Check if the node is a modifier, modifying an operation.
-        let optype = h.get_optype(n);
-        if Modifier::from_optype(optype).is_none() {
-            return false;
+    // todo: explain what the function is checking
+    fn should_modify(
+        &self,
+        h: &impl HugrView<Node = N>,
+        node: N,
+    ) -> Result<bool, ModifierResolverErrors<N>> {
+        // Check if the node is an indirect call.
+        if !matches!(h.get_optype(node), OpType::CallIndirect(_)) {
+            return Ok(false);
         }
-        // Check if this is the last modifier in a chain, i.e., it targets directly an indirect call node.
-        let Ok((caller, _)) = h.linked_inputs(n, 0).exactly_one() else {
-            // NICOLA: here we should have an error
-            return false;
-        };
-        let optype = h.get_optype(caller);
-        if Modifier::from_optype(optype).is_some() {
-            return false;
+        // Check if this indirect call is targeted by a modifier chain.
+        let (maybe_a_modifier, _) = h
+            .linked_outputs(node, 0)
+            .exactly_one()
+            .map_err(|_| ModifierError::InvalidIndirectCallTarget(node))?;
+        if Modifier::from_optype(h.get_optype(maybe_a_modifier)).is_none() {
+            return Ok(false);
         }
-        true
+
+        Ok(true)
     }
 
     /// Resolve a modifier chain in place, starting with no enclosing modifiers.
-    /// `modifier_node` must be the last modifier in a chain, as checked by `should_modify`.
+    /// `indirect_call_node` must consume a modifier chain at its function input (port 0),
+    /// as checked by `should_modify`.
     fn apply_modification(
         &mut self,
         hugr: &mut impl HugrMut<Node = N>,
-        modifier_node: N,
+        indirect_call_node: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
         let modifiers = CombinedModifier::default();
         // Make sure that the modifiers are initially empty.
         self.with_modifiers(modifiers, |this| {
-            this.apply_modification_inner(hugr, modifier_node)
+            this.apply_modification_inner(hugr, indirect_call_node)
         })
     }
 
-    /// Find the indirect call consuming the last modifier and rewrite it in place.
+    /// Rewrite the indirect call consuming a modifier chain in place.
     /// Called by `apply_modification` with no enclosing modifiers.
-    /// `modifier_node` must be the last modifier in a chain, as checked by `should_modify`.
+    /// `indirect_call_node` must consume a modifier chain at its function input (port 0),
+    /// as checked by `should_modify`.
     fn apply_modification_inner(
         &mut self,
         hugr: &mut impl HugrMut<Node = N>,
-        modifier_node: N,
+        indirect_call_node: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // Find the sole consumer of the last modifier's function-value output.
-        let (ind_call_node, ind_call_port) = hugr
-            .linked_inputs(modifier_node, 0)
-            .exactly_one()
-            .map_err(|_| ModifierError::NoCaller(modifier_node))?;
-
-        // This path resolves modifier chains used as the function operand of an indirect call.
-        let optype = hugr.get_optype(ind_call_node).clone();
+        let optype = hugr.get_optype(indirect_call_node).clone();
         let OpType::CallIndirect(indir_call) = &optype else {
-            return Err(ModifierError::ModifierNotApplicable(modifier_node, optype).into());
+            return Err(ModifierError::ModifierNotApplicable(indirect_call_node, optype).into());
         };
-        // NICOLA: TODO: I want a better error here, saying that the modifier is not connected to the proper port
-        // Port 0 is the function operand; the remaining input ports carry call arguments.
-        if ind_call_port != IncomingPort::from(0) {
-            return Err(ModifierError::ModifierNotApplicable(modifier_node, optype).into());
-        }
-        // Reconnect the existing call in the original graph instead of building a separate copy.
         let destination: IndirectCallDestination<'_> = IndirectCallDestination::InPlace;
-        self.rewrite_indirect_call(hugr, ind_call_node, indir_call, destination)
+        self.rewrite_indirect_call(hugr, indirect_call_node, indir_call, destination)
     }
 
     /// Modifies a function signature to account for control qubits added by modifiers.
@@ -1429,7 +1428,7 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
         worklist.extend(h.all_neighbours(node).filter(|n| !visited.contains(n)));
         visited.insert(node);
 
-        if resolver.should_modify(h, node) {
+        if resolver.should_modify(h, node)? {
             resolver.apply_modification(h, node)?;
         }
     }
