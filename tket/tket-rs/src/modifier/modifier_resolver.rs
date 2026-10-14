@@ -120,7 +120,7 @@ use super::CombinedModifier;
 use crate::passes::utils::unpack_container::TypeUnpacker;
 use crate::passes::{InScope, PassScope};
 use crate::{TketOp, extension::global_phase::GlobalPhase, modifier::Modifier};
-use call_modify::IndirectCallDestination;
+use call_modify::IndirectCallRewriteMode;
 use global_phase_modify::delete_phase;
 
 use hugr::{
@@ -385,6 +385,15 @@ pub enum ModifierError<N = Node> {
     )]
     #[error(ignore)]
     InvalidIndirectCallTarget(N),
+    /// The head of a modifier chain is not a loaded function.
+    #[display("Malformed modifier chain: head node {_0} must be a LoadFunction but is {_1}")]
+    MalformedChainHead(N, OpType),
+    /// A modifier's function input does not have exactly one source.
+    #[display(
+        "Malformed modifier chain: modifier node {_0} must have exactly one source connected to its function input (port 0)"
+    )]
+    #[error(ignore)]
+    MalformedChainLink(N),
     /// Not the first modifier in a chain.
     #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
     NotInitialModifier(N, OpType),
@@ -400,6 +409,8 @@ impl<N> ModifierError<N> {
             | ModifierError::NoCaller(n)
             | ModifierError::NoTarget(n)
             | ModifierError::InvalidIndirectCallTarget(n)
+            | ModifierError::MalformedChainHead(n, _)
+            | ModifierError::MalformedChainLink(n)
             | ModifierError::NotInitialModifier(n, _)
             | ModifierError::ModifierNotApplicable(n, _) => n,
         }
@@ -705,7 +716,9 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
-    // todo: explain what the function is checking
+    /// Check whether the node is an indirect call whose function input (port 0)
+    /// is supplied by a modifier operation.
+    /// Return an error if an indirect call's function input has no unique source.
     fn should_modify(
         &self,
         h: &impl HugrView<Node = N>,
@@ -737,6 +750,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<(), ModifierResolverErrors<N>> {
         let modifiers = CombinedModifier::default();
         // Make sure that the modifiers are initially empty.
+        // NICOLA: TODO: This may be useless
         self.with_modifiers(modifiers, |this| {
             this.apply_modification_inner(hugr, indirect_call_node)
         })
@@ -755,8 +769,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         let OpType::CallIndirect(indir_call) = &optype else {
             return Err(ModifierError::ModifierNotApplicable(indirect_call_node, optype).into());
         };
-        let destination: IndirectCallDestination<'_> = IndirectCallDestination::InPlace;
-        self.rewrite_indirect_call(hugr, indirect_call_node, indir_call, destination)
+        let mode: IndirectCallRewriteMode<'_> = IndirectCallRewriteMode::InPlace;
+        self.rewrite_indirect_call(hugr, indirect_call_node, indir_call, mode)
     }
 
     /// Modifies a function signature to account for control qubits added by modifiers.

@@ -12,10 +12,9 @@ use hugr::{
 use super::{ModifierError, ModifierResolver, ModifierResolverErrors};
 use crate::extension::modifier::Modifier;
 
-/// Where an indirect-call rewrite installs its replacement.
+/// How an indirect-call rewrite installs its replacement.
 /// The default builder type allows selecting `InPlace` without supplying a builder.
-// todo: delete this enum and use a flag instead called: "change_indirect_call_node"
-pub(super) enum IndirectCallDestination<'a, D = DFGBuilder<Hugr>> {
+pub(super) enum IndirectCallRewriteMode<'a, D = DFGBuilder<Hugr>> {
     /// Reuse the indirect call node and its data and StateOrder connections in the original graph.
     /// There must be no enclosing modifiers affecting the call's signature.
     InPlace,
@@ -113,6 +112,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         Ok((modified_fn, new_load))
     }
 
+    // NICOLA: TODO: update this doc string
     /// Trace upstream from `n`, following the producer connected to each modifier's input port 0
     /// until reaching a non-modifier target (normally a `LoadFunction`).
     /// For an indirect call, `n` is the producer of the `CallIndirect` node's function input,
@@ -126,31 +126,42 @@ impl<N: HugrNode> ModifierResolver<N> {
     pub(super) fn trace_modifiers_chain(
         &mut self,
         h: &impl HugrMut<Node = N>,
-        n: N,
+        ind_call_node: N,
     ) -> Result<Vec<N>, ModifierResolverErrors<N>> {
-        let mut current = n;
+        // NICOLA: comment on PR: this check is a bit redundant, but may be useful
+        let optype = h.get_optype(ind_call_node);
+        if !matches!(optype, OpType::CallIndirect(_)) {
+            return Err(
+                ModifierError::ModifierNotApplicable(ind_call_node, optype.to_owned()).into(),
+            );
+        }
+
         // Collection of modifiers to apply.
         let modifiers = self.modifiers_mut();
+        let (mut current, _) = h.single_linked_output(ind_call_node, 0).unwrap();
         let mut chain: Vec<N> = Vec::new();
 
         loop {
-            chain.push(current);
             let optype = h.get_optype(current);
-
             if Modifier::from_optype(optype).is_none() {
+                if !matches!(optype, OpType::LoadFunction(_)) {
+                    return Err(
+                        ModifierError::MalformedChainHead(current, optype.to_owned()).into(),
+                    );
+                }
+                // The current node is a LoadFunction, which is the expected head of the chain.
+                chain.push(current);
                 break;
             }
-
+            chain.push(current);
             modifiers.push(optype.as_extension_op().unwrap(), current)?;
-            let next = h
+
+            let (new, _) = h
                 .single_linked_output(current, 0)
-                .ok_or(ModifierError::NoTarget(n))?;
-            current = next.0;
+                .ok_or(ModifierError::MalformedChainLink(current))?;
+            current = new;
         }
         Ok(chain)
-
-        // todo: check that: at least one modifier was found and the final target is a load function node
-        // todo: check that the chain is well formed: one single chain where ind_call is connected to one modifier only, that modifier is connected only: input 1 modifier or a local call (expect power that takes an extra inputs in port 1) and it must have one output: another modifier or the indirect call on port 0.
     }
 
     /// Given a target node `targ` which is expected to be a `LoadFunction`, retrieve the function node it loads.
@@ -202,7 +213,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             h,
             ind_node_call,
             indir_call,
-            IndirectCallDestination::IntoDataflow(new_dfg),
+            IndirectCallRewriteMode::IntoDataflow(new_dfg),
         )
         // Report invalid modifier targets with the indirect-call operation as error context.
         .map_err(|e| match e {
@@ -219,7 +230,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Resolve the call's function operand, construct the modified loader and call,
-    /// and install them according to the destination's connection and cleanup rules.
+    /// and install them according to the rewrite mode's connection and cleanup rules.
     /// The caller decides whether the call needs rewriting.
     /// In-place rewrites require no enclosing modifiers; dataflow rewrites apply
     /// enclosing modifiers to the call and combine them with its local modifier chain
@@ -229,31 +240,29 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         ind_call_node: N,
         indir_call: &CallIndirect,
-        destination: IndirectCallDestination<'_, D>,
+        mode: IndirectCallRewriteMode<'_, D>,
     ) -> Result<(), ModifierResolverErrors<N>> {
         // Accumulate the local chain on top of the enclosing modifiers, restoring
         // the enclosing state before wiring the call, even if resolution fails.
         // Input port 0 carries the function value, produced by the last modifier or the loader.
-        let chain_tail = h.single_linked_output(ind_call_node, 0).unwrap();
 
         // NICOLA: TODO: maybe trace is not needed. we should just return the old load node
-        let (trace, modified_fn, new_load_type) = self.with_modifiers(
+        let (trace, load_node, modified_fn, new_load_type) = self.with_modifiers(
             self.modifiers().clone(),
             |this| -> Result<_, ModifierResolverErrors<N>> {
                 // `trace` contains the sequence of modifiers leading to the load node.
-                let trace = this.trace_modifiers_chain(h, chain_tail.0)?;
                 // The final traced node is the target whose loaded function must be modified.
+                let trace = this.trace_modifiers_chain(h, ind_call_node)?;
                 let load_node = *trace.last().unwrap();
                 let (modified_fn, load) =
                     this.resolve_modified_load(h, ind_call_node, load_node)?;
-                Ok((trace, modified_fn, load))
+                Ok((trace, load_node, modified_fn, load))
             },
         )?;
 
-        match destination {
-            IndirectCallDestination::InPlace => {
+        match mode {
+            IndirectCallRewriteMode::InPlace => {
                 // Use the old loader from the trace to decide whether it can be removed.
-                let load_node = *trace.last().unwrap();
                 // Preserve loaders shared with consumers outside this modifier chain.
                 // (TODO: WE SHOULD TO THIS ALSO ON THE OTHER CASE)
                 if h.linked_inputs(load_node, 0).count() == 1 {
@@ -261,7 +270,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                 }
                 // Insert the replacement loader next to the existing indirect call.
                 let new_load_node = h.add_node_before(ind_call_node, new_load_type);
-                // todo: add some short comment specifying what we are connecting/disconecting
                 // Connect the modified function definition to the loader's static function input.
                 h.connect(modified_fn, 0, new_load_node, 0);
                 // Replace the old modifier-chain connection at the call's function input.
@@ -269,7 +277,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 h.disconnect(ind_call_node, IncomingPort::from(0));
                 h.connect(new_load_node, 0, ind_call_node, 0);
             }
-            IndirectCallDestination::IntoDataflow(new_dfg) => {
+            IndirectCallRewriteMode::IntoDataflow(new_dfg) => {
                 // Only enclosing modifiers affect the call itself. Local modifiers have
                 // already been incorporated into the loaded function's signature.
 
