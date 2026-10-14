@@ -1122,7 +1122,7 @@ checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 [[package]]
 name = "hugr"
 version = "0.30.3"
-source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#0643ac456551ae46d1ecbd870d56b9e58c76659d"
+source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#ff2c8b2e64c1c3d5ece10cb235323da3f1516ede"
 dependencies = [
  "hugr-core",
  "hugr-llvm",
@@ -1132,7 +1132,7 @@ dependencies = [
 [[package]]
 name = "hugr-cli"
 version = "0.30.3"
-source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#0643ac456551ae46d1ecbd870d56b9e58c76659d"
+source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#ff2c8b2e64c1c3d5ece10cb235323da3f1516ede"
 dependencies = [
  "anyhow",
  "clap",
@@ -1153,7 +1153,7 @@ dependencies = [
 [[package]]
 name = "hugr-core"
 version = "0.30.3"
-source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#0643ac456551ae46d1ecbd870d56b9e58c76659d"
+source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#ff2c8b2e64c1c3d5ece10cb235323da3f1516ede"
 dependencies = [
  "base64",
  "cgmath",
@@ -1190,7 +1190,7 @@ dependencies = [
 [[package]]
 name = "hugr-llvm"
 version = "0.30.3"
-source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#0643ac456551ae46d1ecbd870d56b9e58c76659d"
+source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#ff2c8b2e64c1c3d5ece10cb235323da3f1516ede"
 dependencies = [
  "anyhow",
  "cc",
@@ -1210,7 +1210,7 @@ dependencies = [
 [[package]]
 name = "hugr-model"
 version = "0.30.3"
-source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#0643ac456551ae46d1ecbd870d56b9e58c76659d"
+source = "git+https://github.com/Quantinuum/hugr.git?branch=doug%2Ffix-hugr-lists#ff2c8b2e64c1c3d5ece10cb235323da3f1516ede"
 dependencies = [
  "base64",
  "bumpalo",
@@ -2225,7 +2225,7 @@ dependencies = [
  "derive_more 0.99.20",
  "fxhash",
  "itertools 0.13.0",
- "petgraph 0.8.3",
+ "petgraph 0.6.5",
  "serde",
  "slotmap_fork_lmondada",
  "thiserror 1.0.69",
