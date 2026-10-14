@@ -25,7 +25,7 @@
 //! The resolver finds the last modifier in a chain of modifiers,
 //! and starts resolving the function loaded by the `LoadFunction` node,
 //! which is done in
-//! `resolve_modified_load`.
+//! `rewrite_indirect_call`.
 //! After resolution, original function nodes that have been replaced by solved
 //! modified versions may be removed if they are no longer needed and the pass
 //! scope allows removing them. Nodes whose interface must be preserved by the
@@ -120,6 +120,7 @@ use super::CombinedModifier;
 use crate::passes::utils::unpack_container::TypeUnpacker;
 use crate::passes::{InScope, PassScope};
 use crate::{TketOp, extension::global_phase::GlobalPhase, modifier::Modifier};
+use call_modify::IndirectCallDestination;
 use global_phase_modify::delete_phase;
 
 use hugr::{
@@ -697,6 +698,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 }
 
 impl<N: HugrNode> ModifierResolver<N> {
+    // NICOLA: TODO: this function should check that we have Indirect Call on which in the first input port we have a modifier chain (while doing so also checking that every modifier node is properly chained)
     fn should_modify(&self, h: &impl HugrView<Node = N>, n: N) -> bool {
         // Check if the node is a modifier, modifying an operation.
         let optype = h.get_optype(n);
@@ -705,6 +707,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
         // Check if this is the last modifier in a chain, i.e., it targets directly an indirect call node.
         let Ok((caller, _)) = h.linked_inputs(n, 0).exactly_one() else {
+            // NICOLA: here we should have an error
             return false;
         };
         let optype = h.get_optype(caller);
@@ -728,38 +731,33 @@ impl<N: HugrNode> ModifierResolver<N> {
         })
     }
 
-    /// Resolve a modifier chain in place using the current modifier state.
+    /// Find the indirect call consuming the last modifier and rewrite it in place.
+    /// Called by `apply_modification` with no enclosing modifiers.
     /// `modifier_node` must be the last modifier in a chain, as checked by `should_modify`.
     fn apply_modification_inner(
         &mut self,
         hugr: &mut impl HugrMut<Node = N>,
         modifier_node: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // Save the output connections so the replacement loader can use the same consumers.
-        let modifier_output_consumers: Vec<(_, Vec<_>)> = hugr
-            .node_outputs(modifier_node)
-            .map(|p| (p, hugr.linked_inputs(modifier_node, p).collect()))
-            .collect();
+        // Find the sole consumer of the last modifier's function-value output.
+        let (ind_call_node, ind_call_port) = hugr
+            .linked_inputs(modifier_node, 0)
+            .exactly_one()
+            .map_err(|_| ModifierError::NoCaller(modifier_node))?;
 
-        let trace = self.trace_modifiers_chain(hugr, modifier_node)?;
-        let load_node = *trace.last().ok_or(ModifierError::NoTarget(modifier_node))?;
-        let (modified_fn, load) = self.resolve_modified_load(hugr, modifier_node, load_node)?;
-
-        // Preserve loaders shared with consumers outside this modifier chain.
-        if hugr.linked_inputs(load_node, 0).count() == 1 {
-            hugr.remove_node(load_node);
+        // This path resolves modifier chains used as the function operand of an indirect call.
+        let optype = hugr.get_optype(ind_call_node).clone();
+        let OpType::CallIndirect(indir_call) = &optype else {
+            return Err(ModifierError::ModifierNotApplicable(modifier_node, optype).into());
+        };
+        // NICOLA: TODO: I want a better error here, saying that the modifier is not connected to the proper port
+        // Port 0 is the function operand; the remaining input ports carry call arguments.
+        if ind_call_port != IncomingPort::from(0) {
+            return Err(ModifierError::ModifierNotApplicable(modifier_node, optype).into());
         }
-        let new_load = hugr.add_node_after(modifier_node, load);
-        hugr.connect(modified_fn, 0, new_load, 0);
-
-        // Connect the modified function to the inputs
-        for (out_port, inputs) in modifier_output_consumers {
-            for (recv, recv_port) in inputs {
-                hugr.disconnect(recv, recv_port);
-                hugr.connect(new_load, out_port, recv, recv_port);
-            }
-        }
-        Ok(())
+        // Reconnect the existing call in the original graph instead of building a separate copy.
+        let destination: IndirectCallDestination<'_> = IndirectCallDestination::InPlace;
+        self.rewrite_indirect_call(hugr, ind_call_node, indir_call, destination)
     }
 
     /// Modifies a function signature to account for control qubits added by modifiers.
