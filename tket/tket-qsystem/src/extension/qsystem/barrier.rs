@@ -206,7 +206,6 @@ mod test {
             .unwrap();
         h.validate().unwrap();
 
-        // The input identity and its caller must survive unchanged.
         assert_eq!(
             h.static_source(identity_call.node()),
             Some(identity_id.node())

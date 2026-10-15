@@ -56,8 +56,8 @@ impl OpFunctionMap {
     /// if it is not already present.
     ///
     /// * `op`: The extension operation to store the function for.
-    /// * `mangle_args`: Type arguments to use when mangling the function name,
-    ///   to ensure uniqueness, with op name as base.
+    /// * `mangle_args`: Additional type arguments to include in the function name,
+    ///   alongside the complete operation arguments, with op name as base.
     /// * `func_builder`: Closure that takes a [`FunctionBuilder`] and
     ///   builds the function body, returning the output wires.
     ///   The function signature and name will already have been set
@@ -76,11 +76,6 @@ impl OpFunctionMap {
         if self.map.borrow().contains_key(&key) {
             return Ok(());
         }
-        // Definitions are made public while name linking deduplicates them, so
-        // the symbol must distinguish every cached operation instance. Keep
-        // caller-selected arguments for readability, and append the complete
-        // operation arguments to distinguish operation shapes. Registration
-        // allocates a fresh symbol before exposing the definition to the linker.
         let name_args = mangle_args
             .iter()
             .chain(op.args())
@@ -124,6 +119,8 @@ impl OpFunctionMap {
     /// and adds replacements to the given [`ReplaceTypes`] lowerer,
     /// which can be used to replace extension operations with calls to the
     /// corresponding function definitions.
+    /// Only copies of a registered template share its linker symbol; existing
+    /// functions are never adopted based on their name or signature.
     pub fn register_operation_replacements(
         self,
         hugr: &mut impl HugrMut<Node = Node>,
@@ -134,10 +131,6 @@ impl OpFunctionMap {
             let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
                 panic!("OpFunctionMap entries must be function definitions");
             };
-            // A matching name and signature do not imply a matching body. Only
-            // copies of this registered template may share its linker symbol.
-            // Reserving against both the target and earlier templates also
-            // separates independent maps and subsequent lowering invocations.
             *func.func_name_mut() = lowerer.fresh_function_name(hugr, func.func_name());
             lowerer.set_replace_op(&op, func_as_node_template(func_def));
         }
@@ -174,8 +167,6 @@ mod tests {
     use hugr::std_extensions::logic::LogicOp;
     use hugr::types::Signature;
 
-    // Different operations (and maps) can have the same unqualified name and
-    // arguments, hence the same preferred symbol, without having the same body.
     fn helper_op(extension: &str) -> (std::sync::Arc<Extension>, ExtensionOp) {
         let ext = Extension::new_arc(
             extension.try_into().unwrap(),
@@ -212,8 +203,6 @@ mod tests {
             .unwrap();
 
         let mut b = ModuleBuilder::new();
-        // Occupy both the preferred symbol and an allocation suffix, including
-        // a declaration, which must not accidentally become a generated helper.
         let declaration = b
             .declare("$helper$$1", Signature::new_endo([bool_t()]).into())
             .unwrap();
@@ -267,8 +256,6 @@ mod tests {
                 .any(|n| h.get_optype(n) == &LogicOp::Not.into())
         );
 
-        // A subsequent lowering invocation must not infer ownership of an old
-        // helper from its symbol, even for exactly the same operation/signature.
         let mut later = FunctionBuilder::new("later", Signature::new_endo([bool_t()])).unwrap();
         let op = later
             .add_dataflow_op(inner.clone(), later.input_wires())
