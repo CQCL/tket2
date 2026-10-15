@@ -24,7 +24,7 @@
 //! ```
 //! The resolver finds the last modifier in a chain of modifiers,
 //! and starts resolving the function loaded by the `LoadFunction` node,
-//! in `apply_modification` or `modify_indirect_call`.
+//! in `apply_modification` or, if nested modifier blocks are present, in `modify_indirect_call`.
 //! After resolution, original function nodes that have been replaced by solved
 //! modified versions may be removed if they are no longer needed and the pass
 //! scope allows removing them. Nodes whose interface must be preserved by the
@@ -724,7 +724,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
         // Then remove the now-unused chain, starting nearest the call.
         for node in &trace[..trace.len().saturating_sub(1)] {
-            hugr.remove_node(node.clone());
+            hugr.remove_node(*node);
         }
 
         Ok(())

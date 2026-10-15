@@ -85,7 +85,6 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         load_node: N,
     ) -> Result<(N, LoadFunction), ModifierResolverErrors<N>> {
-        // Given a target node `targ` which is expected to be a `LoadFunction`, retrieve the function node it loads.
         let optype = h.get_optype(load_node);
         let (func_node, load_op) = match optype {
             OpType::LoadFunction(load) => {
@@ -108,6 +107,7 @@ impl<N: HugrNode> ModifierResolver<N> {
                 (fn_node, load.clone())
             }
             _ => {
+                // todo: panic instead
                 return Err(ModifierResolverErrors::unreachable(format!(
                     "Expected LoadFunction, found {optype:?}"
                 )));
@@ -148,11 +148,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         loop {
             let optype = h.get_optype(current);
             if Modifier::from_optype(optype).is_none() {
-                // The head of the chain must be a LoadFunction node
+                // The only non modifier node allowed in the chain is the LoadFunction node,
+                // that corresponds to the head of the chain.
                 if !matches!(optype, OpType::LoadFunction(_)) {
+                    // If the chain is empty, it means the call_indirect node is directly connected to a
+                    // non-load node, which is invalid under modifiers.
                     if chain.is_empty() {
-                        // If the chain is empty, it means the call_indirect node is directly connected to a
-                        // non-load node, which is invalid under modifiers.
                         return Err(ModifierResolverErrors::unresolvable(
                             current,
                             ModifierResolverErrors::ModifierNotApplicable(
@@ -174,7 +175,6 @@ impl<N: HugrNode> ModifierResolver<N> {
 
             chain.push(current);
             modifiers.push(optype.as_extension_op().unwrap(), current)?;
-            // Only one predecessor is expected
             let (new, _) = h
                 .single_linked_output(current, 0)
                 .expect("Expected exactly one output connected to input port 0 of a modifier node");
@@ -212,7 +212,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         let new_load_node = new_dfg.add_child_node(new_load_op);
         self.call_map_insert(modified_fn, (new_load_node, IncomingPort::from(0)));
 
-        // Construct the replacement call with additional control-array inputs and outputs.
+        // Construct the replacement IndirectCall with additional control-array inputs and outputs.
         let mut new_ind_call = indir_call.clone();
         self.modify_signature(&mut new_ind_call.signature, false);
         let new_call_node = new_dfg.add_child_node(new_ind_call);
@@ -221,17 +221,14 @@ impl<N: HugrNode> ModifierResolver<N> {
         let mut controls = self.pack_controls(new_dfg)?;
         let offset = self.modifiers().accum_ctrl.len();
         for (i, ctrl) in controls.iter_mut().enumerate() {
-            // Control inputs follow the function operand at port 0; control outputs start at 0.
             new_dfg
                 .hugr_mut()
                 .connect(ctrl.node(), ctrl.source(), new_call_node, i + 1);
             *ctrl = Wire::new(new_call_node, i);
         }
-        // Use the returned control qubits when wiring subsequent operations.
         *self.controls() = self.unpack_controls(new_dfg, controls)?;
 
-        // Map the original arguments and results, skipping the function operand
-        // and allowing for the added control-array ports in the replacement call.
+        // Map the original arguments and results
         let signature = indir_call.signature();
         self.wire_node_inout(
             ind_call_node,
@@ -246,7 +243,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             new_call_node,
             new_dfg.hugr().get_optype(new_call_node),
         )?;
-        // Supply the function value from the replacement loader to the new call.
+        // Connect the new loader to the new indirect call.
         new_dfg
             .hugr_mut()
             .connect(new_load_node, 0, new_call_node, 0);
