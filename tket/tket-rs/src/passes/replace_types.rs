@@ -542,6 +542,39 @@ impl ReplaceTypes {
         );
     }
 
+    /// Allocate a symbol for a newly generated helper, without claiming ownership
+    /// of any existing definition or declaration. Include registered templates:
+    /// their dependencies may be linked before this helper reaches the target.
+    pub(crate) fn fresh_function_name(
+        &self,
+        hugr: &impl HugrView<Node = Node>,
+        base: &str,
+    ) -> String {
+        fn function_names(h: &impl HugrView<Node = Node>) -> impl Iterator<Item = &str> {
+            h.nodes().filter_map(|n| match h.get_optype(n) {
+                OpType::FuncDefn(f) => Some(f.func_name().as_str()),
+                OpType::FuncDecl(f) => Some(f.func_name().as_str()),
+                _ => None,
+            })
+        }
+        let occupied: std::collections::HashSet<_> = function_names(hugr)
+            .chain(self.op_map.values().flat_map(|(template, _)| {
+                match template {
+                    NodeTemplate::LinkedHugr(h, _) | NodeTemplate::CompoundOp(h) => {
+                        Some(h.as_ref())
+                    }
+                    NodeTemplate::SingleOp(_) => None,
+                }
+                .into_iter()
+                .flat_map(function_names)
+            }))
+            .collect();
+        std::iter::once(base.to_owned())
+            .chain((1..).map(|i| format!("{base}${i}")))
+            .find(|name| !occupied.contains(name.as_str()))
+            .unwrap()
+    }
+
     /// Configures this instance to change occurrences of a parameterized op `src`
     /// via a callback that builds the replacement type given the [`TypeArg`]s.
     /// Note that the `TypeArgs` will already have been updated (e.g. they may not

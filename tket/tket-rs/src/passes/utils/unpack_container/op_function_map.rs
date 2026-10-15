@@ -79,7 +79,8 @@ impl OpFunctionMap {
         // Definitions are made public while name linking deduplicates them, so
         // the symbol must distinguish every cached operation instance. Keep
         // caller-selected arguments for readability, and append the complete
-        // operation arguments to guarantee uniqueness.
+        // operation arguments to distinguish operation shapes. Registration
+        // allocates a fresh symbol before exposing the definition to the linker.
         let name_args = mangle_args
             .iter()
             .chain(op.args())
@@ -119,16 +120,25 @@ impl OpFunctionMap {
     }
 
     /// Register function replacements for all temporary operations.
-    /// Inserts function definitions in the given Hugr and
-    /// adds replacements to the given [`ReplaceTypes`] lowerer,
+    /// Allocates helper symbols against the given Hugr and registered templates,
+    /// and adds replacements to the given [`ReplaceTypes`] lowerer,
     /// which can be used to replace extension operations with calls to the
     /// corresponding function definitions.
     pub fn register_operation_replacements(
         self,
-        _hugr: &mut impl HugrMut<Node = Node>,
+        hugr: &mut impl HugrMut<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
-        for (op, func_def) in self.into_function_iter() {
+        for (op, mut func_def) in self.into_function_iter() {
+            let entrypoint = func_def.entrypoint();
+            let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
+                panic!("OpFunctionMap entries must be function definitions");
+            };
+            // A matching name and signature do not imply a matching body. Only
+            // copies of this registered template may share its linker symbol.
+            // Reserving against both the target and earlier templates also
+            // separates independent maps and subsequent lowering invocations.
+            *func.func_name_mut() = lowerer.fresh_function_name(hugr, func.func_name());
             lowerer.set_replace_op(&op, func_as_node_template(func_def));
         }
     }
@@ -150,5 +160,143 @@ fn func_as_node_template(mut func_def: Hugr) -> NodeTemplate {
 impl Default for OpFunctionMap {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::passes::ComposablePass;
+    use hugr::builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder};
+    use hugr::extension::prelude::bool_t;
+    use hugr::extension::{Extension, Version};
+    use hugr::ops::handle::NodeHandle;
+    use hugr::std_extensions::logic::LogicOp;
+    use hugr::types::Signature;
+
+    // Different operations (and maps) can have the same unqualified name and
+    // arguments, hence the same preferred symbol, without having the same body.
+    fn helper_op(extension: &str) -> (std::sync::Arc<Extension>, ExtensionOp) {
+        let ext = Extension::new_arc(
+            extension.try_into().unwrap(),
+            Version::new(0, 0, 0),
+            |e, w| {
+                e.add_op(
+                    "helper".into(),
+                    Default::default(),
+                    Signature::new_endo([bool_t()]),
+                    w,
+                )
+                .unwrap();
+            },
+        );
+        let op = ExtensionOp::new(ext.get_op("helper").unwrap().clone(), []).unwrap();
+        (ext, op)
+    }
+
+    #[test]
+    fn independent_maps_and_nested_dependencies_get_fresh_symbols() {
+        let (_outer_ext, outer) = helper_op("test.outer");
+        let (_inner_ext, inner) = helper_op("test.inner");
+        let outer_map = OpFunctionMap::new();
+        outer_map
+            .insert_with(&outer, &[], |b| {
+                Ok(b.add_dataflow_op(inner.clone(), b.input_wires())?.outputs())
+            })
+            .unwrap();
+        let inner_map = OpFunctionMap::new();
+        inner_map
+            .insert_with(&inner, &[], |b| {
+                Ok(b.add_dataflow_op(LogicOp::Not, b.input_wires())?.outputs())
+            })
+            .unwrap();
+
+        let mut b = ModuleBuilder::new();
+        // Occupy both the preferred symbol and an allocation suffix, including
+        // a declaration, which must not accidentally become a generated helper.
+        let declaration = b
+            .declare("$helper$$1", Signature::new_endo([bool_t()]).into())
+            .unwrap();
+        let private = b
+            .define_function("$helper$$2", Signature::new_endo([bool_t()]))
+            .unwrap();
+        let inputs = private.input_wires().collect::<Vec<_>>();
+        let private = private.finish_with_outputs(inputs).unwrap();
+        let user = b
+            .define_function_vis(
+                "$helper$",
+                Signature::new_endo([bool_t()]),
+                Visibility::Public,
+            )
+            .unwrap();
+        let inputs = user.input_wires().collect::<Vec<_>>();
+        let user = user.finish_with_outputs(inputs).unwrap();
+        let mut main = b
+            .define_function("main", Signature::new_endo([bool_t()]))
+            .unwrap();
+        let original_call = main.call(user.handle(), &[], main.input_wires()).unwrap();
+        let first = main
+            .add_dataflow_op(outer.clone(), original_call.outputs())
+            .unwrap();
+        let second = main.add_dataflow_op(outer, first.outputs()).unwrap();
+        main.finish_with_outputs(second.outputs()).unwrap();
+        let mut h = b.finish_hugr().unwrap();
+        h.validate().unwrap();
+        let mut lowerer = ReplaceTypes::new_empty();
+        outer_map.register_operation_replacements(&mut h, &mut lowerer);
+        inner_map.register_operation_replacements(&mut h, &mut lowerer);
+        lowerer.run(&mut h).unwrap();
+        h.validate().unwrap();
+
+        let outer_fn = h.static_source(first.node()).unwrap();
+        assert!(h.get_optype(declaration.node()).is_func_decl());
+        assert_eq!(h.children(private.node()).count(), 2);
+        assert_eq!(h.static_source(second.node()), Some(outer_fn));
+        assert_eq!(h.static_source(original_call.node()), Some(user.node()));
+        assert_eq!(h.children(user.node()).count(), 2);
+        let inner_call = h
+            .children(outer_fn)
+            .find(|&n| h.get_optype(n).is_call())
+            .unwrap();
+        let inner_fn = h.static_source(inner_call).unwrap();
+        assert_ne!(outer_fn, inner_fn);
+        assert_ne!(outer_fn, user.node());
+        assert_ne!(inner_fn, user.node());
+        assert!(
+            h.children(inner_fn)
+                .any(|n| h.get_optype(n) == &LogicOp::Not.into())
+        );
+
+        // A subsequent lowering invocation must not infer ownership of an old
+        // helper from its symbol, even for exactly the same operation/signature.
+        let mut later = FunctionBuilder::new("later", Signature::new_endo([bool_t()])).unwrap();
+        let op = later
+            .add_dataflow_op(inner.clone(), later.input_wires())
+            .unwrap();
+        let later = later.finish_hugr_with_outputs(op.outputs()).unwrap();
+        let later = h.insert_hugr(h.module_root(), later).inserted_entrypoint;
+        let new_map = OpFunctionMap::new();
+        new_map
+            .insert_with(&inner, &[], |b| Ok(b.input_wires()))
+            .unwrap();
+        let mut lowerer = ReplaceTypes::new_empty();
+        new_map.register_operation_replacements(&mut h, &mut lowerer);
+        lowerer.run(&mut h).unwrap();
+        h.validate().unwrap();
+        let later_call = h
+            .children(later)
+            .find(|&n| h.get_optype(n).is_call())
+            .unwrap();
+        let later_fn = h.static_source(later_call).unwrap();
+        assert_ne!(later_fn, inner_fn);
+        assert_eq!(
+            h.children(later_fn).count(),
+            2,
+            "new helper is identity, not Not"
+        );
+        assert!(
+            h.children(inner_fn)
+                .any(|n| h.get_optype(n) == &LogicOp::Not.into())
+        );
     }
 }
