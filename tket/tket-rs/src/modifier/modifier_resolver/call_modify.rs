@@ -13,12 +13,10 @@ use super::{ModifierError, ModifierResolver, ModifierResolverErrors};
 use crate::extension::modifier::Modifier;
 
 /// How an indirect-call rewrite installs its replacement.
-/// The default builder type allows selecting `InPlace` without supplying a builder.
-pub(super) enum IndirectCallRewriteMode<'a, D = DFGBuilder<Hugr>> {
-    /// Reuse the indirect call node and its data and StateOrder connections in the original graph.
-    /// There must be no enclosing modifiers affecting the call's signature.
+pub(super) enum IndirectCallRewriteMode<'a, D: Dataflow = DFGBuilder<Hugr>> {
+    /// Reuse the indirect call node in the original graph.
     InPlace,
-    /// Build a replacement indirect call and register its wire mappings in another graph.
+    /// Build a replacement indirect call inside the provided dataflow.
     IntoDataflow(&'a mut D),
 }
 
@@ -87,49 +85,66 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Apply the accumulated modifiers to a loaded function and construct its replacement loader.
+    /// `load_node` is expected to be a `LoadFunction` node.
+    ///
     /// Returns the modified function node in `h` and an uninserted `LoadFunction` operation.
-    /// The caller inserts the loader and connects its static function edge.
-    fn resolve_modified_load(
+    fn modify_load(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
-        context_node: N,
         load_node: N,
     ) -> Result<(N, LoadFunction), ModifierResolverErrors<N>> {
-        // Check that the chain ends at a LoadFunction and retrieve its function definition.
-        let (func, load) =
-            Self::get_loaded_function(h, context_node, load_node, h.get_optype(load_node))?;
-
-        // Apply the accumulated modifiers to the function, reusing a cached implementation if available.
-        let modified_fn = self.modify_fn(h, func)?;
-
-        // Give the replacement loader the modified function's signature, with added controls
-        // packed into arrays, and preserve the original type arguments.
-        let mut modified_sig = load.func_sig;
+        // Given a target node `targ` which is expected to be a `LoadFunction`, retrieve the function node it loads.
+        let optype = h.get_optype(load_node);
+        let (func_node, load_op) = match optype {
+            OpType::LoadFunction(load) => {
+                let (fn_node, _) = h.single_linked_output(load_node, 0).unwrap();
+                let fn_optype = h.get_optype(fn_node);
+                match fn_optype {
+                    OpType::FuncDefn(_) => {}
+                    OpType::FuncDecl(_) => {
+                        return Err(ModifierError::ModifierNotApplicable(
+                            load_node,
+                            fn_optype.clone(),
+                        )
+                        .into());
+                    }
+                    _ => {
+                        return Err(ModifierResolverErrors::unreachable(format!(
+                            "Expected FuncDefn or FuncDecl, found {fn_optype:?}"
+                        )));
+                    }
+                }
+                (fn_node, load.clone())
+            }
+            _ => {
+                return Err(ModifierResolverErrors::unreachable(format!(
+                    "Expected LoadFunction, found {optype:?}"
+                )));
+            }
+        };
+        let modified_fn = self.modify_fn(h, func_node)?;
+        // Give the replacement loader the modified function's signature
+        let mut modified_sig = load_op.func_sig;
         self.modify_signature(modified_sig.body_mut(), false);
         let new_load =
-            LoadFunction::try_new(modified_sig, load.type_args).map_err(BuildError::from)?;
-        // Return the loader operation without inserting it; the destination determines its graph.
+            LoadFunction::try_new(modified_sig, load_op.type_args).map_err(BuildError::from)?;
+
         Ok((modified_fn, new_load))
     }
 
-    // NICOLA: TODO: update this doc string
-    /// Trace upstream from `n`, following the producer connected to each modifier's input port 0
-    /// until reaching a non-modifier target (normally a `LoadFunction`).
-    /// For an indirect call, `n` is the producer of the `CallIndirect` node's function input,
-    /// so traversal runs from the modifier closest to the call back towards the load,
-    /// opposite to dataflow. The `CallIndirect` node itself is not included.
-    /// Collects modifiers in traversal order and returns the nodes in that same order,
-    /// including both `n` and the target. If `n` is not a modifier, returns only `n`.
+    /// Trace a `CallIndirect`'s function input back to a `LoadFunction`, accumulating modifiers.
+    /// Return nodes from nearest modifier to load, excluding the call; error on invalid chains.
     ///
-    /// For example, given the dataflow `load -> modifier_a -> modifier_b -> call_indirect`,
-    /// tracing from `n = modifier_b` returns `[modifier_b, modifier_a, load]`.
-    pub(super) fn trace_modifiers_chain(
+    /// For `load -> modifier_a -> modifier_b -> call_indirect`, tracing from `call_indirect`
+    /// returns `[modifier_b, modifier_a, load]`.
+    pub(super) fn trace_indirect_call_to_load(
         &mut self,
         h: &impl HugrMut<Node = N>,
         ind_call_node: N,
     ) -> Result<Vec<N>, ModifierResolverErrors<N>> {
         // NICOLA: comment on PR: this check is a bit redundant, but may be useful
         let optype = h.get_optype(ind_call_node);
+        // First node must be a CallIndirect node
         if !matches!(optype, OpType::CallIndirect(_)) {
             return Err(
                 ModifierError::ModifierNotApplicable(ind_call_node, optype.to_owned()).into(),
@@ -144,51 +159,35 @@ impl<N: HugrNode> ModifierResolver<N> {
         loop {
             let optype = h.get_optype(current);
             if Modifier::from_optype(optype).is_none() {
+                // The head of the chain must be a LoadFunction node
                 if !matches!(optype, OpType::LoadFunction(_)) {
+                    if chain.is_empty() {
+                        // If the chain is empty, it means the call_indirect node is directly connected to a
+                        // non-load node, which is invalid under modifiers.
+                        return Err(ModifierResolverErrors::unresolvable(
+                            current,
+                            ModifierError::ModifierNotApplicable(current, optype.to_owned())
+                                .to_string(),
+                            h.get_optype(ind_call_node).to_owned(),
+                        ));
+                    }
                     return Err(
                         ModifierError::MalformedChainHead(current, optype.to_owned()).into(),
                     );
                 }
-                // The current node is a LoadFunction, which is the expected head of the chain.
                 chain.push(current);
                 break;
             }
+
             chain.push(current);
             modifiers.push(optype.as_extension_op().unwrap(), current)?;
-
+            // Only one predecessor is expected
             let (new, _) = h
                 .single_linked_output(current, 0)
                 .ok_or(ModifierError::MalformedChainLink(current))?;
             current = new;
         }
         Ok(chain)
-    }
-
-    /// Given a target node `targ` which is expected to be a `LoadFunction`, retrieve the function node it loads.
-    pub(super) fn get_loaded_function(
-        h: &impl HugrMut<Node = N>,
-        modifier_node: N,
-        targ: N,
-        optype: &OpType,
-    ) -> Result<(N, LoadFunction), ModifierError<N>> {
-        match optype {
-            OpType::LoadFunction(load) => {
-                let (fn_node, _) = h.single_linked_output(targ, 0).unwrap();
-                let fn_optype = h.get_optype(fn_node);
-                let OpType::FuncDefn(_) = fn_optype else {
-                    return Err(ModifierError::ModifierNotApplicable(
-                        modifier_node,
-                        fn_optype.clone(),
-                    ));
-                };
-                Ok((fn_node, load.clone()))
-            }
-            // If the target is a function, we need to create a new dataflow block of it.
-            _ => Err(ModifierError::ModifierNotApplicable(
-                modifier_node,
-                optype.clone(),
-            )),
-        }
     }
 
     pub(super) fn modify_indirect_call(
@@ -198,10 +197,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         indir_call: &CallIndirect,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // An unmodified classical call can be copied without resolving its target.
-        // A non-modifier function operand corresponds to a trace of length one.
-        let (call_indirect_input, _) = h.single_linked_output(ind_node_call, 0).unwrap();
         // If a function has no quantum effects and is not directly modified, we can skip modifying the call
+        let (call_indirect_input, _) = h.single_linked_output(ind_node_call, 0).unwrap();
         if !self.signature_has_quantum_data(&indir_call.signature)
             && Modifier::from_optype(h.get_optype(call_indirect_input)).is_none()
         {
@@ -216,6 +213,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             IndirectCallRewriteMode::IntoDataflow(new_dfg),
         )
         // Report invalid modifier targets with the indirect-call operation as error context.
+        // NICOLA: TODO: If we get rid of the ModifierError enum, this mapping might be useless
         .map_err(|e| match e {
             ModifierResolverErrors::ModifierError(inner) => {
                 let message = inner.to_string();
@@ -229,12 +227,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         })
     }
 
-    /// Resolve the call's function operand, construct the modified loader and call,
-    /// and install them according to the rewrite mode's connection and cleanup rules.
-    /// The caller decides whether the call needs rewriting.
-    /// In-place rewrites require no enclosing modifiers; dataflow rewrites apply
-    /// enclosing modifiers to the call and combine them with its local modifier chain
-    /// when resolving the callee.
+    /// Resolve the modified callee and rewrite the indirect call. `mode` determines if the
+    /// modified callee is rewritten in place or into another dataflow graph.
     pub(super) fn rewrite_indirect_call<D: Dataflow>(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
@@ -242,54 +236,47 @@ impl<N: HugrNode> ModifierResolver<N> {
         indir_call: &CallIndirect,
         mode: IndirectCallRewriteMode<'_, D>,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        // Accumulate the local chain on top of the enclosing modifiers, restoring
-        // the enclosing state before wiring the call, even if resolution fails.
-        // Input port 0 carries the function value, produced by the last modifier or the loader.
-
-        // NICOLA: TODO: maybe trace is not needed. we should just return the old load node
-        let (trace, load_node, modified_fn, new_load_type) = self.with_modifiers(
+        // Trace the chain of modifiers leading to the load node and apply them to the loaded function.
+        let (trace, load_node, modified_fn, new_load_op) = self.with_modifiers(
             self.modifiers().clone(),
             |this| -> Result<_, ModifierResolverErrors<N>> {
                 // `trace` contains the sequence of modifiers leading to the load node.
-                // The final traced node is the target whose loaded function must be modified.
-                let trace = this.trace_modifiers_chain(h, ind_call_node)?;
+                let trace = this.trace_indirect_call_to_load(h, ind_call_node)?;
                 let load_node = *trace.last().unwrap();
-                let (modified_fn, load) =
-                    this.resolve_modified_load(h, ind_call_node, load_node)?;
-                Ok((trace, load_node, modified_fn, load))
+                let (modified_fn, new_load_op) = this.modify_load(h, load_node)?;
+                Ok((trace, load_node, modified_fn, new_load_op))
             },
         )?;
 
+        // NICOLA: TODO: we need to move this out. it is too different and dangerous to keep here.
         match mode {
             IndirectCallRewriteMode::InPlace => {
-                // Use the old loader from the trace to decide whether it can be removed.
-                // Preserve loaders shared with consumers outside this modifier chain.
-                // (TODO: WE SHOULD TO THIS ALSO ON THE OTHER CASE)
+                // Remove the old loader only if it has no other consumers.
+                // NICOLA: TODO: WE SHOULD TO THIS ALSO ON THE OTHER CASE)
                 if h.linked_inputs(load_node, 0).count() == 1 {
                     h.remove_node(load_node);
                 }
-                // Insert the replacement loader next to the existing indirect call.
-                let new_load_node = h.add_node_before(ind_call_node, new_load_type);
-                // Connect the modified function definition to the loader's static function input.
+
+                // Insert the new loader and connect it to the modified function.
+                let new_load_node = h.add_node_before(ind_call_node, new_load_op);
                 h.connect(modified_fn, 0, new_load_node, 0);
-                // Replace the old modifier-chain connection at the call's function input.
-                // The call's other inputs, outputs and StateOrder edges remain connected.
+                // Disconnect the indirect caller from the modifier chain and connect it to the new loader.
                 h.disconnect(ind_call_node, IncomingPort::from(0));
                 h.connect(new_load_node, 0, ind_call_node, 0);
+
+                // Then remove the now-unused chain, starting nearest the call.
+                for node in &trace[..trace.len().saturating_sub(1)] {
+                    h.remove_node(node.clone());
+                }
             }
             IndirectCallRewriteMode::IntoDataflow(new_dfg) => {
-                // Only enclosing modifiers affect the call itself. Local modifiers have
-                // already been incorporated into the loaded function's signature.
-
-                // Insert the loader into the new graph. Its static edge to the function in h
-                // is deferred until the builder's nodes are inserted into h.
-                let new_load_node = new_dfg.add_child_node(new_load_type);
+                // Insert the modified loader into the new graph.
+                let new_load_node = new_dfg.add_child_node(new_load_op);
                 self.call_map_insert(modified_fn, (new_load_node, IncomingPort::from(0)));
 
                 // Construct the replacement call with additional control-array inputs and outputs.
                 let mut new_ind_call = indir_call.clone();
                 self.modify_signature(&mut new_ind_call.signature, false);
-
                 let new_call_node = new_dfg.add_child_node(new_ind_call);
 
                 // Pack the current control qubits into the arrays expected by the call.
@@ -328,11 +315,12 @@ impl<N: HugrNode> ModifierResolver<N> {
                 // This function input is wired explicitly and needs no automatic wire mapping.
                 self.map_insert_none((ind_call_node, IncomingPort::from(0)).into())?;
 
-                // The original chain's wires need no connections in the rebuilt graph.
-                // Existing mappings, including those for shared loaders, are preserved.
-                for node in trace {
-                    self.forget_node(h, node)?;
-                }
+                // NICOLA: TODO: test this, should be safe to remove
+                // // The original chain's wires need no connections in the rebuilt graph.
+                // // Existing mappings, including those for shared loaders, are preserved.
+                // for node in trace {
+                //     self.forget_node(h, node)?;
+                // }
             }
         }
 
@@ -373,7 +361,7 @@ impl<N: HugrNode> ModifierResolver<N> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{SetUnitary, test_modifier_resolver};
+    use super::super::tests::{SetUnitary, modifier_test_hugr, test_modifier_resolver};
     use super::super::*;
     use crate::TketOp;
     use crate::extension::modifier::{CONTROL_OP_ID, MODIFIER_EXTENSION};
@@ -389,6 +377,38 @@ mod tests {
         std_extensions::collections::array::{ArrayOpBuilder, array_type},
         types::{Signature, Term, Type},
     };
+
+    #[test]
+    fn modify_load_rejects_function_declaration() {
+        let signature = Signature::new_endo([qb_t()]);
+        let mut module = ModuleBuilder::new();
+        let callee = module
+            .declare("external", signature.clone().into())
+            .unwrap();
+        let mut main = module
+            .define_function("main", Signature::new([], [Type::new_function(signature)]))
+            .unwrap();
+        let loaded = main.load_func(&callee, &[]).unwrap();
+        let load_node = loaded.node();
+        main.finish_with_outputs([loaded]).unwrap();
+        let mut h = module.finish_hugr().unwrap();
+        let declaration = h.get_optype(h.static_source(load_node).unwrap()).clone();
+
+        let mut resolver = ModifierResolver::new();
+        resolver.modifiers.dagger = true;
+        let error = resolver.modify_load(&mut h, load_node).unwrap_err();
+
+        match error {
+            ModifierResolverErrors::ModifierError(ModifierError::ModifierNotApplicable(
+                node,
+                optype,
+            )) => {
+                assert_eq!(node, load_node);
+                assert_eq!(optype, declaration);
+            }
+            other => panic!("expected ModifierNotApplicable, got {other:?}"),
+        }
+    }
 
     fn foo_call(module: &mut ModuleBuilder<Hugr>, t_num: usize) -> FuncID<true> {
         let callee = {
@@ -662,6 +682,129 @@ mod tests {
         #[case] dagger: bool,
     ) {
         test_modifier_resolver(target_num, ctrl_num, foo, dagger);
+    }
+
+    /// Resolve this HUGR, where both indirect calls in f share one LoadFunction:
+    ///
+    /// ```text
+    /// Module
+    /// ├── g
+    /// ├── f:
+    /// │     LoadFunction(g) ─┬────────────────> CallIndirect
+    /// │                      └──> Control(2) -> CallIndirect
+    /// └── main: LoadFunction(f) -> [Dagger] -> Control(1) -> CallIndirect
+    /// ```
+    /// The rebuilt f must use distinct loaders for g[C1] and g[C1.2], with
+    /// Dagger is optional.
+    #[rstest::rstest]
+    #[case::controlled(false)]
+    #[case::controlled_daggered(true)]
+    fn shared_loader_with_local_modifier_in_modified_function(#[case] dagger: bool) {
+        let (mut h, _) = modifier_test_hugr(
+            4,
+            1,
+            |module, _| {
+                let g_sig = Signature::new_endo([qb_t()]);
+                let g = {
+                    let mut g = module.define_function("g", g_sig.clone()).unwrap();
+                    g.set_unitary();
+                    let [q] = g.input_wires_arr();
+                    g.finish_with_outputs([q]).unwrap()
+                };
+
+                let mut f = module
+                    .define_function("f", Signature::new_endo([qb_t(), qb_t(), qb_t(), qb_t()]))
+                    .unwrap();
+                f.set_unitary();
+                let [q1, local_control1, local_control2, q2] = f.input_wires_arr();
+                let shared_g = f.load_func(g.handle(), &[]).unwrap();
+
+                let q1 = f
+                    .add_dataflow_op(CallIndirect { signature: g_sig }, [shared_g, q1])
+                    .unwrap()
+                    .out_wire(0);
+
+                let (local_controls, q2) = {
+                    let local_control_op = MODIFIER_EXTENSION
+                        .instantiate_extension_op(
+                            &CONTROL_OP_ID,
+                            [
+                                Term::BoundedNat(2),
+                                Term::new_list([qb_t()]),
+                                Term::new_list(Vec::<Type>::new()),
+                            ],
+                        )
+                        .unwrap();
+                    let controlled_g = f
+                        .add_dataflow_op(local_control_op, [shared_g])
+                        .unwrap()
+                        .out_wire(0);
+                    let control_array = f
+                        .add_new_array(qb_t(), [local_control1, local_control2])
+                        .unwrap();
+                    let [control_array, q2] = f
+                        .add_dataflow_op(
+                            CallIndirect {
+                                signature: Signature::new_endo([array_type(2, qb_t()), qb_t()]),
+                            },
+                            [controlled_g, control_array, q2],
+                        )
+                        .unwrap()
+                        .outputs_arr();
+                    let controls = f.add_array_unpack(qb_t(), 2, control_array).unwrap();
+                    (controls, q2)
+                };
+
+                *f.finish_with_outputs([q1, local_controls[0], local_controls[1], q2])
+                    .unwrap()
+                    .handle()
+            },
+            dagger,
+        );
+
+        // Start at the caller so the shared loader is handled while rebuilding f.
+        let main = h
+            .children(h.module_root())
+            .find(|&node| {
+                h.get_optype(node)
+                    .as_func_defn()
+                    .is_some_and(|defn| defn.func_name() == "main")
+            })
+            .unwrap();
+        h.set_entrypoint(main);
+        resolve_modifier_with_entrypoints(&mut h, [main]).unwrap();
+
+        // Find the rebuilt f and collect its indirect-call loaders and callee names.
+        let suffix = if dagger { "D" } else { "" };
+        let modified_f =
+            dfg_modify::find_module_func_by_name(&h, &format!("__modified__f[C1{suffix}]"))
+                .unwrap();
+        let (loaders, mut callee_names): (Vec<_>, Vec<_>) = h
+            .children(modified_f)
+            .filter(|&node| matches!(h.get_optype(node), OpType::CallIndirect(_)))
+            .map(|call| {
+                let loader = h.single_linked_output(call, 0).unwrap().0;
+                let name = h
+                    .get_optype(h.static_source(loader).unwrap())
+                    .as_func_defn()
+                    .unwrap()
+                    .func_name()
+                    .clone();
+                (loader, name)
+            })
+            .unzip();
+        callee_names.sort_unstable();
+
+        // Both branches inherit the outer control; only the second adds two local controls.
+        assert_eq!(
+            callee_names,
+            [
+                format!("__modified__g[C1.2{suffix}]"),
+                format!("__modified__g[C1{suffix}]"),
+            ]
+        );
+        // The two modified versions must be loaded by different nodes.
+        assert_ne!(loaders[0], loaders[1]);
     }
 
     #[test]

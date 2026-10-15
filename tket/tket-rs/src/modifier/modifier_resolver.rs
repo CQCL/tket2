@@ -364,6 +364,7 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
+// NICOLA: TODO: Does make sense to have this enum now?
 /// Errors that can occur when tracing and validating a chain of modifiers and its target.
 #[derive(Debug, derive_more::Error, derive_more::Display)]
 #[non_exhaustive]
@@ -1474,6 +1475,7 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
         visited.insert(node);
         if h.contains_node(node) {
             let optype = h.get_optype(node);
+            // NICOLA TODO this may be useless
             if Modifier::from_optype(optype).is_some() {
                 // Remove the modifier node and all nodes reachable through its
                 // output edges (i.e. nodes that would become disconnected).
