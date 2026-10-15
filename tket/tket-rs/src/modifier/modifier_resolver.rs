@@ -362,11 +362,10 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
-// todo:: TODO: Does make sense to have this enum now?
-/// Errors that can occur when tracing and validating a chain of modifiers and its target.
-#[derive(Debug, derive_more::Error, derive_more::Display)]
+/// Possible errors that can occur during the modifier resolution process.
+#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
 #[non_exhaustive]
-pub enum ModifierError<N = Node> {
+pub enum ModifierResolverErrors<N = Node> {
     /// The head of a modifier chain is not a loaded function.
     #[display(
         "Malformed modifier chain: head node {_0} must be a LoadFunction. Found {_1} instead."
@@ -375,25 +374,6 @@ pub enum ModifierError<N = Node> {
     /// The modifier cannot be applied to the node.
     #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
     ModifierNotApplicable(N, OpType),
-}
-
-impl<N> ModifierError<N> {
-    fn node(self) -> N {
-        match self {
-            ModifierError::MalformedChainHead(n, _)
-            | ModifierError::ModifierNotApplicable(n, _) => n,
-        }
-    }
-}
-
-/// Possible errors that can occur during the modifier resolution process.
-#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
-#[non_exhaustive]
-pub enum ModifierResolverErrors<N = Node> {
-    /// Errors during tracing or validating a chain of modifiers and its target.
-    #[display("{_0}")]
-    #[from]
-    ModifierError(ModifierError<N>),
     /// Error if the new hugr is not built properly.
     #[display("{_0}")]
     #[from]

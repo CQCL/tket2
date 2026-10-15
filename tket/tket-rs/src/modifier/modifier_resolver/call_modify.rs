@@ -9,7 +9,7 @@ use hugr::{
     ops::{Call, CallIndirect, DataflowOpTrait, LoadFunction, OpType},
 };
 
-use super::{ModifierError, ModifierResolver, ModifierResolverErrors};
+use super::{ModifierResolver, ModifierResolverErrors};
 use crate::extension::modifier::Modifier;
 
 impl<N: HugrNode> ModifierResolver<N> {
@@ -94,11 +94,10 @@ impl<N: HugrNode> ModifierResolver<N> {
                 match fn_optype {
                     OpType::FuncDefn(_) => {}
                     OpType::FuncDecl(_) => {
-                        return Err(ModifierError::ModifierNotApplicable(
+                        return Err(ModifierResolverErrors::ModifierNotApplicable(
                             load_node,
                             fn_optype.clone(),
-                        )
-                        .into());
+                        ));
                     }
                     _ => {
                         return Err(ModifierResolverErrors::unreachable(format!(
@@ -156,14 +155,18 @@ impl<N: HugrNode> ModifierResolver<N> {
                         // non-load node, which is invalid under modifiers.
                         return Err(ModifierResolverErrors::unresolvable(
                             current,
-                            ModifierError::ModifierNotApplicable(current, optype.to_owned())
-                                .to_string(),
+                            ModifierResolverErrors::ModifierNotApplicable(
+                                current,
+                                optype.to_owned(),
+                            )
+                            .to_string(),
                             h.get_optype(ind_call_node).to_owned(),
                         ));
                     }
-                    return Err(
-                        ModifierError::MalformedChainHead(current, optype.to_owned()).into(),
-                    );
+                    return Err(ModifierResolverErrors::MalformedChainHead(
+                        current,
+                        optype.to_owned(),
+                    ));
                 }
                 chain.push(current);
                 break;
@@ -197,27 +200,13 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
 
         // Modify the function loaded by the indirect call preserving the modifier state.
-        let (modified_fn, new_load_op) = self
-            .with_modifiers(self.modifiers().clone(), |this| {
-                // Follow the function operand through its modifiers to the loader.
-                let trace = this.trace_indirect_call_to_load(h, ind_call_node)?;
-                let load_node = *trace.last().unwrap();
-                // Apply the combined modifiers and build the replacement loader.
-                this.modify_load(h, load_node)
-            })
-            // Report invalid modifier targets with the indirect-call operation as error context.
-            // NICOLA: TODO: If we get rid of the ModifierError enum, this mapping might be useless
-            .map_err(|e| match e {
-                ModifierResolverErrors::ModifierError(inner) => {
-                    let message = inner.to_string();
-                    ModifierResolverErrors::unresolvable(
-                        inner.node(),
-                        message,
-                        indir_call.clone().into(),
-                    )
-                }
-                other => other,
-            })?;
+        let (modified_fn, new_load_op) = self.with_modifiers(self.modifiers().clone(), |this| {
+            // Follow the function operand through its modifiers to the loader.
+            let trace = this.trace_indirect_call_to_load(h, ind_call_node)?;
+            let load_node = *trace.last().unwrap();
+            // Apply the combined modifiers and build the replacement loader.
+            this.modify_load(h, load_node)
+        })?;
 
         // Insert the modified loader into the new graph.
         let new_load_node = new_dfg.add_child_node(new_load_op);
@@ -339,10 +328,7 @@ mod tests {
         let error = resolver.modify_load(&mut h, load_node).unwrap_err();
 
         match error {
-            ModifierResolverErrors::ModifierError(ModifierError::ModifierNotApplicable(
-                node,
-                optype,
-            )) => {
+            ModifierResolverErrors::ModifierNotApplicable(node, optype) => {
                 assert_eq!(node, load_node);
                 assert_eq!(optype, declaration);
             }
