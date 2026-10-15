@@ -117,18 +117,11 @@ impl OpFunctionMap {
             .map(|(k, v)| (k.0, v.expect("All placeholders should have been replaced")))
     }
 
-    /// Register function replacements for all temporary operations.
-    /// Allocates helper symbols against the given Hugr, registered templates,
-    /// and module-level dependencies of all incoming helpers,
-    /// and adds replacements to the given [`ReplaceTypes`] lowerer,
-    /// which can be used to replace extension operations with calls to the
-    /// corresponding function definitions.
-    /// Only copies of a registered template share its linker symbol; existing
-    /// functions are never adopted based on their name or signature.
+    /// Register replacements that call the generated helper functions.
     ///
-    /// Symbols are allocated against the current target and templates. Do not
-    /// introduce conflicting function symbols before running the lowerer.
-    /// Register fresh replacements against each target when lowering multiple Hugrs.
+    /// Helper symbols are allocated for this target at registration time. Do not
+    /// introduce conflicting symbols before running `lowerer`; register fresh
+    /// replacements for each target Hugr.
     pub fn register_operation_replacements(
         self,
         hugr: &impl HugrView<Node = Node>,
