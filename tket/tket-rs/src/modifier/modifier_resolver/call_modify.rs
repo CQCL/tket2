@@ -1,8 +1,8 @@
 //! Modify nodes related to function calls.
 
 use hugr::{
-    Hugr, HugrView, IncomingPort, Wire,
-    builder::{BuildError, DFGBuilder, Dataflow},
+    HugrView, IncomingPort, Wire,
+    builder::{BuildError, Dataflow},
     core::HugrNode,
     extension::simple_op::MakeExtensionOp,
     hugr::hugrmut::HugrMut,
@@ -11,14 +11,6 @@ use hugr::{
 
 use super::{ModifierError, ModifierResolver, ModifierResolverErrors};
 use crate::extension::modifier::Modifier;
-
-/// How an indirect-call rewrite installs its replacement.
-pub(super) enum IndirectCallRewriteMode<'a, D: Dataflow = DFGBuilder<Hugr>> {
-    /// Reuse the indirect call node in the original graph.
-    InPlace,
-    /// Build a replacement indirect call inside the provided dataflow.
-    IntoDataflow(&'a mut D),
-}
 
 impl<N: HugrNode> ModifierResolver<N> {
     pub(super) fn modify_call(
@@ -88,7 +80,7 @@ impl<N: HugrNode> ModifierResolver<N> {
     /// `load_node` is expected to be a `LoadFunction` node.
     ///
     /// Returns the modified function node in `h` and an uninserted `LoadFunction` operation.
-    fn modify_load(
+    pub(super) fn modify_load(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
         load_node: N,
@@ -191,128 +183,86 @@ impl<N: HugrNode> ModifierResolver<N> {
     pub(super) fn modify_indirect_call(
         &mut self,
         h: &mut impl HugrMut<Node = N>,
-        ind_node_call: N,
+        ind_call_node: N,
         indir_call: &CallIndirect,
         new_dfg: &mut impl Dataflow,
     ) -> Result<(), ModifierResolverErrors<N>> {
         // If a function has no quantum effects and is not directly modified, we can skip modifying the call
-        let (call_indirect_input, _) = h.single_linked_output(ind_node_call, 0).unwrap();
+        let (call_indirect_input, _) = h.single_linked_output(ind_call_node, 0).unwrap();
         if !self.signature_has_quantum_data(&indir_call.signature)
             && Modifier::from_optype(h.get_optype(call_indirect_input)).is_none()
         {
-            self.add_node_no_modification(h, ind_node_call, indir_call.clone(), new_dfg)?;
+            self.add_node_no_modification(h, ind_call_node, indir_call.clone(), new_dfg)?;
             return Ok(());
         }
 
-        self.rewrite_indirect_call(
-            h,
-            ind_node_call,
-            indir_call,
-            IndirectCallRewriteMode::IntoDataflow(new_dfg),
-        )
-        // Report invalid modifier targets with the indirect-call operation as error context.
-        // NICOLA: TODO: If we get rid of the ModifierError enum, this mapping might be useless
-        .map_err(|e| match e {
-            ModifierResolverErrors::ModifierError(inner) => {
-                let message = inner.to_string();
-                ModifierResolverErrors::unresolvable(
-                    inner.node(),
-                    message,
-                    indir_call.clone().into(),
-                )
-            }
-            other => other,
-        })
-    }
-
-    /// Resolve the modified callee and rewrite the indirect call. `mode` determines if the
-    /// modified callee is rewritten in place or into another dataflow graph.
-    pub(super) fn rewrite_indirect_call<D: Dataflow>(
-        &mut self,
-        h: &mut impl HugrMut<Node = N>,
-        ind_call_node: N,
-        indir_call: &CallIndirect,
-        mode: IndirectCallRewriteMode<'_, D>,
-    ) -> Result<(), ModifierResolverErrors<N>> {
-        // Trace the chain of modifiers leading to the load node and apply them to the loaded function.
-        let (trace, load_node, modified_fn, new_load_op) = self.with_modifiers(
-            self.modifiers().clone(),
-            |this| -> Result<_, ModifierResolverErrors<N>> {
-                // `trace` contains the sequence of modifiers leading to the load node.
+        // Modify the function loaded by the indirect call preserving the modifier state.
+        let (modified_fn, new_load_op) = self
+            .with_modifiers(self.modifiers().clone(), |this| {
+                // Follow the function operand through its modifiers to the loader.
                 let trace = this.trace_indirect_call_to_load(h, ind_call_node)?;
                 let load_node = *trace.last().unwrap();
-                let (modified_fn, new_load_op) = this.modify_load(h, load_node)?;
-                Ok((trace, load_node, modified_fn, new_load_op))
-            },
-        )?;
-
-        // todo: we need to move this out. it is too different and dangerous to keep here.
-        match mode {
-            IndirectCallRewriteMode::InPlace => {
-                // Remove the old loader only if it has no other consumers.
-                if h.linked_inputs(load_node, 0).count() == 1 {
-                    h.remove_node(load_node);
+                // Apply the combined modifiers and build the replacement loader.
+                this.modify_load(h, load_node)
+            })
+            // Report invalid modifier targets with the indirect-call operation as error context.
+            // NICOLA: TODO: If we get rid of the ModifierError enum, this mapping might be useless
+            .map_err(|e| match e {
+                ModifierResolverErrors::ModifierError(inner) => {
+                    let message = inner.to_string();
+                    ModifierResolverErrors::unresolvable(
+                        inner.node(),
+                        message,
+                        indir_call.clone().into(),
+                    )
                 }
+                other => other,
+            })?;
 
-                // Insert the new loader and connect it to the modified function.
-                let new_load_node = h.add_node_before(ind_call_node, new_load_op);
-                h.connect(modified_fn, 0, new_load_node, 0);
-                // Disconnect the indirect caller from the modifier chain and connect it to the new loader.
-                h.disconnect(ind_call_node, IncomingPort::from(0));
-                h.connect(new_load_node, 0, ind_call_node, 0);
+        // Insert the modified loader into the new graph.
+        let new_load_node = new_dfg.add_child_node(new_load_op);
+        self.call_map_insert(modified_fn, (new_load_node, IncomingPort::from(0)));
 
-                // Then remove the now-unused chain, starting nearest the call.
-                for node in &trace[..trace.len().saturating_sub(1)] {
-                    h.remove_node(node.clone());
-                }
-            }
-            IndirectCallRewriteMode::IntoDataflow(new_dfg) => {
-                // Insert the modified loader into the new graph.
-                let new_load_node = new_dfg.add_child_node(new_load_op);
-                self.call_map_insert(modified_fn, (new_load_node, IncomingPort::from(0)));
+        // Construct the replacement call with additional control-array inputs and outputs.
+        let mut new_ind_call = indir_call.clone();
+        self.modify_signature(&mut new_ind_call.signature, false);
+        let new_call_node = new_dfg.add_child_node(new_ind_call);
 
-                // Construct the replacement call with additional control-array inputs and outputs.
-                let mut new_ind_call = indir_call.clone();
-                self.modify_signature(&mut new_ind_call.signature, false);
-                let new_call_node = new_dfg.add_child_node(new_ind_call);
-
-                // Pack the current control qubits into the arrays expected by the call.
-                let mut controls = self.pack_controls(new_dfg)?;
-                let offset = self.modifiers().accum_ctrl.len();
-                for (i, ctrl) in controls.iter_mut().enumerate() {
-                    // Control inputs follow the function operand at port 0; control outputs start at 0.
-                    new_dfg
-                        .hugr_mut()
-                        .connect(ctrl.node(), ctrl.source(), new_call_node, i + 1);
-                    *ctrl = Wire::new(new_call_node, i);
-                }
-                // Use the returned control qubits when wiring subsequent operations.
-                *self.controls() = self.unpack_controls(new_dfg, controls)?;
-
-                // Map the original arguments and results, skipping the function operand
-                // and allowing for the added control-array ports in the replacement call.
-                let signature = indir_call.signature();
-                self.wire_node_inout(
-                    ind_call_node,
-                    new_call_node,
-                    (signature.input.iter().skip(1), signature.output.iter()),
-                    (1, 0, offset),
-                )?;
-                // Register the original StateOrder dependencies for the replacement call.
-                self.wire_state_order(
-                    ind_call_node,
-                    h.get_optype(ind_call_node),
-                    new_call_node,
-                    new_dfg.hugr().get_optype(new_call_node),
-                )?;
-                // Supply the function value from the replacement loader to the new call.
-                new_dfg
-                    .hugr_mut()
-                    .connect(new_load_node, 0, new_call_node, 0);
-                // This function input is wired explicitly and needs no automatic wire mapping.
-                self.map_insert_none((ind_call_node, IncomingPort::from(0)).into())?;
-            }
+        // Pack the current control qubits into the arrays expected by the call.
+        let mut controls = self.pack_controls(new_dfg)?;
+        let offset = self.modifiers().accum_ctrl.len();
+        for (i, ctrl) in controls.iter_mut().enumerate() {
+            // Control inputs follow the function operand at port 0; control outputs start at 0.
+            new_dfg
+                .hugr_mut()
+                .connect(ctrl.node(), ctrl.source(), new_call_node, i + 1);
+            *ctrl = Wire::new(new_call_node, i);
         }
+        // Use the returned control qubits when wiring subsequent operations.
+        *self.controls() = self.unpack_controls(new_dfg, controls)?;
+
+        // Map the original arguments and results, skipping the function operand
+        // and allowing for the added control-array ports in the replacement call.
+        let signature = indir_call.signature();
+        self.wire_node_inout(
+            ind_call_node,
+            new_call_node,
+            (signature.input.iter().skip(1), signature.output.iter()),
+            (1, 0, offset),
+        )?;
+        // Register the original StateOrder dependencies for the replacement call.
+        self.wire_state_order(
+            ind_call_node,
+            h.get_optype(ind_call_node),
+            new_call_node,
+            new_dfg.hugr().get_optype(new_call_node),
+        )?;
+        // Supply the function value from the replacement loader to the new call.
+        new_dfg
+            .hugr_mut()
+            .connect(new_load_node, 0, new_call_node, 0);
+        // This function input is wired explicitly and needs no automatic wire mapping.
+        self.map_insert_none((ind_call_node, IncomingPort::from(0)).into())?;
 
         Ok(())
     }

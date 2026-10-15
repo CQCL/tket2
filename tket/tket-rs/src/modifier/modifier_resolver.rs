@@ -24,8 +24,7 @@
 //! ```
 //! The resolver finds the last modifier in a chain of modifiers,
 //! and starts resolving the function loaded by the `LoadFunction` node,
-//! which is done in
-//! `rewrite_indirect_call`.
+//! in `apply_modification` or `modify_indirect_call`.
 //! After resolution, original function nodes that have been replaced by solved
 //! modified versions may be removed if they are no longer needed and the pass
 //! scope allows removing them. Nodes whose interface must be preserved by the
@@ -120,7 +119,6 @@ use super::CombinedModifier;
 use crate::passes::utils::unpack_container::TypeUnpacker;
 use crate::passes::{InScope, PassScope};
 use crate::{TketOp, extension::global_phase::GlobalPhase, modifier::Modifier};
-use call_modify::IndirectCallRewriteMode;
 use global_phase_modify::delete_phase;
 
 use hugr::{
@@ -364,7 +362,7 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
-// NICOLA: TODO: Does make sense to have this enum now?
+// todo:: TODO: Does make sense to have this enum now?
 /// Errors that can occur when tracing and validating a chain of modifiers and its target.
 #[derive(Debug, derive_more::Error, derive_more::Display)]
 #[non_exhaustive]
@@ -720,12 +718,36 @@ impl<N: HugrNode> ModifierResolver<N> {
     ) -> Result<(), ModifierResolverErrors<N>> {
         // Make sure that the modifiers are initially empty.
         assert_eq!(self.modifiers(), &CombinedModifier::default());
-        let optype = hugr.get_optype(indirect_call_node).clone();
-        let OpType::CallIndirect(indir_call) = &optype else {
-            panic!("Expected a CallIndirect node, found {optype:?}");
-        };
-        let mode: IndirectCallRewriteMode<'_> = IndirectCallRewriteMode::InPlace;
-        self.rewrite_indirect_call(hugr, indirect_call_node, indir_call, mode)
+        // Modify the function loaded by the indirect call preserving the modifier state.
+        let (trace, load_node, modified_fn, new_load_op) = self.with_modifiers(
+            self.modifiers().clone(),
+            |this| -> Result<_, ModifierResolverErrors<N>> {
+                // Collect the chain for cleanup while accumulating its modifiers.
+                let trace = this.trace_indirect_call_to_load(hugr, indirect_call_node)?;
+                let load_node = *trace.last().unwrap();
+                // Modify the loaded function and prepare its replacement loader.
+                let (modified_fn, new_load_op) = this.modify_load(hugr, load_node)?;
+                Ok((trace, load_node, modified_fn, new_load_op))
+            },
+        )?;
+        // Remove the old loader only if it has no other consumers.
+        if hugr.linked_inputs(load_node, 0).count() == 1 {
+            hugr.remove_node(load_node);
+        }
+
+        // Insert the new loader and connect it to the modified function.
+        let new_load_node = hugr.add_node_before(indirect_call_node, new_load_op);
+        hugr.connect(modified_fn, 0, new_load_node, 0);
+        // Disconnect the indirect caller from the modifier chain and connect it to the new loader.
+        hugr.disconnect(indirect_call_node, IncomingPort::from(0));
+        hugr.connect(new_load_node, 0, indirect_call_node, 0);
+
+        // Then remove the now-unused chain, starting nearest the call.
+        for node in &trace[..trace.len().saturating_sub(1)] {
+            hugr.remove_node(node.clone());
+        }
+
+        Ok(())
     }
 
     /// Modifies a function signature to account for control qubits added by modifiers.
