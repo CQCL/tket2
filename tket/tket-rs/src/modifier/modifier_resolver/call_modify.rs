@@ -85,34 +85,27 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &mut impl HugrMut<Node = N>,
         load_node: N,
     ) -> Result<(N, LoadFunction), ModifierResolverErrors<N>> {
-        let optype = h.get_optype(load_node);
-        let (func_node, load_op) = match optype {
-            OpType::LoadFunction(load) => {
-                let (fn_node, _) = h.single_linked_output(load_node, 0).unwrap();
-                let fn_optype = h.get_optype(fn_node);
-                match fn_optype {
-                    OpType::FuncDefn(_) => {}
-                    OpType::FuncDecl(_) => {
-                        return Err(ModifierResolverErrors::ModifierNotApplicable(
-                            load_node,
-                            fn_optype.clone(),
-                        ));
-                    }
-                    _ => {
-                        return Err(ModifierResolverErrors::unreachable(format!(
-                            "Expected FuncDefn or FuncDecl, found {fn_optype:?}"
-                        )));
-                    }
-                }
-                (fn_node, load.clone())
+        let optype = h.get_optype(load_node).clone();
+        let OpType::LoadFunction(load) = optype else {
+            panic!("Expected LoadFunction, found {optype:?}");
+        };
+        let load_op = load.clone();
+
+        let (func_node, _) = h.single_linked_output(load_node, 0).unwrap();
+        let fn_optype = h.get_optype(func_node);
+        match fn_optype {
+            OpType::FuncDefn(_) => {}
+            OpType::FuncDecl(_) => {
+                return Err(ModifierResolverErrors::ModifierNotApplicable(
+                    load_node,
+                    fn_optype.clone(),
+                ));
             }
             _ => {
-                // todo: panic instead
-                return Err(ModifierResolverErrors::unreachable(format!(
-                    "Expected LoadFunction, found {optype:?}"
-                )));
+                panic!("Expected FuncDefn or FuncDecl, found {fn_optype:?}");
             }
-        };
+        }
+
         let modified_fn = self.modify_fn(h, func_node)?;
         // Give the replacement loader the modified function's signature
         let mut modified_sig = load_op.func_sig;
