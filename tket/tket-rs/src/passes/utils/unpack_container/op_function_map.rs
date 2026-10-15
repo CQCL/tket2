@@ -12,7 +12,7 @@ use hugr::{
 use hugr_core::Visibility;
 use hugr_core::hugr::internal::HugrMutInternals;
 use indexmap::IndexMap;
-use std::{cell::RefCell, ops::Deref};
+use std::{cell::RefCell, collections::HashSet, ops::Deref};
 
 /// Wrapper for ExtensionOp that implements Hash
 #[derive(Clone, PartialEq, Eq)]
@@ -117,7 +117,7 @@ impl OpFunctionMap {
             .map(|(k, v)| (k.0, v.expect("All placeholders should have been replaced")))
     }
 
-    /// Register replacements that call the generated helper functions.
+    /// Register calls to helpers with collision-safe symbols for their definitions.
     ///
     /// Helper symbols are allocated for this target at registration time. Do not
     /// introduce conflicting symbols before running `lowerer`; register fresh
@@ -127,29 +127,40 @@ impl OpFunctionMap {
         hugr: &impl HugrView<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
+        fn reserve_name(base: &str, occupied: &mut HashSet<String>) -> String {
+            std::iter::once(base.to_owned())
+                .chain((1_u64..).map(|i| format!("{base}${i}")))
+                .find(|name| occupied.insert(name.clone()))
+                .unwrap()
+        }
+
         let mut occupied = lowerer.reserved_function_names(hugr);
-        let functions = self.into_function_iter().collect::<Vec<_>>();
+        let mut functions = self.into_function_iter().collect::<Vec<_>>();
         occupied.extend(functions.iter().flat_map(|(_, h)| {
-            let entrypoint = h.entrypoint();
             h.children(h.module_root())
-                .filter(move |&n| n != entrypoint)
                 .filter_map(|n| match h.get_optype(n) {
-                    OpType::FuncDefn(f) => Some(f.func_name().clone()),
                     OpType::FuncDecl(f) => Some(f.func_name().clone()),
                     _ => None,
                 })
         }));
+        for (_, h) in &mut functions {
+            let entrypoint = h.entrypoint();
+            let dependencies = h
+                .children(h.module_root())
+                .filter(|&n| n != entrypoint)
+                .collect::<Vec<_>>();
+            for dependency in dependencies {
+                if let OpType::FuncDefn(f) = h.optype_mut(dependency) {
+                    *f.func_name_mut() = reserve_name(f.func_name(), &mut occupied);
+                }
+            }
+        }
         for (op, mut func_def) in functions {
             let entrypoint = func_def.entrypoint();
             let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
                 panic!("OpFunctionMap entries must be function definitions");
             };
-            let base = func.func_name();
-            let name = std::iter::once(base.clone())
-                .chain((1_u64..).map(|i| format!("{base}${i}")))
-                .find(|name| occupied.insert(name.clone()))
-                .unwrap();
-            *func.func_name_mut() = name;
+            *func.func_name_mut() = reserve_name(func.func_name(), &mut occupied);
             lowerer.set_replace_op(&op, func_as_node_template(func_def));
         }
     }
@@ -209,6 +220,7 @@ mod tests {
     fn helper_symbol_avoids_its_incoming_dependency(
         #[values(false, true)] earlier_helper: bool,
         #[values(false, true)] declaration: bool,
+        #[values(false, true)] target_dependency: bool,
     ) {
         let (_ext, op) = helper_op("test.incoming");
         let (_earlier_ext, earlier_op) = helper_op("test.earlier");
@@ -241,6 +253,19 @@ mod tests {
         .unwrap();
 
         let mut b = ModuleBuilder::new();
+        let user_dependency = if target_dependency {
+            let user = b
+                .define_function_vis(
+                    "$helper$$1",
+                    Signature::new_endo([bool_t()]),
+                    Visibility::Public,
+                )
+                .unwrap();
+            let inputs = user.input_wires().collect::<Vec<_>>();
+            Some(user.finish_with_outputs(inputs).unwrap())
+        } else {
+            None
+        };
         let user = b
             .define_function_vis(
                 "$helper$",
@@ -253,7 +278,13 @@ mod tests {
         let mut main = b
             .define_function("main", Signature::new_endo([bool_t()]))
             .unwrap();
-        let original_call = main.call(user.handle(), &[], main.input_wires()).unwrap();
+        let mut inputs = main.input_wires().collect::<Vec<_>>();
+        let dependency_user_call = user_dependency.as_ref().map(|user| {
+            let call = main.call(user.handle(), &[], inputs.clone()).unwrap();
+            inputs = call.outputs().collect();
+            call.node()
+        });
+        let original_call = main.call(user.handle(), &[], inputs).unwrap();
         let mut inputs = original_call.outputs().collect::<Vec<_>>();
         let earlier_call = if earlier_helper {
             let call = main.add_dataflow_op(earlier_op, inputs).unwrap();
@@ -283,16 +314,30 @@ mod tests {
             .unwrap();
         let dependency = h.static_source(call).unwrap();
         assert_ne!(helper, dependency);
-        if declaration {
+        if let Some(user) = user_dependency {
+            assert_eq!(h.children(user.node()).count(), 2);
+            assert_eq!(
+                h.static_source(dependency_user_call.unwrap()),
+                Some(user.node())
+            );
+            if declaration {
+                assert_eq!(dependency, user.node());
+            } else {
+                assert_ne!(dependency, user.node());
+            }
+        }
+        if declaration && !target_dependency {
             assert_eq!(
                 h.get_optype(dependency).as_func_decl().unwrap().func_name(),
                 "$helper$$1"
             );
-        } else {
-            assert_eq!(
-                h.get_optype(dependency).as_func_defn().unwrap().func_name(),
-                "$helper$$1"
-            );
+        } else if !declaration {
+            if !target_dependency {
+                assert_eq!(
+                    h.get_optype(dependency).as_func_defn().unwrap().func_name(),
+                    "$helper$$1"
+                );
+            }
             assert!(
                 h.children(dependency)
                     .any(|n| h.get_optype(n) == &LogicOp::Not.into())

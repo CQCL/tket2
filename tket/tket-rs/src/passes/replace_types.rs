@@ -74,10 +74,11 @@ impl NodeTemplate {
     }
 
     /// Creates a [`NodeTemplate::LinkedHugr`] creating a call node to the given
-    /// function definition or declaration.
+    /// function definition or declaration, including its reachable dependencies.
     ///
     /// Returns a [`BuildError::UnexpectedType`] if the given Hugr does not have
     /// a function definition or declaration as entrypoint.
+    /// Linker errors are returned if dependencies cannot be imported.
     pub fn call_to_function(
         func_def: Hugr,
         type_args: &[TypeArg],
