@@ -217,16 +217,25 @@ mod tests {
     }
 
     #[rstest]
+    #[case::no_earlier_definition(false, false, false)]
+    #[case::same_map_definition(true, false, false)]
+    #[case::separate_maps_definition(true, true, false)]
+    #[case::no_earlier_declaration(false, false, true)]
+    #[case::same_map_declaration(true, false, true)]
     fn helper_symbol_avoids_its_incoming_dependency(
-        #[values(false, true)] earlier_helper: bool,
-        #[values(false, true)] declaration: bool,
+        #[case] earlier_helper: bool,
+        #[case] separate_maps: bool,
+        #[case] declaration: bool,
         #[values(false, true)] target_dependency: bool,
     ) {
         let (_ext, op) = helper_op("test.incoming");
         let (_earlier_ext, earlier_op) = helper_op("test.earlier");
         let map = OpFunctionMap::new();
+        let earlier_map = OpFunctionMap::new();
         if earlier_helper {
-            map.insert_with(&earlier_op, &[], |b| Ok(b.input_wires()))
+            let earlier_builder = if separate_maps { &earlier_map } else { &map };
+            earlier_builder
+                .insert_with(&earlier_op, &[], |b| Ok(b.input_wires()))
                 .unwrap();
         }
         map.insert_with(&op, &[], |b| {
@@ -300,6 +309,9 @@ mod tests {
         h.validate().unwrap();
 
         let mut lowerer = ReplaceTypes::new_empty();
+        if separate_maps {
+            earlier_map.register_operation_replacements(&h, &mut lowerer);
+        }
         map.register_operation_replacements(&h, &mut lowerer);
         lowerer.run(&mut h).unwrap();
         h.validate().unwrap();
@@ -332,7 +344,7 @@ mod tests {
                 "$helper$$1"
             );
         } else if !declaration {
-            if !target_dependency {
+            if !target_dependency && !separate_maps {
                 assert_eq!(
                     h.get_optype(dependency).as_func_defn().unwrap().func_name(),
                     "$helper$$1"
