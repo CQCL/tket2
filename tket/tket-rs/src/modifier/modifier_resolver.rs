@@ -369,35 +369,11 @@ impl<N> Default for ModifierResolver<N> {
 #[derive(Debug, derive_more::Error, derive_more::Display)]
 #[non_exhaustive]
 pub enum ModifierError<N = Node> {
-    /// The node is not a modifier
-    #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
-    NotModifier(N, OpType),
-    /// No caller of this modified function exists.
-    #[display("No caller of the modified function exists for node {_0}")]
-    #[error(ignore)]
-    NoCaller(N),
-    /// No target of this modifier exists.
-    #[display("The modifier node {_0} chain has no target")]
-    #[error(ignore)]
-    NoTarget(N),
-    /// An indirect call's function input does not have exactly one source.
-    #[display(
-        "Indirect call node {_0} must have exactly one source connected to its function input (port 0)"
-    )]
-    #[error(ignore)]
-    InvalidIndirectCallTarget(N),
     /// The head of a modifier chain is not a loaded function.
-    #[display("Malformed modifier chain: head node {_0} must be a LoadFunction but is {_1}")]
-    MalformedChainHead(N, OpType),
-    /// A modifier's function input does not have exactly one source.
     #[display(
-        "Malformed modifier chain: modifier node {_0} must have exactly one source connected to its function input (port 0)"
+        "Malformed modifier chain: head node {_0} must be a LoadFunction. Found {_1} instead."
     )]
-    #[error(ignore)]
-    MalformedChainLink(N),
-    /// Not the first modifier in a chain.
-    #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
-    NotInitialModifier(N, OpType),
+    MalformedChainHead(N, OpType),
     /// The modifier cannot be applied to the node.
     #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
     ModifierNotApplicable(N, OpType),
@@ -406,13 +382,7 @@ pub enum ModifierError<N = Node> {
 impl<N> ModifierError<N> {
     fn node(self) -> N {
         match self {
-            ModifierError::NotModifier(n, _)
-            | ModifierError::NoCaller(n)
-            | ModifierError::NoTarget(n)
-            | ModifierError::InvalidIndirectCallTarget(n)
-            | ModifierError::MalformedChainHead(n, _)
-            | ModifierError::MalformedChainLink(n)
-            | ModifierError::NotInitialModifier(n, _)
+            ModifierError::MalformedChainHead(n, _)
             | ModifierError::ModifierNotApplicable(n, _) => n,
         }
     }
@@ -731,9 +701,8 @@ impl<N: HugrNode> ModifierResolver<N> {
         }
         // Check if this indirect call is targeted by a modifier chain.
         let (maybe_a_modifier, _) = h
-            .linked_outputs(node, 0)
-            .exactly_one()
-            .map_err(|_| ModifierError::InvalidIndirectCallTarget(node))?;
+            .single_linked_output(node, 0)
+            .expect("CallIndirect must have exactly one function input");
         if Modifier::from_optype(h.get_optype(maybe_a_modifier)).is_none() {
             return Ok(false);
         }
@@ -742,33 +711,18 @@ impl<N: HugrNode> ModifierResolver<N> {
     }
 
     /// Resolve a modifier chain in place, starting with no enclosing modifiers.
-    /// `indirect_call_node` must consume a modifier chain at its function input (port 0),
-    /// as checked by `should_modify`.
+    ///
+    /// `indirect_call_node` is expected to be a `CallIndirect` node, as checked by `should_modify`.
     fn apply_modification(
         &mut self,
         hugr: &mut impl HugrMut<Node = N>,
         indirect_call_node: N,
     ) -> Result<(), ModifierResolverErrors<N>> {
-        let modifiers = CombinedModifier::default();
         // Make sure that the modifiers are initially empty.
-        // NICOLA: TODO: This may be useless
-        self.with_modifiers(modifiers, |this| {
-            this.apply_modification_inner(hugr, indirect_call_node)
-        })
-    }
-
-    /// Rewrite the indirect call consuming a modifier chain in place.
-    /// Called by `apply_modification` with no enclosing modifiers.
-    /// `indirect_call_node` must consume a modifier chain at its function input (port 0),
-    /// as checked by `should_modify`.
-    fn apply_modification_inner(
-        &mut self,
-        hugr: &mut impl HugrMut<Node = N>,
-        indirect_call_node: N,
-    ) -> Result<(), ModifierResolverErrors<N>> {
+        assert_eq!(self.modifiers(), &CombinedModifier::default());
         let optype = hugr.get_optype(indirect_call_node).clone();
         let OpType::CallIndirect(indir_call) = &optype else {
-            return Err(ModifierError::ModifierNotApplicable(indirect_call_node, optype).into());
+            panic!("Expected a CallIndirect node, found {optype:?}");
         };
         let mode: IndirectCallRewriteMode<'_> = IndirectCallRewriteMode::InPlace;
         self.rewrite_indirect_call(hugr, indirect_call_node, indir_call, mode)

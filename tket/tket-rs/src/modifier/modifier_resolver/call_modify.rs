@@ -142,14 +142,12 @@ impl<N: HugrNode> ModifierResolver<N> {
         h: &impl HugrMut<Node = N>,
         ind_call_node: N,
     ) -> Result<Vec<N>, ModifierResolverErrors<N>> {
-        // NICOLA: comment on PR: this check is a bit redundant, but may be useful
         let optype = h.get_optype(ind_call_node);
         // First node must be a CallIndirect node
-        if !matches!(optype, OpType::CallIndirect(_)) {
-            return Err(
-                ModifierError::ModifierNotApplicable(ind_call_node, optype.to_owned()).into(),
-            );
-        }
+        assert!(
+            matches!(optype, OpType::CallIndirect(_)),
+            "Expected CallIndirect, found {optype:?}"
+        );
 
         // Collection of modifiers to apply.
         let modifiers = self.modifiers_mut();
@@ -184,7 +182,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             // Only one predecessor is expected
             let (new, _) = h
                 .single_linked_output(current, 0)
-                .ok_or(ModifierError::MalformedChainLink(current))?;
+                .expect("Expected exactly one output connected to input port 0 of a modifier node");
             current = new;
         }
         Ok(chain)
@@ -248,11 +246,10 @@ impl<N: HugrNode> ModifierResolver<N> {
             },
         )?;
 
-        // NICOLA: TODO: we need to move this out. it is too different and dangerous to keep here.
+        // todo: we need to move this out. it is too different and dangerous to keep here.
         match mode {
             IndirectCallRewriteMode::InPlace => {
                 // Remove the old loader only if it has no other consumers.
-                // NICOLA: TODO: WE SHOULD TO THIS ALSO ON THE OTHER CASE)
                 if h.linked_inputs(load_node, 0).count() == 1 {
                     h.remove_node(load_node);
                 }
@@ -314,13 +311,6 @@ impl<N: HugrNode> ModifierResolver<N> {
                     .connect(new_load_node, 0, new_call_node, 0);
                 // This function input is wired explicitly and needs no automatic wire mapping.
                 self.map_insert_none((ind_call_node, IncomingPort::from(0)).into())?;
-
-                // NICOLA: TODO: test this, should be safe to remove
-                // // The original chain's wires need no connections in the rebuilt graph.
-                // // Existing mappings, including those for shared loaders, are preserved.
-                // for node in trace {
-                //     self.forget_node(h, node)?;
-                // }
             }
         }
 
