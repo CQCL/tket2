@@ -6,7 +6,6 @@ use hugr::HugrView;
 use hugr::{
     Hugr, Node, Wire,
     builder::{BuildError, DataflowHugr, FunctionBuilder},
-    hugr::hugrmut::HugrMut,
     ops::{DataflowOpTrait, ExtensionOp, OpType},
     types::TypeArg,
 };
@@ -125,17 +124,27 @@ impl OpFunctionMap {
     /// corresponding function definitions.
     /// Only copies of a registered template share its linker symbol; existing
     /// functions are never adopted based on their name or signature.
+    ///
+    /// Symbols are allocated against the current target and templates. Do not
+    /// introduce conflicting function symbols before running the lowerer.
+    /// Register fresh replacements against each target when lowering multiple Hugrs.
     pub fn register_operation_replacements(
         self,
-        hugr: &mut impl HugrMut<Node = Node>,
+        hugr: &impl HugrView<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
+        let mut occupied = lowerer.reserved_function_names(hugr);
         for (op, mut func_def) in self.into_function_iter() {
             let entrypoint = func_def.entrypoint();
             let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
                 panic!("OpFunctionMap entries must be function definitions");
             };
-            *func.func_name_mut() = lowerer.fresh_function_name(hugr, func.func_name());
+            let base = func.func_name();
+            let name = std::iter::once(base.clone())
+                .chain((1_u64..).map(|i| format!("{base}${i}")))
+                .find(|name| occupied.insert(name.clone()))
+                .unwrap();
+            *func.func_name_mut() = name;
             lowerer.set_replace_op(&op, func_as_node_template(func_def));
         }
     }
@@ -167,9 +176,11 @@ mod tests {
     use hugr::builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder};
     use hugr::extension::prelude::bool_t;
     use hugr::extension::{Extension, Version};
+    use hugr::hugr::hugrmut::HugrMut;
     use hugr::ops::handle::NodeHandle;
     use hugr::std_extensions::logic::LogicOp;
     use hugr::types::Signature;
+    use rstest::rstest;
 
     fn helper_op(extension: &str) -> (std::sync::Arc<Extension>, ExtensionOp) {
         let ext = Extension::new_arc(
@@ -189,8 +200,10 @@ mod tests {
         (ext, op)
     }
 
-    #[test]
-    fn independent_maps_and_nested_dependencies_get_fresh_symbols() {
+    #[rstest]
+    fn helper_symbols_handle_nested_dependencies_and_repeated_lowering(
+        #[values(false, true)] separate_maps: bool,
+    ) {
         let (_outer_ext, outer) = helper_op("test.outer");
         let (_inner_ext, inner) = helper_op("test.inner");
         let outer_map = OpFunctionMap::new();
@@ -200,7 +213,12 @@ mod tests {
             })
             .unwrap();
         let inner_map = OpFunctionMap::new();
-        inner_map
+        let inner_builder = if separate_maps {
+            &inner_map
+        } else {
+            &outer_map
+        };
+        inner_builder
             .insert_with(&inner, &[], |b| {
                 Ok(b.add_dataflow_op(LogicOp::Not, b.input_wires())?.outputs())
             })
@@ -236,8 +254,8 @@ mod tests {
         let mut h = b.finish_hugr().unwrap();
         h.validate().unwrap();
         let mut lowerer = ReplaceTypes::new_empty();
-        outer_map.register_operation_replacements(&mut h, &mut lowerer);
-        inner_map.register_operation_replacements(&mut h, &mut lowerer);
+        outer_map.register_operation_replacements(&h, &mut lowerer);
+        inner_map.register_operation_replacements(&h, &mut lowerer);
         lowerer.run(&mut h).unwrap();
         h.validate().unwrap();
 
@@ -271,7 +289,7 @@ mod tests {
             .insert_with(&inner, &[], |b| Ok(b.input_wires()))
             .unwrap();
         let mut lowerer = ReplaceTypes::new_empty();
-        new_map.register_operation_replacements(&mut h, &mut lowerer);
+        new_map.register_operation_replacements(&h, &mut lowerer);
         lowerer.run(&mut h).unwrap();
         h.validate().unwrap();
         let later_call = h

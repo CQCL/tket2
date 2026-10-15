@@ -2,7 +2,7 @@
 //! Replace types with other types across the Hugr. See [`ReplaceTypes`] and [Linearizer].
 //!
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use handlers::list_const;
@@ -542,22 +542,21 @@ impl ReplaceTypes {
         );
     }
 
-    /// Allocate a symbol for a newly generated helper, without claiming ownership
-    /// of any existing definition or declaration. Include registered templates:
-    /// their dependencies may be linked before this helper reaches the target.
-    pub(crate) fn fresh_function_name(
+    /// Collect module-level function symbols from the target and registered
+    /// templates, including private functions and declarations.
+    pub(crate) fn reserved_function_names(
         &self,
         hugr: &impl HugrView<Node = Node>,
-        base: &str,
-    ) -> String {
+    ) -> HashSet<String> {
         fn function_names(h: &impl HugrView<Node = Node>) -> impl Iterator<Item = &str> {
-            h.nodes().filter_map(|n| match h.get_optype(n) {
-                OpType::FuncDefn(f) => Some(f.func_name().as_str()),
-                OpType::FuncDecl(f) => Some(f.func_name().as_str()),
-                _ => None,
-            })
+            h.children(h.module_root())
+                .filter_map(|n| match h.get_optype(n) {
+                    OpType::FuncDefn(f) => Some(f.func_name().as_str()),
+                    OpType::FuncDecl(f) => Some(f.func_name().as_str()),
+                    _ => None,
+                })
         }
-        let occupied: std::collections::HashSet<_> = function_names(hugr)
+        function_names(hugr)
             .chain(self.op_map.values().flat_map(|(template, _)| {
                 match template {
                     NodeTemplate::LinkedHugr(h, _) | NodeTemplate::CompoundOp(h) => {
@@ -568,11 +567,8 @@ impl ReplaceTypes {
                 .into_iter()
                 .flat_map(function_names)
             }))
-            .collect();
-        std::iter::once(base.to_owned())
-            .chain((1..).map(|i| format!("{base}${i}")))
-            .find(|name| !occupied.contains(name.as_str()))
-            .unwrap()
+            .map(str::to_owned)
+            .collect()
     }
 
     /// Configures this instance to change occurrences of a parameterized op `src`

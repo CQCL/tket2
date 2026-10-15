@@ -253,7 +253,10 @@ mod test {
             h.get_optype(wrapper).as_func_defn().unwrap().visibility(),
             &Visibility::Private
         );
-        let call = h.output_neighbours(wrapper).exactly_one().ok().unwrap();
+        let call = h
+            .output_neighbours(wrapper)
+            .exactly_one()
+            .unwrap_or_else(|error| panic!("{error}"));
         assert!(h.descendants(main_id.node()).contains(&call));
     }
 
