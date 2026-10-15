@@ -13,7 +13,7 @@ use itertools::Either;
 use thiserror::Error;
 
 use hugr_core::builder::{
-    BuildError, BuildHandle, Container, Dataflow, DataflowHugr, FunctionBuilder, HugrBuilder,
+    BuildError, BuildHandle, Container, Dataflow, DataflowHugr, FunctionBuilder,
 };
 use hugr_core::extension::{ExtensionId, OpDef, SignatureError, TypeDef};
 use hugr_core::hugr::hugrmut::HugrMut;
@@ -98,9 +98,10 @@ impl NodeTemplate {
 
         // Build a new hugr and insert the function definition into it
         let mut b = FunctionBuilder::new_vis("", func_signature, Visibility::Private).unwrap();
+        let module_root = b.hugr().module_root();
         let func_id = FuncID::<true>::from(
-            b.module_root_builder()
-                .add_hugr(func_def)
+            b.hugr_mut()
+                .insert_link_hugr(module_root, func_def, &NameLinkingPolicy::default())?
                 .inserted_entrypoint,
         );
 
