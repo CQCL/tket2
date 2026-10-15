@@ -127,22 +127,18 @@ impl OpFunctionMap {
         hugr: &impl HugrView<Node = Node>,
         lowerer: &mut ReplaceTypes,
     ) {
-        fn reserve_name(base: &str, occupied: &mut HashSet<String>) -> String {
-            std::iter::once(base.to_owned())
-                .chain((1_u64..).map(|i| format!("{base}${i}")))
-                .find(|name| occupied.insert(name.clone()))
-                .unwrap()
-        }
-
-        let mut occupied = lowerer.reserved_function_names(hugr);
         let mut functions = self.into_function_iter().collect::<Vec<_>>();
-        occupied.extend(functions.iter().flat_map(|(_, h)| {
-            h.children(h.module_root())
-                .filter_map(|n| match h.get_optype(n) {
-                    OpType::FuncDecl(f) => Some(f.func_name().clone()),
-                    _ => None,
-                })
-        }));
+        let declarations = functions
+            .iter()
+            .flat_map(|(_, h)| {
+                h.children(h.module_root())
+                    .filter_map(|n| match h.get_optype(n) {
+                        OpType::FuncDecl(f) => Some(f.func_name().clone()),
+                        _ => None,
+                    })
+            })
+            .collect::<HashSet<_>>();
+        let mut occupied = lowerer.reserve_function_declarations(hugr, &declarations);
         for (_, h) in &mut functions {
             let entrypoint = h.entrypoint();
             let dependencies = h
@@ -151,7 +147,8 @@ impl OpFunctionMap {
                 .collect::<Vec<_>>();
             for dependency in dependencies {
                 if let OpType::FuncDefn(f) = h.optype_mut(dependency) {
-                    *f.func_name_mut() = reserve_name(f.func_name(), &mut occupied);
+                    *f.func_name_mut() =
+                        ReplaceTypes::reserve_function_name(f.func_name(), &mut occupied);
                 }
             }
         }
@@ -160,8 +157,9 @@ impl OpFunctionMap {
             let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
                 panic!("OpFunctionMap entries must be function definitions");
             };
-            *func.func_name_mut() = reserve_name(func.func_name(), &mut occupied);
-            lowerer.set_replace_op(&op, func_as_node_template(func_def));
+            *func.func_name_mut() =
+                ReplaceTypes::reserve_function_name(func.func_name(), &mut occupied);
+            lowerer.set_replace_generated_op(&op, func_as_node_template(func_def));
         }
     }
 }
@@ -216,18 +214,32 @@ mod tests {
         (ext, op)
     }
 
+    #[derive(Clone, Copy)]
+    enum EarlierHelper {
+        None,
+        SameMap,
+        SeparateMap,
+        Replaced,
+    }
+
     #[rstest]
-    #[case::no_earlier_definition(false, false, false)]
-    #[case::same_map_definition(true, false, false)]
-    #[case::separate_maps_definition(true, true, false)]
-    #[case::no_earlier_declaration(false, false, true)]
-    #[case::same_map_declaration(true, false, true)]
+    #[case::no_earlier_definition(EarlierHelper::None, false)]
+    #[case::same_map_definition(EarlierHelper::SameMap, false)]
+    #[case::separate_maps_definition(EarlierHelper::SeparateMap, false)]
+    #[case::no_earlier_declaration(EarlierHelper::None, true)]
+    #[case::same_map_declaration(EarlierHelper::SameMap, true)]
+    #[case::separate_maps_declaration(EarlierHelper::SeparateMap, true)]
+    #[case::replaced_declaration(EarlierHelper::Replaced, true)]
     fn helper_symbol_avoids_its_incoming_dependency(
-        #[case] earlier_helper: bool,
-        #[case] separate_maps: bool,
+        #[case] earlier: EarlierHelper,
         #[case] declaration: bool,
         #[values(false, true)] target_dependency: bool,
     ) {
+        let earlier_helper = !matches!(earlier, EarlierHelper::None);
+        let separate_maps = matches!(
+            earlier,
+            EarlierHelper::SeparateMap | EarlierHelper::Replaced
+        );
         let (_ext, op) = helper_op("test.incoming");
         let (_earlier_ext, earlier_op) = helper_op("test.earlier");
         let map = OpFunctionMap::new();
@@ -296,7 +308,7 @@ mod tests {
         let original_call = main.call(user.handle(), &[], inputs).unwrap();
         let mut inputs = original_call.outputs().collect::<Vec<_>>();
         let earlier_call = if earlier_helper {
-            let call = main.add_dataflow_op(earlier_op, inputs).unwrap();
+            let call = main.add_dataflow_op(earlier_op.clone(), inputs).unwrap();
             inputs = call.outputs().collect();
             Some(call.node())
         } else {
@@ -311,6 +323,17 @@ mod tests {
         let mut lowerer = ReplaceTypes::new_empty();
         if separate_maps {
             earlier_map.register_operation_replacements(&h, &mut lowerer);
+        }
+        if matches!(earlier, EarlierHelper::Replaced) {
+            let f = FunctionBuilder::new_vis(
+                "$helper$$1",
+                Signature::new_endo([bool_t()]),
+                Visibility::Public,
+            )
+            .unwrap();
+            let inputs = f.input_wires().collect::<Vec<_>>();
+            let f = f.finish_hugr_with_outputs(inputs).unwrap();
+            lowerer.set_replace_op(&earlier_op, NodeTemplate::call_to_function(f, &[]).unwrap());
         }
         map.register_operation_replacements(&h, &mut lowerer);
         lowerer.run(&mut h).unwrap();
@@ -338,7 +361,7 @@ mod tests {
                 assert_ne!(dependency, user.node());
             }
         }
-        if declaration && !target_dependency {
+        if declaration && !target_dependency && !matches!(earlier, EarlierHelper::Replaced) {
             assert_eq!(
                 h.get_optype(dependency).as_func_decl().unwrap().func_name(),
                 "$helper$$1"
@@ -357,7 +380,11 @@ mod tests {
         }
         if let Some(call) = earlier_call {
             let earlier_function = h.static_source(call).unwrap();
-            assert_ne!(earlier_function, dependency);
+            if matches!(earlier, EarlierHelper::Replaced) {
+                assert_eq!(earlier_function, dependency);
+            } else {
+                assert_ne!(earlier_function, dependency);
+            }
             assert_eq!(h.children(earlier_function).count(), 2);
         }
     }

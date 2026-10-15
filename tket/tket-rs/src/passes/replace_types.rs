@@ -9,6 +9,7 @@ use handlers::list_const;
 use hugr_core::hugr::linking::{HugrLinking, NameLinkingPolicy, OnMultiDefn};
 use hugr_core::std_extensions::collections::array::array_type_def;
 use hugr_core::std_extensions::collections::list::list_type_def;
+use indexmap::IndexSet;
 use itertools::Either;
 use thiserror::Error;
 
@@ -17,6 +18,7 @@ use hugr_core::builder::{
 };
 use hugr_core::extension::{ExtensionId, OpDef, SignatureError, TypeDef};
 use hugr_core::hugr::hugrmut::HugrMut;
+use hugr_core::hugr::internal::HugrMutInternals;
 use hugr_core::ops::constant::{OpaqueValue, Sum};
 use hugr_core::ops::handle::{DataflowOpID, FuncID, NodeHandle};
 use hugr_core::ops::{
@@ -334,6 +336,7 @@ pub struct ReplaceTypes {
         HashMap<ParametricType, (Arc<dyn Fn(&[TypeArg]) -> Option<Type>>, ReplacementOptions)>,
     linearize: DelegatingLinearizer,
     op_map: HashMap<OpHashWrapper, (NodeTemplate, ReplacementOptions)>,
+    generated_ops: IndexSet<OpHashWrapper>,
     param_ops: HashMap<
         ParametricOp,
         (
@@ -420,6 +423,7 @@ impl ReplaceTypes {
             param_types: Default::default(),
             linearize: DelegatingLinearizer::new_empty(),
             op_map: Default::default(),
+            generated_ops: Default::default(),
             param_ops: Default::default(),
             consts: Default::default(),
             param_consts: Default::default(),
@@ -538,18 +542,56 @@ impl ReplaceTypes {
     /// Hugrs, as substitution (parametric polymorphism) happening later will not respect
     /// this replacement.
     pub fn set_replace_op(&mut self, src: &ExtensionOp, dest: NodeTemplate) {
-        self.op_map.insert(
-            OpHashWrapper::from(src),
-            (dest, ReplacementOptions::recursive()),
-        );
+        let key = OpHashWrapper::from(src);
+        self.generated_ops.swap_remove(&key);
+        self.op_map
+            .insert(key, (dest, ReplacementOptions::recursive()));
+    }
+
+    /// Register a template whose public definitions are owned by this lowerer.
+    pub(crate) fn set_replace_generated_op(&mut self, src: &ExtensionOp, dest: NodeTemplate) {
+        self.set_replace_op(src, dest);
+        self.generated_ops.insert(src.into());
+    }
+
+    /// Reserve an unused function symbol.
+    pub(crate) fn reserve_function_name(base: &str, occupied: &mut HashSet<String>) -> String {
+        std::iter::once(base.to_owned())
+            .chain((1_u64..).map(|i| format!("{base}${i}")))
+            .find(|name| occupied.insert(name.clone()))
+            .unwrap()
+    }
+
+    /// Reserve declarations, renaming conflicting definitions in generated templates.
+    pub(crate) fn reserve_function_declarations(
+        &mut self,
+        hugr: &impl HugrView<Node = Node>,
+        declarations: &HashSet<String>,
+    ) -> HashSet<String> {
+        let mut occupied = self.reserved_function_names(hugr);
+        if declarations.is_empty() {
+            return occupied;
+        }
+        occupied.extend(declarations.iter().cloned());
+        for key in &self.generated_ops {
+            let Some((NodeTemplate::LinkedHugr(h, _), _)) = self.op_map.get_mut(key) else {
+                continue;
+            };
+            for node in h.children(h.module_root()).collect::<Vec<_>>() {
+                if let OpType::FuncDefn(f) = h.optype_mut(node)
+                    && f.visibility() == &Visibility::Public
+                    && declarations.contains(f.func_name())
+                {
+                    *f.func_name_mut() = Self::reserve_function_name(f.func_name(), &mut occupied);
+                }
+            }
+        }
+        occupied
     }
 
     /// Collect module-level function symbols from the target and registered
     /// templates, including private functions and declarations.
-    pub(crate) fn reserved_function_names(
-        &self,
-        hugr: &impl HugrView<Node = Node>,
-    ) -> HashSet<String> {
+    fn reserved_function_names(&self, hugr: &impl HugrView<Node = Node>) -> HashSet<String> {
         fn function_names(h: &impl HugrView<Node = Node>) -> impl Iterator<Item = &str> {
             h.children(h.module_root())
                 .filter_map(|n| match h.get_optype(n) {
