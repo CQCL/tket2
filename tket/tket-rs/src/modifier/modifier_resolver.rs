@@ -362,10 +362,47 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
+/// Errors that can occur when tracing and validating a chain of modifiers and its target.
+#[expect(deprecated)]
+#[derive(Debug, derive_more::Error, derive_more::Display)]
+#[non_exhaustive]
+#[deprecated(since = "0.23.0", note = "Use ModifierResolverErrors instead")]
+pub enum ModifierError<N = Node> {
+    /// The node is not a modifier
+    #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
+    NotModifier(N, OpType),
+    /// No caller of this modified function exists.
+    #[display("No caller of the modified function exists for node {_0}")]
+    #[error(ignore)]
+    NoCaller(N),
+    /// No target of this modifier exists.
+    #[display("The modifier node {_0} chain has no target")]
+    #[error(ignore)]
+    NoTarget(N),
+    /// Not the first modifier in a chain.
+    #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
+    NotInitialModifier(N, OpType),
+    /// The modifier cannot be applied to the node.
+    #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
+    ModifierNotApplicable(N, OpType),
+}
+
 /// Possible errors that can occur during the modifier resolution process.
+#[expect(
+    deprecated,
+    reason = "retain the legacy error variant for API compatibility"
+)]
 #[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
 #[non_exhaustive]
 pub enum ModifierResolverErrors<N = Node> {
+    /// Errors during tracing or validating a chain of modifiers and its target.
+    #[deprecated(
+        since = "0.23.0",
+        note = "Use the specific ModifierResolverErrors variants instead"
+    )]
+    #[display("{_0}")]
+    #[from]
+    ModifierError(ModifierError<N>),
     /// The head of a modifier chain is not a loaded function.
     #[display(
         "Malformed modifier chain: head node {_0} must be a LoadFunction. Found {_1} instead."
