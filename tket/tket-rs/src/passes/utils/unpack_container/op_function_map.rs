@@ -76,6 +76,10 @@ impl OpFunctionMap {
         if self.map.borrow().contains_key(&key) {
             return Ok(());
         }
+        // Definitions are made public while name linking deduplicates them, so
+        // the symbol must distinguish every cached operation instance. Keep
+        // caller-selected arguments for readability, and append the complete
+        // operation arguments to distinguish operation shapes.
         let name_args = mangle_args
             .iter()
             .chain(op.args())
