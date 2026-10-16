@@ -167,7 +167,7 @@ impl<N: HugrNode> ModifierResolver<N> {
             }
 
             chain.push(current);
-            modifiers.push(optype.as_extension_op().unwrap(), current)?;
+            modifiers.push(optype.as_extension_op().unwrap(), current, h)?;
             let (new, _) = h
                 .single_linked_output(current, 0)
                 .expect("Expected exactly one output connected to input port 0 of a modifier node");
