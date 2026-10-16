@@ -1468,7 +1468,6 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
         visited.insert(node);
         if h.contains_node(node) {
             let optype = h.get_optype(node);
-            // NICOLA TODO this may be useless
             if Modifier::from_optype(optype).is_some() {
                 return Err(ModifierResolverErrors::unreachable(format!(
                     "Modifier at node {node} remains unresolved; all modifiers should be resolved."
