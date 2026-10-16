@@ -1448,15 +1448,8 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
         }
     }
 
-    // After all rewrites, some modifier nodes may still remain in the graph
-    // (e.g. intermediate nodes in a chain whose last modifier was the one rewritten).
-    // Walk the same reachable set again and delete any surviving modifier nodes,
-    // together with every downstream node that consumes their output.
-    //
-    // NOTE:
-    // This might be insufficient as a cleanup since the resolution procedure might
-    // generate nodes that are not reachable from the entry points.
-    // If more thorough cleanup is needed, we should run dead code elimination.
+    // We do not expect any modifier nodes to remain after the main resolution pass.
+    // The following loop revisits all reachable nodes to ensure that no modifier nodes remain.
     let mut deletelist = entry_points.clone();
     let mut visited = FxHashSet::default();
     while let Some(node) = deletelist.pop_front() {
@@ -1477,13 +1470,9 @@ pub fn resolve_modifier_with_entrypoints_and_scope(
             let optype = h.get_optype(node);
             // NICOLA TODO this may be useless
             if Modifier::from_optype(optype).is_some() {
-                // Remove the modifier node and all nodes reachable through its
-                // output edges (i.e. nodes that would become disconnected).
-                let mut l = vec![node];
-                while let Some(n) = l.pop() {
-                    l.extend(h.output_neighbours(n));
-                    h.remove_node(n);
-                }
+                return Err(ModifierResolverErrors::unreachable(format!(
+                    "Modifier at node {node} remains unresolved; all modifiers should be resolved."
+                )));
             }
         }
     }
