@@ -577,7 +577,7 @@ impl ReplaceTypes {
         occupied.extend(declarations.iter().cloned());
         for key in &self.generated_ops {
             let Some((NodeTemplate::LinkedHugr(h, _), _)) = self.op_map.get_mut(key) else {
-                continue;
+                unreachable!("generated operations must have registered LinkedHugr templates");
             };
             for node in h.children(h.module_root()).collect::<Vec<_>>() {
                 if let OpType::FuncDefn(f) = h.optype_mut(node)
