@@ -362,9 +362,10 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
-// There are some issue in rust when we try to deprecate a enum with `derive_more` macros or
-// deprecate a enum variant (https://github.com/rust-lang/rust/issues/92313). As a workaround,
-// we use `#[expect(deprecated)]` on the module containing the deprecated enum.
+// There are some issue in rust when we try to deprecate a enum with `derive_more` macros
+// (https://github.com/JelteF/derive_more/issues/570) or deprecate a enum variant
+// (https://github.com/rust-lang/rust/issues/92313). As a workaround, we use `#[expect(deprecated)]`
+// on the module containing the deprecated enum.
 #[expect(deprecated)]
 mod modifier_error {
     use super::*;
