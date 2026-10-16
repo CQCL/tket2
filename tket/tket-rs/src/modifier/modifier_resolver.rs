@@ -362,85 +362,91 @@ impl<N> Default for ModifierResolver<N> {
     }
 }
 
-/// Errors that can occur when tracing and validating a chain of modifiers and its target.
+// There are some issue in rust when we try to deprecate a enum with `derive_more` macros or
+// deprecate a enum variant (https://github.com/rust-lang/rust/issues/92313). As a workaround,
+// we use `#[expect(deprecated)]` on the module containing the deprecated enum.
 #[expect(deprecated)]
-#[derive(Debug, derive_more::Error, derive_more::Display)]
-#[non_exhaustive]
-#[deprecated(since = "0.23.0", note = "Use ModifierResolverErrors instead")]
-pub enum ModifierError<N = Node> {
-    /// The node is not a modifier
-    #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
-    NotModifier(N, OpType),
-    /// No caller of this modified function exists.
-    #[display("No caller of the modified function exists for node {_0}")]
-    #[error(ignore)]
-    NoCaller(N),
-    /// No target of this modifier exists.
-    #[display("The modifier node {_0} chain has no target")]
-    #[error(ignore)]
-    NoTarget(N),
-    /// Not the first modifier in a chain.
-    #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
-    NotInitialModifier(N, OpType),
-    /// The modifier cannot be applied to the node.
-    #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
-    ModifierNotApplicable(N, OpType),
+mod modifier_error {
+    use super::*;
+
+    /// Errors that can occur when tracing and validating a chain of modifiers and its target.
+    #[derive(Debug, derive_more::Error, derive_more::Display)]
+    #[non_exhaustive]
+    #[deprecated(since = "0.23.0", note = "Use ModifierResolverErrors instead")]
+    pub enum ModifierError<N = Node> {
+        /// The node is not a modifier
+        #[display("Node to modify {_0} expected to be a modifier but actually {_1}")]
+        NotModifier(N, OpType),
+        /// No caller of this modified function exists.
+        #[display("No caller of the modified function exists for node {_0}")]
+        #[error(ignore)]
+        NoCaller(N),
+        /// No target of this modifier exists.
+        #[display("The modifier node {_0} chain has no target")]
+        #[error(ignore)]
+        NoTarget(N),
+        /// Not the first modifier in a chain.
+        #[display("Node {_0} of type {_1} is not the first modifier in a chain.")]
+        NotInitialModifier(N, OpType),
+        /// The modifier cannot be applied to the node.
+        #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
+        ModifierNotApplicable(N, OpType),
+    }
+
+    /// Possible errors that can occur during the modifier resolution process.
+    #[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
+    #[non_exhaustive]
+    pub enum ModifierResolverErrors<N = Node> {
+        /// Errors during tracing or validating a chain of modifiers and its target.
+        #[deprecated(
+            since = "0.23.0",
+            note = "Use the specific ModifierResolverErrors variants instead"
+        )]
+        #[display("{_0}")]
+        #[from]
+        ModifierError(ModifierError<N>),
+        /// The head of a modifier chain is not a loaded function.
+        #[display(
+            "Malformed modifier chain: head node {_0} must be a LoadFunction. Found {_1} instead."
+        )]
+        MalformedChainHead(N, OpType),
+        /// The modifier cannot be applied to the node.
+        #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
+        ModifierNotApplicable(N, OpType),
+        /// Error if the new hugr is not built properly.
+        #[display("{_0}")]
+        #[from]
+        BuildError(BuildError),
+        /// Error that is caused by a bug in this resolver which should be unreachable.
+        #[display("Unreachable error: {msg}")]
+        Unreachable {
+            /// The message of the unreachable error.
+            msg: String,
+        },
+        /// Modifier applied to a node that cannot be modified.
+        #[display("The node {node} of type {optype} cannot be modified: {msg}")]
+        UnResolvable {
+            /// The node that cannot be modified.
+            node: N,
+            /// The operation type that cannot be modified.
+            optype: OpType,
+            /// The message of the unresolvable error.
+            msg: String,
+        },
+        /// The node cannot be modified.
+        #[display("Modification by {_0:?} is not defined for the node {_1}")]
+        Unimplemented(Modifier, OpType),
+        /// The power modifier is not supported.
+        #[display("Found power modifier in node: {node}. Power modifier is not supported yet.")]
+        PowerModifierNotSupported {
+            /// The `power` node
+            node: N,
+        },
+    }
 }
 
-/// Possible errors that can occur during the modifier resolution process.
-#[expect(
-    deprecated,
-    reason = "retain the legacy error variant for API compatibility"
-)]
-#[derive(Debug, derive_more::Display, derive_more::Error, derive_more::From)]
-#[non_exhaustive]
-pub enum ModifierResolverErrors<N = Node> {
-    /// Errors during tracing or validating a chain of modifiers and its target.
-    #[deprecated(
-        since = "0.23.0",
-        note = "Use the specific ModifierResolverErrors variants instead"
-    )]
-    #[display("{_0}")]
-    #[from]
-    ModifierError(ModifierError<N>),
-    /// The head of a modifier chain is not a loaded function.
-    #[display(
-        "Malformed modifier chain: head node {_0} must be a LoadFunction. Found {_1} instead."
-    )]
-    MalformedChainHead(N, OpType),
-    /// The modifier cannot be applied to the node.
-    #[display("Modifier cannot be applied to the node {_0} of type {_1}")]
-    ModifierNotApplicable(N, OpType),
-    /// Error if the new hugr is not built properly.
-    #[display("{_0}")]
-    #[from]
-    BuildError(BuildError),
-    /// Error that is caused by a bug in this resolver which should be unreachable.
-    #[display("Unreachable error: {msg}")]
-    Unreachable {
-        /// The message of the unreachable error.
-        msg: String,
-    },
-    /// Modifier applied to a node that cannot be modified.
-    #[display("The node {node} of type {optype} cannot be modified: {msg}")]
-    UnResolvable {
-        /// The node that cannot be modified.
-        node: N,
-        /// The operation type that cannot be modified.
-        optype: OpType,
-        /// The message of the unresolvable error.
-        msg: String,
-    },
-    /// The node cannot be modified.
-    #[display("Modification by {_0:?} is not defined for the node {_1}")]
-    Unimplemented(Modifier, OpType),
-    /// The power modifier is not supported.
-    #[display("Found power modifier in node: {node}. Power modifier is not supported yet.")]
-    PowerModifierNotSupported {
-        /// The `power` node
-        node: N,
-    },
-}
+#[expect(deprecated)]
+pub use modifier_error::{ModifierError, ModifierResolverErrors};
 
 impl<N> ModifierResolverErrors<N> {
     /// Create an unreachable error.
