@@ -765,7 +765,7 @@ impl<N: HugrNode> ModifierResolver<N> {
         hugr.disconnect(indirect_call_node, IncomingPort::from(0));
         hugr.connect(new_load_node, 0, indirect_call_node, 0);
 
-        // Then remove the now-unused chain, starting nearest the call.
+        // Then remove the chain, skipping the last node (the original `load_node`).
         for node in &trace[..trace.len().saturating_sub(1)] {
             hugr.remove_node(*node);
         }
