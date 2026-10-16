@@ -39,6 +39,14 @@ pub use linearize::{CallbackHandler, DelegatingLinearizer, LinearizeError, Linea
 pub mod metadata;
 pub use metadata::MetadataPropagationPolicy;
 
+/// Reserve an unused function symbol.
+pub(crate) fn reserve_function_name(base: &str, occupied: &mut HashSet<String>) -> String {
+    std::iter::once(base.to_owned())
+        .chain((1_u64..).map(|i| format!("{base}${i}")))
+        .find(|name| occupied.insert(name.clone()))
+        .unwrap()
+}
+
 /// A recipe for creating a dataflow Node - as a new child of a [`DataflowParent`]
 /// or in order to replace an existing node.
 ///
@@ -548,18 +556,12 @@ impl ReplaceTypes {
             .insert(key, (dest, ReplacementOptions::recursive()));
     }
 
-    /// Register a template whose public definitions are owned by this lowerer.
+    /// Register a [`NodeTemplate::call_to_function`] template whose public definitions
+    /// are owned by this lowerer. Other template kinds do not link helper definitions.
     pub(crate) fn set_replace_generated_op(&mut self, src: &ExtensionOp, dest: NodeTemplate) {
+        assert!(matches!(dest, NodeTemplate::LinkedHugr(..)));
         self.set_replace_op(src, dest);
         self.generated_ops.insert(src.into());
-    }
-
-    /// Reserve an unused function symbol.
-    pub(crate) fn reserve_function_name(base: &str, occupied: &mut HashSet<String>) -> String {
-        std::iter::once(base.to_owned())
-            .chain((1_u64..).map(|i| format!("{base}${i}")))
-            .find(|name| occupied.insert(name.clone()))
-            .unwrap()
     }
 
     /// Reserve declarations, renaming conflicting definitions in generated templates.
@@ -582,7 +584,7 @@ impl ReplaceTypes {
                     && f.visibility() == &Visibility::Public
                     && declarations.contains(f.func_name())
                 {
-                    *f.func_name_mut() = Self::reserve_function_name(f.func_name(), &mut occupied);
+                    *f.func_name_mut() = reserve_function_name(f.func_name(), &mut occupied);
                 }
             }
         }

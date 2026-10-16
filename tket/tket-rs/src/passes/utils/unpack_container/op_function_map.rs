@@ -1,7 +1,10 @@
 //! Mapping from extension operation instances to function definitions
 //! that can be used to replace them.
 use crate::passes::monomorphize::mangle_name;
-use crate::passes::{ReplaceTypes, replace_types::NodeTemplate};
+use crate::passes::{
+    ReplaceTypes,
+    replace_types::{NodeTemplate, reserve_function_name},
+};
 use hugr::HugrView;
 use hugr::{
     Hugr, Node, Wire,
@@ -128,6 +131,7 @@ impl OpFunctionMap {
         lowerer: &mut ReplaceTypes,
     ) {
         let mut functions = self.into_function_iter().collect::<Vec<_>>();
+        // Reserve each name once; declarations remain in their HUGRs for linker type checking.
         let declarations = functions
             .iter()
             .flat_map(|(_, h)| {
@@ -139,6 +143,7 @@ impl OpFunctionMap {
             })
             .collect::<HashSet<_>>();
         let mut occupied = lowerer.reserve_function_declarations(hugr, &declarations);
+        // Allocate all dependency names before entrypoints so dependencies get first choice.
         for (_, h) in &mut functions {
             let entrypoint = h.entrypoint();
             let dependencies = h
@@ -147,8 +152,7 @@ impl OpFunctionMap {
                 .collect::<Vec<_>>();
             for dependency in dependencies {
                 if let OpType::FuncDefn(f) = h.optype_mut(dependency) {
-                    *f.func_name_mut() =
-                        ReplaceTypes::reserve_function_name(f.func_name(), &mut occupied);
+                    *f.func_name_mut() = reserve_function_name(f.func_name(), &mut occupied);
                 }
             }
         }
@@ -157,8 +161,7 @@ impl OpFunctionMap {
             let OpType::FuncDefn(func) = func_def.optype_mut(entrypoint) else {
                 panic!("OpFunctionMap entries must be function definitions");
             };
-            *func.func_name_mut() =
-                ReplaceTypes::reserve_function_name(func.func_name(), &mut occupied);
+            *func.func_name_mut() = reserve_function_name(func.func_name(), &mut occupied);
             lowerer.set_replace_generated_op(&op, func_as_node_template(func_def));
         }
     }
