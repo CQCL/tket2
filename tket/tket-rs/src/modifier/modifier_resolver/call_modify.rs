@@ -162,6 +162,20 @@ impl<N: HugrNode> ModifierResolver<N> {
                         optype.to_owned(),
                     ));
                 }
+
+                // Check that the modfier node has not order edges
+                if optype
+                    .other_input_port()
+                    .is_some_and(|p| h.is_linked(current, p))
+                    || optype
+                        .other_output_port()
+                        .is_some_and(|p| h.is_linked(current, p))
+                {
+                    return Err(ModifierResolverErrors::unreachable(
+                        "Modifier node has order edges. The chain is malformed.",
+                    ));
+                }
+
                 chain.push(current);
                 break;
             }
