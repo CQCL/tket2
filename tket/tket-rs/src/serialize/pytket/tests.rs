@@ -2108,7 +2108,8 @@ fn opaque_repeated_bit_inputs_preserve_outputs(circ_opaque_repeated_bit_inputs: 
         .unwrap();
     assert_eq!(barrier.args.len(), 4);
     // Shared inputs are reads, but fresh outputs must be writes so pytket
-    // preserves their dependencies on later consumers (Guppy issue #2423).
+    // preserves their dependencies on later consumers.
+    // Regression: https://github.com/Quantinuum/guppylang/issues/2423.
     assert_eq!(
         barrier.op.signature.as_ref().unwrap(),
         &["B", "B", "C", "C"]
