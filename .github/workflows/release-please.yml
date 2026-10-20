@@ -6,51 +6,18 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    paths:
-      - .github/workflows/release-please.yml
-      - scripts/release/**
-      - release-please-config.json
-      - .release-please-manifest.json
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  test:
-    name: Test release detection
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-        working-directory: scripts/release
-      - run: npm test
-        working-directory: scripts/release
-
   release-please:
     name: Create release PR
-    if: github.event_name != 'pull_request'
-    needs: test
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    # Serialize manifest updates when pushes and manual runs overlap.
-    concurrency:
-      group: release-please-${{ github.ref }}
-      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: googleapis/release-please-action@v5
         with:
-          node-version: '24'
-      - run: npm ci --ignore-scripts --no-audit --no-fund
-        working-directory: scripts/release
-      - run: npm run release
-        working-directory: scripts/release
-        env:
-          # Releases created with this token can trigger the deployment workflow.
-          GITHUB_TOKEN: ${{ secrets.HUGRBOT_PAT }}
+            # Using a personal access token so releases created by this workflow can trigger the deployment workflow
+            token: ${{ secrets.HUGRBOT_PAT }}
+            config-file: release-please-config.json
