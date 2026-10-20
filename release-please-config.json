@@ -20,7 +20,7 @@
             "extra-files": [
                 {
                     "type": "toml",
-                    "path": "uv.lock",
+                    "path": "/uv.lock",
                     "jsonpath": "$.package[?(@.name.value=='tket')].version"
                 }
             ]
