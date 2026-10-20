@@ -8,7 +8,7 @@
     "separate-pull-requests": true,
     "pull-request-title-pattern": "chore(py): release${component} ${version}",
     "packages": {
-        ".": {
+        "tket": {
             "release-type": "simple",
             "component": "tket-py",
             "package-name": "tket",
@@ -20,22 +20,19 @@
             "extra-files": [
                 {
                     "type": "toml",
-                    "path": "tket/tket-py/pyproject.toml",
+                    "path": "tket-py/pyproject.toml",
                     "jsonpath": "$.project.version"
                 },
-                "tket/tket-py/tket/__init__.py",
+                "tket-py/tket/__init__.py",
                 {
                     "type": "toml",
-                    "path": "uv.lock",
+                    "path": "/uv.lock",
                     "jsonpath": "$.package[?(@.name.value=='tket')].version"
                 }
             ],
-            "version-file": "tket/tket-py/VERSION",
-            "changelog-path": "tket/tket-py/CHANGELOG.md",
+            "version-file": "tket-py/VERSION",
+            "changelog-path": "tket-py/CHANGELOG.md",
             "exclude-paths": [
-                "docs",
-                "scripts",
-                "test_files",
                 "tket/badger-optimiser",
                 "tket/compile-rewriter",
                 "tket/qis-compiler",

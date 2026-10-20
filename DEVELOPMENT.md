@@ -275,19 +275,19 @@ Rust pre-release versions should be formatted as `0.1.0-alpha.1` (or `-beta`, or
 Python releases are managed by `release-please`, which determines version bumps
 from conventional commit messages.
 
-The `tket` wheel includes Rust code outside `tket/tket-py`, so it is configured
-as the root (`.`) package in `release-please-config.json` and
+The `tket` wheel includes Rust code outside `tket/tket-py`, so its release
+package path is `tket` in `release-please-config.json` and
 `.release-please-manifest.json`. The built-in `simple` strategy updates
 `tket/tket-py/VERSION`, with explicit extra-file updates for the Python package
 metadata, `__version__`, and workspace lockfile. Its component remains `tket-py`,
 so release tags and the release PR branch keep their existing names.
 
-The root package's `exclude-paths` keep changes confined to independent packages,
-standalone tools, documentation, and test fixtures from triggering a wheel
-release. Keep these exclusions in sync when adding packages. Shared Rust code
-and root build inputs remain in scope. Other Python packages retain their own
+The package's `exclude-paths` keep changes confined to independent packages and
+standalone tools from triggering a wheel release. Keep these exclusions in sync
+when adding packages. Changes confined to `pg-libs/` or root build inputs are
+outside the `tket/` detection scope. Other Python packages retain their own
 release entries. The Release-please workflow can also be run manually to pick up
-unreleased changes already on `main`.
+unreleased changes already within this scope on `main`.
 
 To override the version getting released, you must merge a PR to `main` containing
 `Release-As: 0.1.0` in the description.
