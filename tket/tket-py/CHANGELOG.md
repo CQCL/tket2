@@ -1,5 +1,4 @@
 # Changelog
-<!-- Release trigger for Rust fixes #2081 and #2085. -->
 
 ## [0.15.12](https://github.com/Quantinuum/tket2/compare/tket-py-v0.15.11...tket-py-v0.15.12) (2026-10-20)
 
