@@ -1,25 +1,29 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#    "guppylang==1.0.0rc1",
+#    "guppylang==1.1.1",
 # ]
 # ///
 """Test the use of a higher-order function with complex control flow inside modifiers"""
 
 from pathlib import Path
 from sys import argv
-from collections.abc import Callable
 
-from guppylang import enable_experimental_features, guppy
-from guppylang.std.builtins import Controllable, Unitary, array, control, dagger
+from guppylang import guppy
+from guppylang.std.builtins import (
+    Controllable,
+    Daggerable,
+    Unitary,
+    array,
+    control,
+    dagger,
+)
 from guppylang.std.debug import state_result
 from guppylang.std.lang import Function
 from guppylang.std.quantum import angle, discard_array, h, qubit, rx, rz
 
-enable_experimental_features()
 
-
-@guppy
+@guppy(daggerable=True)
 def get_angle(f: float) -> angle:
     return angle(f)
 
@@ -33,10 +37,27 @@ def get_get_angle() -> Function[[float], angle]:
 def apply_r(
     f: Unitary[[qubit, angle], None],
     q: array[qubit, 2],
-    fun_angle: Callable[[float], angle],
+    fun_angle: Daggerable[[float], angle],
     radiant: float,
 ) -> None:
-    f(q[1], fun_angle(radiant))
+    a = fun_angle(radiant)
+    f(q[1], a)
+
+
+@guppy(controllable=True)
+def recursive_apply(
+    f: Controllable[[qubit, angle], None],
+    classic_call: Function[[float], angle],
+    angle: angle,
+    q: qubit,
+    b: bool,
+) -> None:
+    """Testing that recursive calls do not cause non termination during compilation"""
+    if b:
+        f(q, classic_call(0.25))
+        f(q, angle)
+    else:
+        recursive_apply(f, classic_call, angle, q, not b)
 
 
 @guppy(controllable=True)
@@ -56,15 +77,14 @@ def apply_c(
         get_a = classic_fun()
         angle = get_a(0.25)
         for _ in range(2):
-            g(q, get_a(0.25))
-            g(q, angle)
+            recursive_apply(g, get_a, angle, q, b)
 
 
 @guppy
 def main() -> None:
     qs: array[qubit, 2] = array(qubit(), qubit())
     h(qs[0])
-    flag = 2 > 10
+    flag = 2 > 10  # noqa: PLR0133
     with control(qs[0]):
         apply_c(h, rx, get_get_angle, qs[1], True)
         apply_c(h, rx, get_get_angle, qs[1], flag)

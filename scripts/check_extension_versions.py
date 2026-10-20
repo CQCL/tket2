@@ -15,9 +15,9 @@ def get_changed_files(target: str) -> list[Path]:
         "--name-only",
         target,
         "--",
-        "tket-exts/src/tket_exts/data/tket/",
+        "tket/tket-exts/src/tket_exts/data/tket/",
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, check=True)  # noqa: S603
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     changed_files = [Path(f) for f in result.stdout.splitlines() if f.endswith(".json")]
     return changed_files
 
@@ -39,7 +39,7 @@ def check_version_changes(changed_files: list[Path], target: str) -> list[str]:
         # Get the version in the target branch
         try:
             cmd = ["git", "show", f"{target}:{file_path}"]
-            result = subprocess.run(cmd, capture_output=True, text=True)  # noqa: S603
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
             if result.returncode == 0:
                 # File exists in target

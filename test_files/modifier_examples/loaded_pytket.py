@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.13"
 # dependencies = [
-#    "guppylang==1.0.0rc1",
+#    "guppylang==1.1.1",
 # ]
 # ///
 """Testing modifier on a loaded pytket circuit"""
@@ -9,19 +9,18 @@
 from pathlib import Path
 from sys import argv
 
-from guppylang import enable_experimental_features, guppy
+from guppylang import guppy
 from guppylang.std.builtins import control, dagger
 from guppylang.std.debug import state_result
 from guppylang.std.quantum import discard, h, qubit
 from pytket import Circuit
-
-enable_experimental_features()
 
 # PyTket circuit
 circ = Circuit(2)
 circ.Rz(-0.5, 0)
 circ.Ry(-0.5, 1)
 circ.H(0)
+circ.Phase(0.5)
 
 guppy_circ = guppy.load_pytket("guppy_circ_2", circ, use_arrays=False)
 
