@@ -4,13 +4,18 @@ use hugr::extension::prelude::qb_t;
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex};
+use nalgebra::DMatrix;
+use num_complex::Complex64;
 use petgraph::visit::{Topo, Walker as _};
 use tket::TketOp;
 use tket::extension::rotation::ConstRotation;
 use tket_qsystem::extension::qsystem::helios::HeliosOp;
 use tket_qsystem::extension::qsystem::sol::SolOp;
 
-use crate::{Simulatable, UnitaryMatrix};
+use crate::{
+    Simulatable,
+    matrix::{expand_to_system, identity},
+};
 
 /// An error that occurred during simulation.
 #[derive(Debug, Clone)]
@@ -66,7 +71,7 @@ enum GateInfo {
 pub fn simulate_circuit(
     hugr: &impl HugrView<Node = Node>,
     input_params: &HashMap<usize, f64>,
-) -> Result<UnitaryMatrix, SimulationError> {
+) -> Result<DMatrix<Complex64>, SimulationError> {
     let parent = hugr.entrypoint();
     let [input_node, _output_node] = hugr.get_io(parent).expect("No I/O nodes");
 
@@ -105,7 +110,7 @@ pub fn simulate_circuit(
     }
 
     // Start with identity
-    let mut total_unitary = UnitaryMatrix::identity(num_qubits);
+    let mut total_unitary = identity(num_qubits);
 
     // Process nodes in topological order
     let scheduling_graph = hugr.scheduling_graph(parent);
@@ -185,8 +190,8 @@ pub fn simulate_circuit(
 
                 // Compute the gate unitary and expand to full system.
                 let gate_unitary = gate.unitary(&params);
-                let expanded = gate_unitary.expand_to_system(&target_qubits, num_qubits);
-                total_unitary = expanded.matmul(&total_unitary);
+                let expanded = expand_to_system(&gate_unitary, &target_qubits, num_qubits);
+                total_unitary = expanded * total_unitary;
 
                 // Update wire_to_qubit: output qubit ports map to the same qubit indices.
                 for (i, &port) in qubit_ports.iter().enumerate() {

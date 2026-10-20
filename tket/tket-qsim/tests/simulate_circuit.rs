@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use approx::assert_abs_diff_eq;
 use hugr::{
     builder::{Container, DFGBuilder, Dataflow, DataflowHugr},
     extension::prelude::qb_t,
@@ -16,7 +17,7 @@ use tket::{
         ComposablePass, InlineDFGsPass, InlineFunctionsPass, inline_funcs::InlineFuncsHeuristic,
     },
 };
-use tket_qsim::simulate_circuit;
+use tket_qsim::{align_global_phase_to, simulate_circuit};
 use tket_qsystem::extension::qsystem::{LowerTketToQSystemPass, QSystemPlatform};
 
 fn reference_circuit() -> hugr::Hugr {
@@ -58,12 +59,10 @@ fn composed_circuit_matches_pytket_reference() {
 
     for row in 0..4 {
         for col in 0..4 {
-            let delta = unitary.get(row, col) - expected[row * 4 + col];
-            assert!(
-                delta.norm() < 1e-12,
-                "mismatch at ({row}, {col}): got {}, expected {}",
-                unitary.get(row, col),
-                expected[row * 4 + col]
+            assert_abs_diff_eq!(
+                unitary[(row, col)],
+                expected[row * 4 + col],
+                epsilon = 1e-12
             );
         }
     }
@@ -88,9 +87,7 @@ fn lowering_to_each_qsystem_platform_preserves_the_unitary() {
             .unwrap();
         InlineDFGsPass::default().run(&mut lowered).unwrap();
         let actual = simulate_circuit(&lowered, &HashMap::new()).unwrap();
-        assert!(
-            actual.approx_eq_up_to_global_phase(&expected, 1e-10),
-            "lowering to {platform:?} changed the circuit unitary\nexpected: {expected:?}\nactual: {actual:?}"
-        );
+        let actual = align_global_phase_to(&actual, &expected);
+        assert_abs_diff_eq!(actual, expected, epsilon = 1e-10);
     }
 }

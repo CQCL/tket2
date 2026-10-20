@@ -7,7 +7,7 @@
 //!
 //! # Architecture
 //!
-//! - [`UnitaryMatrix`]: A dense 2^n × 2^n complex matrix.
+//! - [`nalgebra::DMatrix`]: Stores each dense 2^n × 2^n complex matrix.
 //! - [`Simulatable`]: A trait that each gate type implements to provide its
 //!   unitary representation.
 //! - [`simulate_circuit`]: Traverses a HUGR dataflow graph and computes the
@@ -21,7 +21,10 @@ mod simulate;
 mod sol_ops;
 mod tket_ops;
 
-pub use matrix::UnitaryMatrix;
+use nalgebra::DMatrix;
+use num_complex::Complex64;
+
+pub use matrix::align_global_phase_to;
 pub use simulate::simulate_circuit;
 
 /// Trait for quantum operations that can be simulated via unitary matrices.
@@ -37,5 +40,5 @@ pub trait Simulatable {
     ///
     /// `params`: floating-point parameters for parametric gates.
     ///           Non-parametric gates ignore this slice.
-    fn unitary(&self, params: &[f64]) -> UnitaryMatrix;
+    fn unitary(&self, params: &[f64]) -> DMatrix<Complex64>;
 }

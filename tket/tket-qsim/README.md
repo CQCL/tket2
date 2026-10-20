@@ -18,7 +18,8 @@ the resulting matrices:
 
 ```rust
 use std::collections::HashMap;
-use tket_qsim::simulate_circuit;
+use approx::assert_abs_diff_eq;
+use tket_qsim::{align_global_phase_to, simulate_circuit};
 use tket_qsystem::extension::qsystem::{
     LowerTketToQSystemPass, QSystemPlatform,
 };
@@ -47,14 +48,17 @@ InlineDFGsPass::default().run(&mut lowered).unwrap();
 
 // Compare the unitary matrices of the original and transformed programs
 let actual = simulate_circuit(&lowered, &HashMap::new()).unwrap();
-assert!(actual.approx_eq_up_to_global_phase(&expected, 1e-10));
+let actual = align_global_phase_to(&actual, &expected);
+assert_abs_diff_eq!(actual, expected, epsilon = 1e-10);
 ```
 
 ### Equality comparison
 
-Use `approx_eq` when the transformation must preserve the complete matrix,
-including global phase. Use `approx_eq_up_to_global_phase` when global phase is
-not semantically relevant.
+The simulator returns `nalgebra::DMatrix<Complex64>`, which implements
+[`approx::AbsDiffEq`](https://docs.rs/approx/latest/approx/trait.AbsDiffEq.html),
+so use `assert_abs_diff_eq!` for entry-wise matrix comparisons. When global
+phase is not semantically relevant, call `align_global_phase_to` before the
+assertion as shown above.
 
 ### HUGRs with floating-point parameters
 
@@ -78,7 +82,7 @@ Adding a new quantum gate has two parts:
    [`src/tket_ops.rs`](src/tket_ops.rs),
    [`src/helios_ops.rs`](src/helios_ops.rs), or
    [`src/sol_ops.rs`](src/sol_ops.rs). `num_qubits` declares the gate arity and
-   `unitary` constructs its `UnitaryMatrix` from the supplied parameters.
+   `unitary` constructs its `DMatrix<Complex64>` from the supplied parameters.
 2. Register the operation in [`src/simulate.rs`](src/simulate.rs), specifying
    which input ports contain qubits and which contain floating-point
    parameters. This lets the HUGR traversal resolve the gate's wires and
@@ -86,16 +90,16 @@ Adding a new quantum gate has two parts:
 
 ### Matrix conventions
 
-Matrices passed to `UnitaryMatrix::from_row_major` use computational-basis,
+Use `DMatrix::from_row_slice` to construct matrices in computational-basis,
 row-major order. For example, the X gate is:
 
 ```rust
 use num_complex::Complex64;
-use tket_qsim::UnitaryMatrix;
+use nalgebra::DMatrix;
 
 let zero = Complex64::new(0.0, 0.0);
 let one = Complex64::new(1.0, 0.0);
-let x = UnitaryMatrix::from_row_major(1, vec![zero, one, one, zero]);
+let x = DMatrix::from_row_slice(2, 2, &[zero, one, one, zero]);
 ```
 
 For multi-qubit gates, the first local qubit is the most-significant qubit in

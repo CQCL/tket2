@@ -13,10 +13,12 @@ workspace = true
 tket = { path = "../tket-rs" }
 tket-qsystem = { path = "../tket-qsystem" }
 hugr.workspace = true
+nalgebra.workspace = true
 num-complex = { workspace = true }
 petgraph = { workspace = true }
 
 [dev-dependencies]
+approx.workspace = true
 ndarray = "0.17"
 roqoqo = "1.22"
 rstest.workspace = true

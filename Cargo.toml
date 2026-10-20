@@ -10,8 +10,8 @@ members = [
     "tket/tket-rs",
     "tket/tket1-passes",
     "tket/tket-py",
-    "tket/tket-qsystem",
     "tket/tket-qsim",
+    "tket/tket-qsystem",
     "pg-libs/tk-pg-libs",
     "pg-libs/tk-pg-core",
     "pg-libs/pg-converters/tk-pg-converter",
@@ -123,6 +123,8 @@ typetag = "0.2.22"
 cool_asserts = "2.0.4"
 zstd = "0.14.0"
 anyhow = "1.0.102"
+approx = { version = "0.5.1", features = ["num-complex"] }
+nalgebra = "0.35.0"
 num-rational = "0.4.2"
 num-complex = "0.4"
 pg-core = { package = "tk-pg-core", path = "pg-libs/tk-pg-core", version = "0.1.1" }

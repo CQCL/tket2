@@ -6,6 +6,8 @@
 
 use std::f64::consts::PI;
 
+use approx::assert_abs_diff_eq;
+use nalgebra::DMatrix;
 use ndarray::Array2;
 use ndarray::linalg::kron;
 use num_complex::Complex64;
@@ -16,22 +18,19 @@ use roqoqo::operations::{
 };
 use rstest::rstest;
 use tket::TketOp;
-use tket_qsim::{Simulatable, UnitaryMatrix};
+use tket_qsim::Simulatable;
 use tket_qsystem::extension::qsystem::{helios::HeliosOp, sol::SolOp};
 
 const TOLERANCE: f64 = 1e-12;
 
-fn assert_roqoqo_matrix(actual: UnitaryMatrix, expected: &Array2<Complex64>) {
-    assert_eq!(expected.shape(), &[actual.dim(), actual.dim()]);
+fn assert_roqoqo_matrix(actual: DMatrix<Complex64>, expected: &Array2<Complex64>) {
+    assert_eq!(expected.shape(), &[actual.nrows(), actual.ncols()]);
 
-    for row in 0..actual.dim() {
-        for col in 0..actual.dim() {
-            let got = actual.get(row, col);
+    for row in 0..actual.nrows() {
+        for col in 0..actual.ncols() {
+            let got = actual[(row, col)];
             let reference = expected[[row, col]];
-            assert!(
-                (got - reference).norm() < TOLERANCE,
-                "mismatch at ({row}, {col}): got {got}, expected {reference}"
-            );
+            assert_abs_diff_eq!(got, reference, epsilon = TOLERANCE);
         }
     }
 }
@@ -41,7 +40,7 @@ fn roqoqo_unitary<G: OperateGate>(gate: &G) -> Array2<Complex64> {
         .expect("roqoqo gate parameters should be numeric")
 }
 
-fn assert_matches_roqoqo<G: OperateGate>(actual: UnitaryMatrix, reference: &G) {
+fn assert_matches_roqoqo<G: OperateGate>(actual: DMatrix<Complex64>, reference: &G) {
     assert_roqoqo_matrix(actual, &roqoqo_unitary(reference));
 }
 

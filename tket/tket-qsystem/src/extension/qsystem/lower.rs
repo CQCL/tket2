@@ -674,6 +674,7 @@ mod test {
     use crate::extension::qsystem::{helios::HeliosOp, sol::SolOp};
 
     use super::*;
+    use approx::assert_abs_diff_eq;
     use rstest::{fixture, rstest};
 
     #[derive(Debug, PartialEq, Eq)]
@@ -1927,7 +1928,7 @@ mod test {
         use tket::passes::{
             InlineDFGsPass, InlineFunctionsPass, inline_funcs::InlineFuncsHeuristic,
         };
-        use tket_qsim::simulate_circuit;
+        use tket_qsim::{align_global_phase_to, simulate_circuit};
 
         let params = HashMap::new();
         let unitary_before = simulate_circuit(&unitary_ops_hugr, &params).unwrap();
@@ -1946,13 +1947,8 @@ mod test {
         h.validate().unwrap();
 
         let unitary_after = simulate_circuit(&h, &params).unwrap();
-        assert!(
-            unitary_before.approx_eq_up_to_global_phase(&unitary_after, 1e-10),
-            "Lowering to {:?} changed the circuit semantics!\nBefore:\n{:?}\nAfter:\n{:?}",
-            platform,
-            unitary_before,
-            unitary_after
-        );
+        let unitary_after = align_global_phase_to(&unitary_after, &unitary_before);
+        assert_abs_diff_eq!(unitary_after, unitary_before, epsilon = 1e-10);
     }
 
     /// Verify that relowering preserves the program semantics.
@@ -1968,7 +1964,7 @@ mod test {
         use tket::passes::{
             InlineDFGsPass, InlineFunctionsPass, inline_funcs::InlineFuncsHeuristic,
         };
-        use tket_qsim::simulate_circuit;
+        use tket_qsim::{align_global_phase_to, simulate_circuit};
 
         let params = HashMap::new();
         let unitary_before = simulate_circuit(&unitary_ops_hugr, &params).unwrap();
@@ -1989,13 +1985,7 @@ mod test {
         h.validate().unwrap();
 
         let unitary_after = simulate_circuit(&h, &params).unwrap();
-        assert!(
-            unitary_before.approx_eq_up_to_global_phase(&unitary_after, 1e-10),
-            "Relowering from {:?} to {:?} changed the circuit semantics!\nBefore:\n{:?}\nAfter:\n{:?}",
-            first,
-            second,
-            unitary_before,
-            unitary_after
-        );
+        let unitary_after = align_global_phase_to(&unitary_after, &unitary_before);
+        assert_abs_diff_eq!(unitary_after, unitary_before, epsilon = 1e-10);
     }
 }
