@@ -37,7 +37,7 @@ LowerTketToQSystemPass::new(QSystemPlatform::Helios)
 // functions. tket-qsim simulates a flat entrypoint dataflow graph, so inline
 // calls and nested DFGs before simulating the transformed program.
 use tket::passes::{
-  InlineDFGsPass, InlineFunctionsPass,
+  ComposablePass, InlineDFGsPass, InlineFunctionsPass,
   inline_funcs::InlineFuncsHeuristic,
 };
 InlineFunctionsPass::default()
@@ -50,6 +50,31 @@ InlineDFGsPass::default().run(&mut lowered).unwrap();
 let actual = simulate_circuit(&lowered, &HashMap::new()).unwrap();
 let actual = align_global_phase_to(&actual, &expected);
 assert_abs_diff_eq!(actual, expected, epsilon = 1e-10);
+```
+
+### Supported HUGRs and errors
+
+`simulate_circuit` accepts a flat DFG or function entrypoint containing only
+registered unitary Tket, Helios, and Sol operations with concrete parameters.
+Prelude `Noop` and `Barrier` operations are explicitly supported as identities.
+
+The simulator rejects operations whose semantics it cannot represent instead of
+silently treating them as identities. In particular, it returns
+`SimulationError::UnsupportedOp` for:
+
+- measurement, reset, qubit allocation, and qubit deallocation;
+- function calls and nested DFGs that have not been inlined;
+- conditionals, CFGs, and other control flow; and
+- unregistered extension operations.
+
+`SimulationError` is exported from the crate root and can be matched in tests:
+
+```rust
+use std::collections::HashMap;
+use tket_qsim::{SimulationError, simulate_circuit};
+
+let error = simulate_circuit(&hugr, &HashMap::new()).unwrap_err();
+assert!(matches!(error, SimulationError::UnsupportedOp(_)));
 ```
 
 ### Equality comparison
