@@ -5,7 +5,7 @@
 
 ### Bug Fixes
 
-* Avoid generated helper symbol collisions ([#2081](https://github.com/Quantinuum/tket2/issues/2081))
+* Avoid generated helper symbol collisions ([#2081](https://github.com/Quantinuum/tket2/pull/2081))
 * Preserve opaque bit output dependencies ([#2085](https://github.com/Quantinuum/tket2/pull/2085))
 
 ## [0.15.11](https://github.com/Quantinuum/tket2/compare/tket-py-v0.15.10...tket-py-v0.15.11) (2026-10-07)
