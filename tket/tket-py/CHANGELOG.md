@@ -1,6 +1,13 @@
 # Changelog
 <!-- Release trigger for Rust fixes #2081 and #2085. -->
 
+## [0.15.12](https://github.com/Quantinuum/tket2/compare/tket-py-v0.15.11...tket-py-v0.15.12) (2026-10-20)
+
+
+### Bug Fixes
+
+* **py:** include Rust fixes from [#2081](https://github.com/Quantinuum/tket2/issues/2081) and [#2085](https://github.com/Quantinuum/tket2/issues/2085) ([#2088](https://github.com/Quantinuum/tket2/issues/2088)) ([7a9d7f9](https://github.com/Quantinuum/tket2/commit/7a9d7f956cf7e85c12080fd08f35856f242d4ccd))
+
 ## [0.15.11](https://github.com/Quantinuum/tket2/compare/tket-py-v0.15.10...tket-py-v0.15.11) (2026-10-07)
 
 
