@@ -25,7 +25,7 @@ use nalgebra::DMatrix;
 use num_complex::Complex64;
 
 pub use matrix::align_global_phase_to;
-pub use simulate::simulate_circuit;
+pub use simulate::{SimulationError, simulate_circuit};
 
 /// Trait for quantum operations that can be simulated via unitary matrices.
 ///

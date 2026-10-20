@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hugr::extension::prelude::qb_t;
+use hugr::extension::prelude::{Barrier, Noop, qb_t};
 use hugr::ops::{OpType, Value};
 use hugr::std_extensions::arithmetic::float_types::ConstF64;
 use hugr::{HugrView, IncomingPort, Node, OutgoingPort, PortIndex};
@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// An error that occurred during simulation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SimulationError {
     /// An unsupported operation was encountered.
     UnsupportedOp(String),
@@ -51,14 +51,15 @@ enum GateInfo {
         /// Input parameter ports (in order, for parametric gates).
         param_ports: Vec<IncomingPort>,
     },
-    /// A non-unitary op that we skip (alloc, free, measure, etc.)
-    Skip,
+    /// An explicitly supported operation with identity semantics.
+    PassThrough,
 }
 
 /// Simulate a quantum circuit (HUGR) and return its unitary matrix.
 ///
 /// The circuit must be a pure quantum circuit with concrete float parameters.
-/// Non-unitary operations (alloc, free, measure) are skipped.
+/// Non-unitary, control-flow, nested dataflow, call, and unknown operations are
+/// rejected rather than treated as identities.
 ///
 /// `input_params` maps each input port index of the function to a concrete
 /// f64 value. This is needed for parametric circuits where the rotation/float
@@ -73,11 +74,21 @@ pub fn simulate_circuit(
     input_params: &HashMap<usize, f64>,
 ) -> Result<DMatrix<Complex64>, SimulationError> {
     let parent = hugr.entrypoint();
-    let [input_node, _output_node] = hugr.get_io(parent).expect("No I/O nodes");
+    let parent_op = hugr.get_optype(parent);
+    if !matches!(parent_op, OpType::DFG(_) | OpType::FuncDefn(_)) {
+        return Err(unsupported_op(parent_op));
+    }
+    let io_nodes = hugr
+        .get_io(parent)
+        .ok_or_else(|| unsupported_op(parent_op))?;
+    let [input_node, _output_node] = io_nodes;
+    let sig = hugr
+        .inner_function_type()
+        .ok_or_else(|| unsupported_op(parent_op))?;
 
     // First pass: determine the number of qubits by counting qubit outputs
     // from the Input node.
-    let num_qubits = count_qubit_inputs(hugr);
+    let num_qubits = sig.input().iter().filter(|ty| **ty == qb_t()).count();
     if num_qubits == 0 {
         return Err(SimulationError::NoQubits);
     }
@@ -87,7 +98,6 @@ pub fn simulate_circuit(
 
     // Assign qubit indices from the input node outputs.
     let mut qubit_idx = 0;
-    let sig = hugr.inner_function_type().unwrap();
     for (port_idx, ty) in sig.input().iter().enumerate() {
         if *ty == qb_t() {
             let out_port = OutgoingPort::from(port_idx);
@@ -115,8 +125,6 @@ pub fn simulate_circuit(
     // Process nodes in topological order
     let scheduling_graph = hugr.scheduling_graph(parent);
     let petgraph = scheduling_graph.petgraph();
-    let io_nodes = hugr.get_io(parent).unwrap();
-
     let topo_nodes: Vec<_> = Topo::new(petgraph)
         .iter(petgraph)
         .map(|pg_node| scheduling_graph.pg_to_node(pg_node))
@@ -153,7 +161,7 @@ pub fn simulate_circuit(
             continue;
         }
 
-        let gate_info = classify_gate(optype);
+        let gate_info = classify_gate(optype)?;
         match gate_info {
             GateInfo::Unitary {
                 gate,
@@ -203,20 +211,14 @@ pub fn simulate_circuit(
                 // Propagate any parameter outputs (for ops that pass through params).
                 propagate_non_qubit_outputs(hugr, node, optype, &mut wire_to_param);
             }
-            GateInfo::Skip => {
-                // For skipped ops (alloc, free, measure), propagate qubit and param wires.
+            GateInfo::PassThrough => {
+                // Explicit identity operations preserve their input wire mappings.
                 propagate_all_wires(hugr, node, optype, &mut wire_to_qubit, &mut wire_to_param);
             }
         }
     }
 
     Ok(total_unitary)
-}
-
-/// Count the number of qubit-typed inputs in the dataflow graph
-fn count_qubit_inputs(hugr: &impl HugrView<Node = Node>) -> usize {
-    let sig = hugr.inner_function_type().unwrap();
-    sig.input().iter().filter(|ty| **ty == qb_t()).count()
 }
 
 /// Try to extract a constant float value from a LoadConst or Const node.
@@ -322,7 +324,7 @@ fn resolve_input_param(
 }
 
 /// Classify a HUGR node's operation for simulation.
-fn classify_gate(optype: &OpType) -> GateInfo {
+fn classify_gate(optype: &OpType) -> Result<GateInfo, SimulationError> {
     // Try TketOp
     if let Some(op) = optype.cast::<TketOp>() {
         return classify_tket_op(op);
@@ -335,12 +337,17 @@ fn classify_gate(optype: &OpType) -> GateInfo {
     if let Some(op) = optype.cast::<SolOp>() {
         return classify_sol_op(op);
     }
-    // Everything else is skipped
-    GateInfo::Skip
+    // Prelude no-ops and barriers are the only operations that are explicitly
+    // supported as identities. In particular, do not silently erase unknown
+    // extension operations, calls, nested dataflow, or control flow.
+    if optype.cast::<Noop>().is_some() || optype.cast::<Barrier>().is_some() {
+        return Ok(GateInfo::PassThrough);
+    }
+    Err(unsupported_op(optype))
 }
 
-fn classify_tket_op(op: TketOp) -> GateInfo {
-    match op {
+fn classify_tket_op(op: TketOp) -> Result<GateInfo, SimulationError> {
+    let gate_info = match op {
         TketOp::H
         | TketOp::X
         | TketOp::Y
@@ -379,19 +386,21 @@ fn classify_tket_op(op: TketOp) -> GateInfo {
             ],
             param_ports: vec![],
         },
-        // Non-unitary ops: skip
+        // These operations cannot be represented by a unitary over the input
+        // qubits and must never be treated as identities.
         TketOp::Measure
         | TketOp::MeasureFree
         | TketOp::QAlloc
         | TketOp::TryQAlloc
         | TketOp::QFree
-        | TketOp::Reset => GateInfo::Skip,
-        _ => GateInfo::Skip, // Other ops are skipped for now
-    }
+        | TketOp::Reset => return Err(unsupported_op(&op.into())),
+        _ => return Err(unsupported_op(&op.into())),
+    };
+    Ok(gate_info)
 }
 
-fn classify_helios_op(op: HeliosOp) -> GateInfo {
-    match op {
+fn classify_helios_op(op: HeliosOp) -> Result<GateInfo, SimulationError> {
+    let gate_info = match op {
         HeliosOp::PhasedX => GateInfo::Unitary {
             gate: Box::new(op),
             qubit_ports: vec![IncomingPort::from(0usize)],
@@ -407,13 +416,13 @@ fn classify_helios_op(op: HeliosOp) -> GateInfo {
             qubit_ports: vec![IncomingPort::from(0usize), IncomingPort::from(1usize)],
             param_ports: vec![IncomingPort::from(2usize)],
         },
-        // Non-unitary ops
-        _ => GateInfo::Skip,
-    }
+        _ => return Err(unsupported_op(&op.into())),
+    };
+    Ok(gate_info)
 }
 
-fn classify_sol_op(op: SolOp) -> GateInfo {
-    match op {
+fn classify_sol_op(op: SolOp) -> Result<GateInfo, SimulationError> {
+    let gate_info = match op {
         SolOp::PhasedX => GateInfo::Unitary {
             gate: Box::new(op),
             qubit_ports: vec![IncomingPort::from(0usize)],
@@ -429,9 +438,13 @@ fn classify_sol_op(op: SolOp) -> GateInfo {
             qubit_ports: vec![IncomingPort::from(0usize), IncomingPort::from(1usize)],
             param_ports: vec![IncomingPort::from(2usize), IncomingPort::from(3usize)],
         },
-        // Non-unitary ops
-        _ => GateInfo::Skip,
-    }
+        _ => return Err(unsupported_op(&op.into())),
+    };
+    Ok(gate_info)
+}
+
+fn unsupported_op(optype: &OpType) -> SimulationError {
+    SimulationError::UnsupportedOp(optype.to_string())
 }
 
 /// Propagate non-qubit output wires through a gate node.
@@ -445,7 +458,7 @@ fn propagate_non_qubit_outputs(
     // No-op for now.
 }
 
-/// Propagate all wires through a skipped node.
+/// Propagate all wires through an explicitly supported identity node.
 fn propagate_all_wires(
     hugr: &impl HugrView<Node = Node>,
     node: Node,
