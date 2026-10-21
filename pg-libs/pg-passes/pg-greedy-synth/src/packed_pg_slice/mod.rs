@@ -878,6 +878,55 @@ impl PackedPGSlice {
         start: PackedStoragePosition,
         end: PackedStoragePosition,
     ) {
+        if start == end {
+            return;
+        }
+        if let Some(table) = action.small_table() {
+            let width = action.qubits().len();
+            let last_chunk = if end.bit == 0 {
+                end.chunk - 1
+            } else {
+                end.chunk
+            };
+            for chunk in start.chunk..=last_chunk {
+                let mut mask = u64::MAX;
+                if chunk == start.chunk {
+                    mask &= u64::MAX << start.bit;
+                }
+                if chunk == end.chunk {
+                    mask &= (1u64 << end.bit) - 1;
+                }
+                let mut inputs = [0; 4];
+                for (q, &physical) in action.qubits().iter().enumerate() {
+                    inputs[2 * q] = self.zb_rows[physical][chunk];
+                    inputs[2 * q + 1] = self.xb_rows[physical][chunk];
+                }
+                let mut outputs = [0; 4];
+                let mut signs = 0;
+                for (input, &(output, sign)) in table.iter().enumerate().take(1 << (2 * width)) {
+                    let mut selected = mask;
+                    for (bit, &row) in inputs.iter().enumerate().take(2 * width) {
+                        selected &= if input & (1 << bit) != 0 { row } else { !row };
+                    }
+                    for (bit, row) in outputs.iter_mut().enumerate().take(2 * width) {
+                        if output & (1 << bit) != 0 {
+                            *row |= selected;
+                        }
+                    }
+                    if sign {
+                        signs |= selected;
+                    }
+                }
+                for (q, &physical) in action.qubits().iter().enumerate() {
+                    self.zb_rows[physical][chunk] =
+                        (self.zb_rows[physical][chunk] & !mask) | outputs[2 * q];
+                    self.xb_rows[physical][chunk] =
+                        (self.xb_rows[physical][chunk] & !mask) | outputs[2 * q + 1];
+                }
+                self.sign_bits[chunk] ^= signs;
+            }
+            return;
+        }
         let mut position = start;
         while position != end {
             let mask = 1u64 << position.bit;

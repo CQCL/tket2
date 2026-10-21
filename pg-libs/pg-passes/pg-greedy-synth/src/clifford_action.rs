@@ -1,4 +1,4 @@
-use pg_bitpacked::{I_U8, X_U8, Y_U8, Z_U8, paulis_to_u64s, u64s_to_paulis};
+use pg_bitpacked::{I_U8, X_U8, Y_U8, Z_U8, bits_to_u8_pauli, paulis_to_u64s, u64s_to_paulis};
 use pg_core::{Pauli, TableauData};
 use pg_qm_tableau::Tableau;
 
@@ -13,6 +13,7 @@ pub struct CliffordAction {
     qubits: Vec<usize>,
     cost: f64,
     duration: u64,
+    small_table: Option<[(u8, bool); 16]>,
 }
 
 impl CliffordAction {
@@ -66,13 +67,103 @@ impl CliffordAction {
             }
         }
         let compiled = Tableau::from(tableau.clone());
-        Self {
+        let mut result = Self {
             tableau,
             compiled,
             qubits,
             cost,
             duration,
+            small_table: None,
+        };
+        if width <= 2 {
+            // Compile once per placed action, using the authoritative signed
+            // tableau implementation. Packed updates then avoid row allocations.
+            result.small_table = Some(std::array::from_fn(|input| {
+                let local = [
+                    bits_to_u8_pauli((input & 1) as u8, ((input >> 1) & 1) as u8),
+                    bits_to_u8_pauli(((input >> 2) & 1) as u8, ((input >> 3) & 1) as u8),
+                ];
+                let (output, sign) = result.transform(&local[..width]);
+                let mut bits = 0;
+                for (q, p) in output.into_iter().enumerate() {
+                    bits |= u8::from(matches!(p, Y_U8 | Z_U8)) << (2 * q);
+                    bits |= u8::from(matches!(p, X_U8 | Y_U8)) << (2 * q + 1);
+                }
+                (bits, sign)
+            }));
         }
+        result
+    }
+
+    pub(crate) fn small_table(&self) -> Option<&[(u8, bool); 16]> {
+        self.small_table.as_ref()
+    }
+
+    /// Reuses this compiled action on a different ordered qubit placement.
+    ///
+    /// # Panics
+    /// Panics if the placement width differs or contains duplicate qubits.
+    pub fn placed_on(&self, qubits: Vec<usize>) -> Self {
+        assert_eq!(
+            qubits.len(),
+            self.qubits.len(),
+            "action and placement widths differ"
+        );
+        let mut distinct = qubits.clone();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(
+            distinct.len(),
+            qubits.len(),
+            "action qubits must be distinct"
+        );
+        Self {
+            qubits,
+            ..self.clone()
+        }
+    }
+
+    /// Conjugates one local Hermitian Pauli word in place, returning its sign flip.
+    ///
+    /// One- and two-qubit actions use a precompiled signed table without heap
+    /// allocation. Larger actions retain the general tableau implementation.
+    ///
+    /// # Panics
+    /// Panics if the word width differs from the action width.
+    #[inline]
+    pub fn transform_local(&self, paulis: &mut [Pauli]) -> bool {
+        assert_eq!(paulis.len(), self.qubits.len());
+        if let Some(table) = self.small_table() {
+            let mut input = 0;
+            for (q, &p) in paulis.iter().enumerate() {
+                input |= usize::from(matches!(p, Pauli::Y | Pauli::Z)) << (2 * q);
+                input |= usize::from(matches!(p, Pauli::X | Pauli::Y)) << (2 * q + 1);
+            }
+            let (output, sign) = table[input];
+            for (q, p) in paulis.iter_mut().enumerate() {
+                *p = [Pauli::I, Pauli::Z, Pauli::X, Pauli::Y][((output >> (2 * q)) & 3) as usize];
+            }
+            return sign;
+        }
+        let local = paulis
+            .iter()
+            .map(|p| match p {
+                Pauli::I => I_U8,
+                Pauli::X => X_U8,
+                Pauli::Y => Y_U8,
+                Pauli::Z => Z_U8,
+            })
+            .collect::<Vec<_>>();
+        let (output, sign) = self.transform(&local);
+        for (p, result) in paulis.iter_mut().zip(output) {
+            *p = match result {
+                I_U8 => Pauli::I,
+                X_U8 => Pauli::X,
+                Y_U8 => Pauli::Y,
+                _ => Pauli::Z,
+            };
+        }
+        sign
     }
 
     /// Returns the local Clifford tableau.

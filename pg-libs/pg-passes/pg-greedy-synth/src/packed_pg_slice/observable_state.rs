@@ -192,11 +192,24 @@ impl ObservableState {
             action.qubits().iter().all(|&q| q < self.width()),
             "action outside state"
         );
+        // Observable storage is contiguous. Batch active runs so small placed
+        // Cliffords update up to 64 signed rows per packed kernel invocation.
+        // Retired rows retain their exact value, including their sign.
+        let mut run = None;
         for (&index, &active) in self.indices.iter().zip(&self.active) {
-            if active {
-                let (start, end) = self.packed.op(index).bit_range();
-                self.packed.apply_action_range(action, start, end);
+            let (start, end) = self.packed.op(index).bit_range();
+            if let Some((first, last)) = run
+                && (!active || last != start)
+            {
+                self.packed.apply_action_range(action, first, last);
+                run = None;
             }
+            if active {
+                run = Some((run.map_or(start, |(first, _)| first), end));
+            }
+        }
+        if let Some((start, end)) = run {
+            self.packed.apply_action_range(action, start, end);
         }
     }
 }
@@ -205,6 +218,100 @@ impl ObservableState {
 mod tests {
     use super::*;
     use pg_core::TableauData;
+
+    #[test]
+    fn small_packed_actions_match_general_tableaux_exhaustively() {
+        use Pauli::{I, X, Y, Z};
+        let actions = [
+            CliffordAction::new(
+                TableauData::new(
+                    vec![(vec![Z, I], false), (vec![Z, Z], false)],
+                    vec![(vec![X, X], false), (vec![I, X], false)],
+                ),
+                vec![4, 1],
+                1.0,
+                1,
+            ),
+            CliffordAction::new(
+                TableauData::new(
+                    vec![(vec![I, Z], false), (vec![Z, I], false)],
+                    vec![(vec![I, X], false), (vec![X, I], false)],
+                ),
+                vec![1, 4],
+                1.0,
+                1,
+            ),
+            CliffordAction::new(
+                TableauData::new(
+                    vec![(vec![X, I], true), (vec![I, Z], false)],
+                    vec![(vec![Z, I], false), (vec![I, Y], true)],
+                ),
+                vec![4, 1],
+                1.0,
+                1,
+            ),
+            CliffordAction::new(
+                TableauData::new(vec![(vec![X], true)], vec![(vec![Z], false)]),
+                vec![4],
+                1.0,
+                1,
+            ),
+        ];
+        let encode = |p| match p {
+            I => I_U8,
+            X => X_U8,
+            Y => Y_U8,
+            _ => Z_U8,
+        };
+        let decode = |p| match p {
+            I_U8 => I,
+            X_U8 => X,
+            Y_U8 => Y,
+            _ => Z,
+        };
+        for n in [0, 1, 63, 64, 65, 128, 257] {
+            for action in &actions {
+                let mut expected = (0..n)
+                    .map(|r| {
+                        let mut word = vec![I; 5];
+                        word[4] = [I, X, Y, Z][r % 4];
+                        word[1] = [I, X, Y, Z][(r / 4) % 4];
+                        word[2] = [X, Y, Z, I][r % 4];
+                        (word, r % 3 == 0)
+                    })
+                    .collect::<Vec<_>>();
+                let mut state = ObservableState::new(5, expected.clone());
+                for (r, expected_row) in expected.iter_mut().enumerate() {
+                    if r % 67 == 63 || r % 67 == 64 {
+                        state.retire(r);
+                    }
+                    if state.is_active(r) {
+                        let local = action
+                            .qubits()
+                            .iter()
+                            .map(|&q| encode(expected_row.0[q]))
+                            .collect::<Vec<_>>();
+                        let (output, flip) = action.transform(&local);
+                        let mut small = local.iter().copied().map(decode).collect::<Vec<_>>();
+                        assert_eq!(action.transform_local(&mut small), flip);
+                        assert_eq!(
+                            small,
+                            output.iter().copied().map(decode).collect::<Vec<_>>()
+                        );
+                        for (&q, p) in action.qubits().iter().zip(output) {
+                            expected_row.0[q] = decode(p);
+                        }
+                        expected_row.1 ^= flip;
+                    }
+                }
+                state.apply(action);
+                for (r, (word, sign)) in expected.into_iter().enumerate() {
+                    assert_eq!(state.paulis(r), word, "observable {r}");
+                    assert_eq!(state.sign(r), sign, "sign {r}");
+                }
+            }
+        }
+    }
 
     #[test]
     fn support_preview_handles_sequences_weights_and_retirement() {
