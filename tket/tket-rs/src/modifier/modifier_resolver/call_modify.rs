@@ -179,6 +179,14 @@ impl<N: HugrNode> ModifierResolver<N> {
                     "Modifier node has order edges. The chain is malformed.",
                 ));
             }
+
+            // Reject branching modifier chains: each modifier's function output must have one consumer.
+            if h.linked_inputs(current, 0).nth(1).is_some() {
+                return Err(ModifierResolverErrors::unreachable(
+                    "Modifier node has multiple consumers. The chain is malformed.",
+                ));
+            }
+
             chain.push(current);
             modifiers.push(optype.as_extension_op().unwrap(), current)?;
             let (new, _) = h
@@ -304,7 +312,7 @@ mod tests {
     use super::super::tests::{SetUnitary, modifier_test_hugr, test_modifier_resolver};
     use super::super::*;
     use crate::TketOp;
-    use crate::extension::modifier::{CONTROL_OP_ID, MODIFIER_EXTENSION};
+    use crate::extension::modifier::{CONTROL_OP_ID, DAGGER_OP_ID, MODIFIER_EXTENSION};
     use hugr::{
         Hugr,
         builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
@@ -482,6 +490,99 @@ mod tests {
             ModifierResolverErrors::Unreachable { msg }
                 if msg == "Modifier node has order edges. The chain is malformed."
         ));
+    }
+
+    #[test]
+    fn branching_modifier_chain_is_rejected() {
+        let signature = Signature::new_endo([qb_t()]);
+        let dagger = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &DAGGER_OP_ID,
+                [Term::new_list([qb_t()]), Term::new_list(Vec::<Type>::new())],
+            )
+            .unwrap();
+        let mut module = ModuleBuilder::new();
+        let callee = module
+            .define_function("identity", signature.clone())
+            .unwrap();
+        let outputs = callee.input_wires();
+        let callee = callee.finish_with_outputs(outputs).unwrap();
+        let mut main = module.define_function("main", signature.clone()).unwrap();
+        let [q] = main.input_wires_arr();
+        let loaded = main.load_func(callee.handle(), &[]).unwrap();
+        let modified = main
+            .add_dataflow_op(dagger.clone(), [loaded])
+            .unwrap()
+            .out_wire(0);
+        let first_call = main
+            .add_dataflow_op(
+                CallIndirect {
+                    signature: signature.clone(),
+                },
+                [modified, q],
+            )
+            .unwrap();
+        let second_modifier = main.add_dataflow_op(dagger, [modified]).unwrap();
+        let second_call = main
+            .add_dataflow_op(
+                CallIndirect { signature },
+                [second_modifier.out_wire(0), first_call.out_wire(0)],
+            )
+            .unwrap();
+        main.finish_with_outputs(second_call.outputs()).unwrap();
+        let h = module.finish_hugr().unwrap();
+        h.validate().unwrap();
+
+        // Both branches must detect the shared modifier, including when tracing
+        // through another modifier before reaching it.
+        for call in [first_call.node(), second_call.node()] {
+            let error = ModifierResolver::new()
+                .trace_indirect_call_to_load(&h, call)
+                .unwrap_err();
+            assert!(matches!(
+                error,
+                ModifierResolverErrors::Unreachable { msg }
+                    if msg == "Modifier node has multiple consumers. The chain is malformed."
+            ));
+        }
+    }
+
+    #[test]
+    fn modifier_chain_with_bad_input_head_is_rejected() {
+        let signature = Signature::new_endo([qb_t()]);
+        let dagger = MODIFIER_EXTENSION
+            .instantiate_extension_op(
+                &DAGGER_OP_ID,
+                [Term::new_list([qb_t()]), Term::new_list(Vec::<Type>::new())],
+            )
+            .unwrap();
+        let mut module = ModuleBuilder::new();
+        let mut main = module
+            .define_function(
+                "main",
+                Signature::new([Type::new_function(signature.clone()), qb_t()], [qb_t()]),
+            )
+            .unwrap();
+        let [function, q] = main.input_wires_arr();
+        let modified = main.add_dataflow_op(dagger, [function]).unwrap();
+        let call = main
+            .add_dataflow_op(CallIndirect { signature }, [modified.out_wire(0), q])
+            .unwrap();
+        main.finish_with_outputs(call.outputs()).unwrap();
+        let h = module.finish_hugr().unwrap();
+        h.validate().unwrap();
+
+        let error = ModifierResolver::new()
+            .trace_indirect_call_to_load(&h, call.node())
+            .unwrap_err();
+        match error {
+            ModifierResolverErrors::MalformedChainHead(node, optype) => {
+                assert_eq!(node, function.node());
+                assert_eq!(&optype, h.get_optype(function.node()));
+                assert!(matches!(optype, OpType::Input(_)));
+            }
+            other => panic!("expected MalformedChainHead, got {other:?}"),
+        }
     }
 
     #[test]
