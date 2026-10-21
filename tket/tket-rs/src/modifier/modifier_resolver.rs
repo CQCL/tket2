@@ -1521,7 +1521,7 @@ mod tests {
         TketOp,
         extension::modifier::{CONTROL_OP_ID, DAGGER_OP_ID, MODIFIER_EXTENSION},
         metadata,
-        passes::{composable::Preserve, force_order::force_order},
+        passes::composable::Preserve,
     };
 
     use super::*;
@@ -1746,66 +1746,6 @@ mod tests {
         let h = module.finish_hugr().unwrap();
         assert_matches!(h.validate(), Ok(()));
         (h, foo_node)
-    }
-
-    #[test]
-    /// Test that modifier passes under control preserve the order edges.
-    fn control_modifier_preserves_state_order_edges() {
-        fn state_order_edge_count(h: &Hugr, root: Node) -> usize {
-            h.descendants(root)
-                .flat_map(|node| {
-                    h.node_outputs(node)
-                        .filter(move |port| {
-                            h.get_optype(node).port_kind(*port) == Some(EdgeKind::StateOrder)
-                        })
-                        .map(move |port| h.linked_inputs(node, port).count())
-                })
-                .sum()
-        }
-
-        fn foo(module: &mut ModuleBuilder<Hugr>, _: usize) -> FuncID<true> {
-            let mut function = module
-                .define_function(
-                    "foo",
-                    Signature::new_endo([qb_t(), qb_t(), qb_t(), qb_t(), qb_t()]),
-                )
-                .unwrap();
-            function.set_unitary();
-            let [x, z, control_1, control_2, target] = function.input_wires_arr();
-            let x = function
-                .add_dataflow_op(TketOp::X, [x])
-                .unwrap()
-                .out_wire(0);
-            let z = function
-                .add_dataflow_op(TketOp::Z, [z])
-                .unwrap()
-                .out_wire(0);
-            let [control_1, control_2, target] = function
-                .add_dataflow_op(TketOp::Toffoli, [control_1, control_2, target])
-                .unwrap()
-                .outputs_arr();
-            *function
-                .finish_with_outputs([x, z, control_1, control_2, target])
-                .unwrap()
-                .handle()
-        }
-
-        let (mut h, foo_node) = modifier_test_hugr(5, 3, foo, false);
-        force_order(&mut h, foo_node, |_, _| 0).unwrap();
-        assert_eq!(state_order_edge_count(&h, foo_node), 2);
-
-        let entrypoint = h.entrypoint();
-        resolve_modifier_with_entrypoints(&mut h, [entrypoint]).unwrap();
-        let modified_function = h
-            .nodes()
-            .find(|node| {
-                h.get_optype(*node)
-                    .as_func_defn()
-                    .is_some_and(|function| function.func_name().starts_with("__modified__"))
-            })
-            .unwrap();
-        assert_eq!(state_order_edge_count(&h, modified_function), 16);
-        assert_matches!(h.validate(), Ok(()));
     }
 
     #[test]

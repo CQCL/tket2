@@ -658,11 +658,17 @@ impl CombinedModifier {
 mod test {
     use cool_asserts::assert_matches;
     use hugr::{
-        Hugr, IncomingPort, OutgoingPort,
+        Direction, Hugr, IncomingPort, OutgoingPort,
         builder::{Dataflow, DataflowSubContainer, HugrBuilder, ModuleBuilder},
         extension::prelude::qb_t,
-        ops::CallIndirect,
-        std_extensions::collections::array::array_type,
+        ops::{
+            CallIndirect,
+            handle::{FuncID, NodeHandle},
+        },
+        std_extensions::{
+            arithmetic::{float_ops::FloatOps, float_types::ConstF64},
+            collections::array::array_type,
+        },
         types::{EdgeKind, Signature, Term},
     };
     use strum::IntoEnumIterator;
@@ -673,7 +679,7 @@ mod test {
     };
     use crate::{
         extension::rotation::ConstRotation,
-        modifier::modifier_resolver::tests::{SetUnitary, test_modifier_resolver},
+        modifier::modifier_resolver::tests::{SetUnitary, resolved_modifier_test_hugr},
         modifier::modifier_resolver::*,
     };
 
@@ -688,6 +694,75 @@ mod test {
             Measure | MeasureFree | QAlloc | TryQAlloc | QFree | Reset => return None,
         };
         Some(p)
+    }
+
+    fn single_tket_op_function(
+        module: &mut ModuleBuilder<Hugr>,
+        t_num: usize,
+        op: TketOp,
+    ) -> FuncID<true> {
+        let (size, has_angle) = size(op).unwrap();
+        let signature = Signature::new_endo(vec![qb_t(); t_num]);
+        let mut func = module.define_function("foo", signature).unwrap();
+        func.set_unitary();
+        let mut inputs: Vec<_> = func.input_wires().collect();
+        let mut args = inputs[..size].to_vec();
+        if has_angle {
+            args.push(func.add_load_value(ConstRotation::new(0.5).unwrap()));
+        }
+        let gate = func.add_dataflow_op(op, args).unwrap();
+        inputs.splice(..size, gate.outputs());
+        // Independent classical operations provide both order boundaries.
+        let [before, after] = add_order_markers(&mut func);
+        for (source, target) in [(before, gate.node()), (gate.node(), after)] {
+            let output = func.hugr().get_optype(source).other_output_port().unwrap();
+            let input = func.hugr().get_optype(target).other_input_port().unwrap();
+            func.hugr_mut().connect(source, output, target, input);
+        }
+        *func.finish_with_outputs(inputs).unwrap().handle()
+    }
+
+    fn add_order_markers(builder: &mut impl Dataflow) -> [Node; 2] {
+        let value = builder.add_load_value(ConstF64::new(0.5));
+        [FloatOps::fabs, FloatOps::fceil]
+            .map(|op| builder.add_dataflow_op(op, [value]).unwrap().node())
+    }
+
+    /// Every gate in a replacement must sit between the same order boundaries.
+    /// Follow only StateOrder edges to check internal order wiring explicitly.
+    fn assert_ordered_replacement(h: &Hugr, before: Node, after: Node, op: TketOp) {
+        let parent = h.get_parent(before).unwrap();
+        let gates = h
+            .children(parent)
+            .filter(|&node| TketOp::from_optype(h.get_optype(node)).is_some())
+            .collect_vec();
+        assert!(!gates.is_empty(), "{op:?} produced no gates");
+        for (boundary, direction, label) in [
+            (before, Direction::Outgoing, "incoming"),
+            (after, Direction::Incoming, "outgoing"),
+        ] {
+            let mut reachable = HashSet::new();
+            let mut pending = vec![boundary];
+            while let Some(node) = pending.pop() {
+                if reachable.insert(node) {
+                    for port in h.node_ports(node, direction) {
+                        if h.get_optype(node).port_kind(port) == Some(EdgeKind::StateOrder) {
+                            pending.extend(h.linked_ports(node, port).map(|(n, _)| n));
+                        }
+                    }
+                }
+            }
+            let unordered = gates
+                .iter()
+                .filter(|node| !reachable.contains(node))
+                .count();
+            assert_eq!(
+                unordered,
+                0,
+                "{op:?}: {unordered}/{} replacement gates lack an {label} order path",
+                gates.len()
+            );
+        }
     }
 
     #[test]
@@ -722,29 +797,14 @@ mod test {
     #[test]
     fn controlled_toffoli_expansion_preserves_state_order() {
         let mut old_module = ModuleBuilder::new();
-        let mut old_func = old_module
-            .define_function("old", Signature::new_endo([qb_t(), qb_t(), qb_t(), qb_t()]))
-            .unwrap();
-        let previous = old_func.add_child_node(TketOp::X);
-        let op_node = old_func.add_child_node(TketOp::Toffoli);
-        let state_order_output = old_func
+        let original = single_tket_op_function(&mut old_module, 4, TketOp::Toffoli);
+        let op_node = old_module
             .hugr()
-            .get_optype(previous)
-            .other_output_port()
+            .children(original.node())
+            .find(|&n| {
+                TketOp::from_optype(old_module.hugr().get_optype(n)) == Some(TketOp::Toffoli)
+            })
             .unwrap();
-        let state_order_input = old_func
-            .hugr()
-            .get_optype(op_node)
-            .other_input_port()
-            .unwrap();
-        old_func
-            .hugr_mut()
-            .connect(previous, state_order_output, op_node, state_order_input);
-        let insert_state_order_edges = old_func
-            .hugr()
-            .single_linked_output(op_node, state_order_input)
-            .is_some();
-        assert!(insert_state_order_edges);
 
         let mut module = ModuleBuilder::new();
         let mut func = module
@@ -755,7 +815,7 @@ mod test {
         resolver.modifiers.control = 3;
         resolver.controls = inputs[..3].to_vec();
 
-        let port_vector = resolver.with_state_order_edges(insert_state_order_edges, |resolver| {
+        let port_vector = resolver.with_state_order_edges(true, |resolver| {
             resolver
                 .modify_tket_op(op_node, TketOp::Toffoli, &mut func, &mut vec![inputs[3]])
                 .unwrap()
@@ -763,49 +823,58 @@ mod test {
 
         assert_eq!(port_vector.incoming.len(), 4);
         assert_eq!(port_vector.outgoing.len(), 4);
-        let h = func.hugr();
-        let state_order_edges = h
-            .nodes()
-            .map(|node| {
-                h.node_outputs(node)
-                    .filter(|port| {
-                        h.get_optype(node).port_kind(*port) == Some(EdgeKind::StateOrder)
-                    })
-                    .map(|port| h.linked_inputs(node, port).count())
-                    .sum::<usize>()
-            })
-            .sum::<usize>();
-        assert_eq!(state_order_edges, 15);
+        // Exercise the dirty-ancilla expansion with the same boundary assertion
+        // as the end-to-end gate tests, using its returned order-port mapping.
+        let [before, after] = add_order_markers(&mut func);
+        let input = port_vector.incoming.last().unwrap();
+        let output = port_vector.outgoing.last().unwrap();
+        for port in [input, output] {
+            assert_eq!(
+                func.hugr().get_optype(port.0).port_kind(port.1),
+                Some(EdgeKind::StateOrder)
+            );
+        }
+        let before_output = func.hugr().get_optype(before).other_output_port().unwrap();
+        let after_input = func.hugr().get_optype(after).other_input_port().unwrap();
+        connect::<Node>(&mut func, &(before, before_output).into(), input).unwrap();
+        connect::<Node>(&mut func, output, &(after, after_input).into()).unwrap();
+        assert_ordered_replacement(func.hugr(), before, after, TketOp::Toffoli);
     }
 
     #[rstest::rstest]
-    #[case(0, true)]
-    #[case(1, false)]
-    #[case(3, false)]
-    #[case(3, true)]
-    #[case(7, false)]
+    #[case::unmodified(0, false)]
+    #[case::dagger(0, true)]
+    #[case::controlled(1, false)]
+    #[case::multi_controlled(3, false)]
+    #[case::controlled_dagger(3, true)]
+    #[case::many_controls(7, false)]
     #[cfg_attr(miri, ignore)] // miri takes a long time to analyze this test.
     fn test_single_tket_op(#[case] c_num: u64, #[case] dagger: bool) {
-        for op in TketOp::iter() {
-            let Some((size, has_angle)) = size(op) else {
-                continue;
-            };
-            let foo = |module: &mut ModuleBuilder<Hugr>, t_num: usize| {
-                let foo_sig =
-                    Signature::new_endo(iter::repeat_n(qb_t(), t_num).collect::<Vec<_>>());
-                let mut func = module.define_function("foo", foo_sig.clone()).unwrap();
-                func.set_unitary();
-                let mut inputs: Vec<_> = func.input_wires().collect();
-                let mut args = inputs[0..size].to_vec();
-                if has_angle {
-                    let angle = func.add_load_value(ConstRotation::new(0.5).unwrap());
-                    args.push(angle);
-                }
-                let v = func.add_dataflow_op(op, args).unwrap().outputs();
-                inputs.splice(0..size, v);
-                *func.finish_with_outputs(inputs).unwrap().handle()
-            };
-            test_modifier_resolver(3, c_num, foo, dagger);
+        for op in TketOp::iter().filter(|&op| size(op).is_some()) {
+            let h = resolved_modifier_test_hugr(
+                3,
+                c_num,
+                |module, t_num| single_tket_op_function(module, t_num, op),
+                dagger,
+            );
+            // Dagger intentionally drops order edges; all other cases must
+            // preserve before -> replacement gates -> after, including internally.
+            if !dagger {
+                let function = h
+                    .nodes()
+                    .find(|&node| {
+                        h.get_optype(node)
+                            .as_func_defn()
+                            .is_some_and(|f| f.func_name().starts_with("__modified__foo["))
+                    })
+                    .unwrap();
+                let [before, after] = [FloatOps::fabs, FloatOps::fceil].map(|marker| {
+                    h.children(function)
+                        .find(|&n| FloatOps::from_optype(h.get_optype(n)) == Some(marker))
+                        .unwrap()
+                });
+                assert_ordered_replacement(&h, before, after, op);
+            }
         }
     }
 
