@@ -47,7 +47,9 @@ indexmap.workspace = true
 anyhow = { workspace = true, optional = true }
 
 [dev-dependencies]
+approx.workspace = true
 tket1-passes = { path = "../tket1-passes" }
+tket-qsim = { path = "../tket-qsim" }
 
 cool_asserts.workspace = true
 petgraph.workspace = true
