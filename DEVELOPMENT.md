@@ -286,7 +286,7 @@ The package's `exclude-paths` keep changes confined to independent packages and
 standalone tools from triggering a wheel release. Keep these exclusions in sync
 when adding packages. Changes confined to `pg-libs/` or root build inputs are
 outside the `tket/` detection scope. Other Python packages retain their own
-release entries. The Release-please workflow can also be run manually to pick up
+release entries. The `release-please` workflow can also be run manually to pick up
 unreleased changes already within this scope on `main`.
 
 To override the version getting released, you must merge a PR to `main` containing
